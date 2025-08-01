@@ -1,6 +1,6 @@
-# Welcome to your Expo app 👋
+# Hamaki - YouTube Channel App 🎮
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A futuristic, neon-themed mobile app for the Hamaki YouTube channel with exclusive subscriber access.
 
 ## Get started
 
@@ -35,16 +35,41 @@ npm run reset-project
 
 This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
-## Learn more
+## Authentication Setup
 
-To learn more about developing your project with Expo, look at the following resources:
+This app uses Google OAuth authentication with YouTube API integration to verify channel subscriptions.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Features
 
-## Join the community
+- **Google Sign-In**: Uses `expo-auth-session` to authenticate users with their Google accounts
+- **YouTube API Integration**: Verifies if the user is subscribed to the Hamaki channel
+- **Exclusive Access**: Only allows access to subscribers of the channel
 
-Join our community of developers creating universal apps.
+### Configuration
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+The app is configured with the following OAuth credentials:
+
+- **Client ID**: `986216455734-km0t9srahthpebl4dvb9gc8o9j2ehru5.apps.googleusercontent.com`
+- **Redirect URI**: Uses the app scheme `hamaki://` for authentication redirects
+- **Required Scopes**: `profile`, `email`, and `https://www.googleapis.com/auth/youtube.readonly`
+
+### Testing Authentication
+
+To test the authentication flow:
+
+1. Make sure you're signed in to a Google account that is subscribed to the Hamaki YouTube channel (ID: `UCSI5XbaxsX1USijrfFVuJqA`)
+2. Tap the "Continue with Google" button on the authentication screen
+3. Complete the Google authentication process
+4. The app will verify your subscription status and grant access if you're subscribed
+
+## Design System
+
+### Color Palette
+- **Primary Neon Green**: `#C4FF00`
+- **Deep Navy Background**: `#0B0C1A`
+- **Accent White**: `#F5F5F5`
+
+### Typography
+- **Headings**: Custom font 'Hamaki Geo'
+- **Body**: Space Mono
+

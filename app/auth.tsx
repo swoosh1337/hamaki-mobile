@@ -1,21 +1,41 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import { Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { GoogleSignInButton } from '@/components/ui/GoogleSignInButton';
 import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * Authentication screen component
  * Displays the welcome screen with Google sign-in option
  */
-export default function AuthScreen() {
-  // Handle sign-in button press - currently just navigates to the main app
-  const handleSignIn = () => {
-    // In a real app, this would handle the authentication process
-    // For now, just navigate to the main app
-    router.replace('/(tabs)');
+function AuthScreen() {
+  const { signIn, isLoading } = useAuth();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // Handle sign-in button press with Google authentication
+  const handleSignIn = async () => {
+    try {
+      const result = await signIn();
+      
+      if (result.success) {
+        if (result.isSubscribed) {
+          // User is subscribed to Hamaki channel, allow access
+          router.replace('/(tabs)');
+        } else {
+          // User is not subscribed, show error message
+          setErrorMessage('You need to be subscribed to the Hamaki YouTube channel to access this app.');
+        }
+      } else {
+        // Authentication failed
+        setErrorMessage(result.error || 'Authentication failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Sign in error:', error);
+      setErrorMessage('An unexpected error occurred. Please try again.');
+    }
   };
 
   return (
@@ -23,6 +43,12 @@ export default function AuthScreen() {
       <StatusBar style="light" />
       
       <View style={styles.content}>
+        {isLoading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={Colors.dark.tint} />
+            <Text style={styles.loadingText}>Verifying subscription...</Text>
+          </View>
+        )}
         {/* Logo */}
         <View style={styles.logoContainer}>
           <Image
@@ -46,9 +72,16 @@ export default function AuthScreen() {
           <GoogleSignInButton onPress={handleSignIn} />
         </View>
         
+        {/* Error Message */}
+        {errorMessage && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        )}
+        
         {/* Footer Text */}
         <Text style={styles.footerText}>
-            მხოლოდ გამომწერებისათვის
+          მხოლოდ გამომწერებისათვის
         </Text>
       </View>
     </SafeAreaView>
@@ -65,6 +98,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(11, 12, 26, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  loadingText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 16,
+    color: Colors.dark.text,
+    marginTop: 16,
   },
   logoContainer: {
     marginBottom: 20,
@@ -99,6 +149,20 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     marginBottom: 60,
   },
+  errorContainer: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+    borderRadius: 8,
+    width: '100%',
+    maxWidth: 320,
+  },
+  errorText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 14,
+    color: '#FF6B6B',
+    textAlign: 'center',
+  },
   footerText: {
     fontFamily: 'SpaceMono',
     fontSize: 16,
@@ -109,3 +173,5 @@ const styles = StyleSheet.create({
     bottom: 40,
   },
 });
+
+export default AuthScreen;

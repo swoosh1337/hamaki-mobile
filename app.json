@@ -4,8 +4,8 @@
     "slug": "hamaki",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
-    "scheme": "hamaki",
+    "icon": "./assets/images/icon.png",
+    "scheme": "com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0B0C1A",
     "splash": {
