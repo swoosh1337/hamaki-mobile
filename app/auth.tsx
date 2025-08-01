@@ -26,7 +26,7 @@ function AuthScreen() {
           router.replace('/(tabs)');
         } else {
           // User is not subscribed, show error message
-          setErrorMessage('You need to be subscribed to the Hamaki YouTube channel to access this app.');
+          setErrorMessage("გამოიწერეთ ჰამაკის არხი რომ შეძლოთ აუტორიზაცია");
         }
       } else {
         // Authentication failed
@@ -64,7 +64,7 @@ function AuthScreen() {
         
         {/* Subtitle */}
         <Text style={styles.subtitle}>
-          Sign in with your YouTube account{'\n'}to get exclusive access.
+          გამოიყენე შენი YouTube ექაუნთი{'\n'} რომ შემოგვიერთდე
         </Text>
         
         {/* Sign In Button */}

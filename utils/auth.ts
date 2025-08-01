@@ -40,12 +40,9 @@ export interface AuthResult {
  */
 export async function authenticateWithGoogle(): Promise<AuthResult> {
   try {
-    // Build redirect URI that goes through the Expo AuthSession proxy. This
-    // works out-of-the-box without any extra configuration in Google Cloud.
-    // @ts-expect-error - type definitions may not include `useProxy` yet but it is supported at runtime
     const redirectUri = AuthSession.makeRedirectUri({ native: 'com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3:/oauth2redirect/google', useProxy: false });
 
-    // Create the auth request for the Google OAuth flow
+    // Create the auth request for the Google OAuth flow, using PKCE
     const request = new AuthSession.AuthRequest({
       clientId: CLIENT_ID,
       responseType: AuthSession.ResponseType.Code,
@@ -55,31 +52,39 @@ export async function authenticateWithGoogle(): Promise<AuthResult> {
         'https://www.googleapis.com/auth/youtube.readonly',
       ],
       redirectUri,
+      usePKCE: true, // Ensure PKCE is enabled
     });
 
-    // Prompt the user to authenticate – the second argument `{ useProxy: true }`
-    // ensures the proxy URL is used in the browser flow.
-    // @ts-expect-error - type definitions may not include `useProxy` yet but it is supported at runtime
-    const result = await request.promptAsync(discovery, { useProxy: true });
+    const result = await request.promptAsync(discovery);
 
     if (result.type === 'success') {
-      // Exchange the code for an access token
-      const { accessToken } = await exchangeCodeForToken(result.params.code, request.redirectUri);
+      if (!request.codeVerifier) {
+        throw new Error('PKCE code verifier not found');
+      }
+      
+      // Exchange the code for an access token, including the code verifier
+      const { accessToken } = await exchangeCodeForToken(
+        result.params.code,
+        request.redirectUri,
+        request.codeVerifier
+      );
       
       if (!accessToken) {
         return { success: false, error: 'Failed to obtain access token' };
       }
 
-      // Save the token for future use
-      await AsyncStorage.setItem(STORAGE_KEY, accessToken);
+      // Get user info to verify the account
+      const userData = await getUserInfo(accessToken);
+      console.log('Authenticated with Google account:', userData.email);
 
-      // Check if the user is subscribed to the Hamaki channel
+      await AsyncStorage.setItem(STORAGE_KEY, accessToken);
       const isSubscribed = await checkYouTubeSubscription(accessToken);
       
       return { 
         success: true, 
         isSubscribed, 
-        token: accessToken 
+        token: accessToken,
+        userData,
       };
     } else {
       return { 
@@ -97,9 +102,36 @@ export async function authenticateWithGoogle(): Promise<AuthResult> {
 }
 
 /**
+ * Diagnostic: Get all channels owned by the authenticated user.
+ */
+async function getUserInfo(accessToken: string): Promise<any> {
+  try {
+    const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const userData = await response.json();
+    if (!response.ok) {
+      console.error('Google user info error:', userData);
+      throw new Error('Failed to fetch user info');
+    }
+    return userData;
+  } catch (error) {
+    console.error('Get user info error:', error);
+    throw error;
+  }
+}
+
+/**
  * Exchange authorization code for access token
  */
-async function exchangeCodeForToken(code: string, redirectUri: string): Promise<{ accessToken: string }> {
+async function exchangeCodeForToken(
+  code: string,
+  redirectUri: string,
+  codeVerifier: string
+): Promise<{ accessToken: string }> {
   try {
     const tokenResult = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -111,12 +143,14 @@ async function exchangeCodeForToken(code: string, redirectUri: string): Promise<
         client_id: CLIENT_ID,
         redirect_uri: redirectUri,
         grant_type: 'authorization_code',
+        code_verifier: codeVerifier, // Send the PKCE code verifier
       }).toString(),
     });
 
     const tokenData = await tokenResult.json();
     
     if (!tokenData.access_token) {
+      console.error('Google token response:', tokenData);
       throw new Error('No access token returned');
     }
 
@@ -132,29 +166,41 @@ async function exchangeCodeForToken(code: string, redirectUri: string): Promise<
  */
 async function checkYouTubeSubscription(accessToken: string): Promise<boolean> {
   try {
-    // First, get all subscriptions for the authenticated user
-    const response = await fetch(
-      'https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&mine=true&maxResults=50',
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+    let nextPageToken: string | undefined = undefined;
+
+    do {
+      const response = await fetch(
+        `https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&mine=true&maxResults=50${nextPageToken ? `&pageToken=${nextPageToken}` : ''}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('YouTube API error:', data);
+        throw new Error(data.error?.message || 'Failed to fetch subscriptions');
       }
-    );
 
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('YouTube API error:', data);
-      throw new Error(data.error?.message || 'Failed to fetch subscriptions');
-    }
+      // Check if the subscription is on the current page
+      const isSubscribedOnPage = data.items?.some(
+        (item: any) => item.snippet?.resourceId?.channelId === HAMAKI_CHANNEL_ID
+      ) || false;
 
-    // Check if any of the subscriptions match the Hamaki channel ID
-    const isSubscribed = data.items?.some(
-      (item: any) => item.snippet?.resourceId?.channelId === HAMAKI_CHANNEL_ID
-    ) || false;
+      if (isSubscribedOnPage) {
+        return true; // Found it, exit early
+      }
 
-    return isSubscribed;
+      nextPageToken = data.nextPageToken;
+
+    } while (nextPageToken);
+
+    // If the loop finishes, the subscription was not found on any page
+    return false;
+
   } catch (error) {
     console.error('Subscription check error:', error);
     throw error;
