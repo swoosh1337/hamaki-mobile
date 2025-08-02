@@ -9,7 +9,7 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0B0C1A",
     "splash": {
-      "image": "./assets/images/logo.png",
+      "image": "./assets/images/logo-transparent.png",
       "resizeMode": "contain",
       "backgroundColor": "#0B0C1A"
     },
@@ -18,7 +18,7 @@
       "supportsTablet": true,
       "backgroundColor": "#0B0C1A",
       "splash": {
-        "image": "./assets/images/logo.png",
+        "image": "./assets/images/logo-transparent.png",
         "resizeMode": "contain",
         "backgroundColor": "#0B0C1A"
       },
@@ -26,11 +26,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo.png",
+        "foregroundImage": "./assets/images/logo-transparent.png",
         "backgroundColor": "#0B0C1A"
       },
       "splash": {
-        "image": "./assets/images/logo.png",
+        "image": "./assets/images/logo-transparent.png",
         "resizeMode": "contain",
         "backgroundColor": "#0B0C1A"
       },
@@ -47,11 +47,19 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#0B0C1A",
-          "image": "./assets/images/logo.png",
+          "image": "./assets/images/logo-transparent.png",
           "dark": {
             "backgroundColor": "#0B0C1A",
-            "image": "./assets/images/logo.png"
+            "image": "./assets/images/logo-transparent.png"
           }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#C4FF00",
+          "defaultChannel": "hamaki-videos"
         }
       ]
     ],

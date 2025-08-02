@@ -16,6 +16,9 @@ const IOS_CLIENT_ID = '986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3.apps.google
 const CLIENT_ID = Platform.OS === 'ios' ? IOS_CLIENT_ID : WEB_CLIENT_ID;
 const HAMAKI_CHANNEL_ID = 'UCSI5XbaxsX1USijrfFVuJqA';
 const STORAGE_KEY = 'hamaki_auth_token';
+const USER_DATA_KEY = 'hamaki_user_data';
+const LAST_VERIFICATION_KEY = 'hamaki_last_verification';
+const VERIFICATION_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 // Configure the discovery document for Google
 const discovery = {
@@ -33,6 +36,18 @@ export interface AuthResult {
   token?: string;
   error?: string;
   userData?: any;
+  fromCache?: boolean; // Indicates if loaded from persistent storage
+}
+
+/**
+ * Interface for stored user session data
+ */
+export interface StoredUserSession {
+  token: string;
+  userData: any;
+  isSubscribed: boolean;
+  lastVerification: number;
+  expiresAt: number;
 }
 
 /**
@@ -77,8 +92,10 @@ export async function authenticateWithGoogle(): Promise<AuthResult> {
       const userData = await getUserInfo(accessToken);
       console.log('Authenticated with Google account:', userData.email);
 
-      await AsyncStorage.setItem(STORAGE_KEY, accessToken);
       const isSubscribed = await checkYouTubeSubscription(accessToken);
+      
+      // Store the session persistently
+      await storeUserSession(accessToken, userData, isSubscribed);
       
       return { 
         success: true, 
@@ -225,6 +242,162 @@ export async function clearAuthToken(): Promise<void> {
  * Check if the user is already authenticated
  */
 export async function isAuthenticated(): Promise<boolean> {
-  const token = await getAuthToken();
-  return token !== null;
+  const sessionData = await getStoredUserSession();
+  return sessionData !== null;
+}
+
+/**
+ * Store user session data persistently
+ */
+export async function storeUserSession(
+  token: string,
+  userData: any,
+  isSubscribed: boolean
+): Promise<void> {
+  try {
+    const sessionData: StoredUserSession = {
+      token,
+      userData,
+      isSubscribed,
+      lastVerification: Date.now(),
+      expiresAt: Date.now() + (30 * 24 * 60 * 60 * 1000), // 30 days
+    };
+
+    await AsyncStorage.multiSet([
+      [STORAGE_KEY, token],
+      [USER_DATA_KEY, JSON.stringify(sessionData)],
+      [LAST_VERIFICATION_KEY, Date.now().toString()],
+    ]);
+  } catch (error) {
+    console.error('Error storing user session:', error);
+  }
+}
+
+/**
+ * Get stored user session data
+ */
+export async function getStoredUserSession(): Promise<StoredUserSession | null> {
+  try {
+    const sessionDataString = await AsyncStorage.getItem(USER_DATA_KEY);
+    if (!sessionDataString) return null;
+
+    const sessionData: StoredUserSession = JSON.parse(sessionDataString);
+    
+    // Check if session has expired
+    if (Date.now() > sessionData.expiresAt) {
+      await clearUserSession();
+      return null;
+    }
+
+    return sessionData;
+  } catch (error) {
+    console.error('Error getting stored user session:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if subscription verification is needed
+ */
+export async function needsSubscriptionVerification(): Promise<boolean> {
+  try {
+    const sessionData = await getStoredUserSession();
+    if (!sessionData) return true;
+
+    const timeSinceLastVerification = Date.now() - sessionData.lastVerification;
+    return timeSinceLastVerification > VERIFICATION_INTERVAL;
+  } catch (error) {
+    console.error('Error checking verification need:', error);
+    return true;
+  }
+}
+
+/**
+ * Update last verification timestamp
+ */
+export async function updateLastVerification(): Promise<void> {
+  try {
+    const sessionData = await getStoredUserSession();
+    if (sessionData) {
+      sessionData.lastVerification = Date.now();
+      await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(sessionData));
+    }
+    await AsyncStorage.setItem(LAST_VERIFICATION_KEY, Date.now().toString());
+  } catch (error) {
+    console.error('Error updating last verification:', error);
+  }
+}
+
+/**
+ * Background subscription verification (called periodically)
+ */
+export async function backgroundVerifySubscription(): Promise<boolean | null> {
+  try {
+    const sessionData = await getStoredUserSession();
+    if (!sessionData || !sessionData.token) return null;
+
+    if (!await needsSubscriptionVerification()) {
+      return sessionData.isSubscribed;
+    }
+
+    console.log('Performing background subscription verification...');
+    const isSubscribed = await checkYouTubeSubscription(sessionData.token);
+    
+    // Update stored session data
+    sessionData.isSubscribed = isSubscribed;
+    sessionData.lastVerification = Date.now();
+    await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(sessionData));
+    
+    return isSubscribed;
+  } catch (error) {
+    console.error('Background subscription verification failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Load user from persistent storage (if valid session exists)
+ */
+export async function loadPersistedUser(): Promise<AuthResult> {
+  try {
+    const sessionData = await getStoredUserSession();
+    if (!sessionData) {
+      return { success: false, error: 'No persisted session found' };
+    }
+
+    console.log('Loading user from persisted session...');
+    
+    // Check if we need background verification
+    if (await needsSubscriptionVerification()) {
+      console.log('Triggering background subscription verification...');
+      // Don't wait for verification - return current data and verify in background
+      backgroundVerifySubscription();
+    }
+
+    return {
+      success: true,
+      isSubscribed: sessionData.isSubscribed,
+      token: sessionData.token,
+      userData: sessionData.userData,
+      fromCache: true,
+    };
+  } catch (error) {
+    console.error('Error loading persisted user:', error);
+    return { success: false, error: 'Failed to load persisted session' };
+  }
+}
+
+/**
+ * Clear all stored user session data
+ */
+export async function clearUserSession(): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove([
+      STORAGE_KEY,
+      USER_DATA_KEY,
+      LAST_VERIFICATION_KEY,
+    ]);
+  } catch (error) {
+    console.error('Error clearing user session:', error);
+  }
 }
