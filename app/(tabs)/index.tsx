@@ -10,8 +10,6 @@ export default function HomeScreen() {
   const { userProfile } = useAuth();
   const { videos, isLoading, error, hasNewVideos } = useVideos();
   
-  // Get user's XP points from database
-  const userXP = userProfile?.xp_points || 0;
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -26,10 +24,10 @@ export default function HomeScreen() {
       </View>
 
       {/* XP Counter */}
-      <View style={styles.xpContainer}>
+      {/* <View style={styles.xpContainer}>
         <Text style={styles.xpLabel}>XP Points</Text>
         <Text style={styles.xpValue}>{userXP.toLocaleString()}</Text>
-      </View>
+      </View> */}
 
       {/* Latest Videos Section */}
       <View style={styles.sectionHeader}>

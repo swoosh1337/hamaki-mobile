@@ -8,11 +8,19 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "typecheck": "tsc --noEmit",
+    "build:android": "expo prebuild --platform android --clean && printf \"sdk.dir=$HOME/Library/Android/sdk\\n\" > android/local.properties && cd android && ./gradlew assembleDebug",
+    "build:android:mac": "export JAVA_17=$(/usr/libexec/java_home -v 17) && echo Using JAVA_17=$JAVA_17 && ($JAVA_17/bin/java -version 2>&1 | head -n1 | grep '\"17' > /dev/null) || (echo 'ERROR: JDK 17 not found. Install with: brew install --cask temurin@17' && exit 1); JAVA_HOME=$JAVA_17 ORG_GRADLE_JAVA_HOME=$JAVA_17 npx expo prebuild --platform android --clean && printf \"sdk.dir=$HOME/Library/Android/sdk\\n\" > android/local.properties && cd android && JAVA_HOME=$JAVA_17 ORG_GRADLE_JAVA_HOME=$JAVA_17 ./gradlew --no-daemon -Dorg.gradle.java.home=$JAVA_17 assembleDebug",
+    "build:ios": "expo prebuild --platform ios --clean && cd ios && pod install && xcodebuild -workspace $(ls | grep .xcworkspace) -scheme hamaki -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15' build",
+    "ci": "npm run lint && npm run typecheck && npm test && npm run build:android && npm run build:ios"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
-    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-async-storage/async-storage": "2.1.2",
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
@@ -31,6 +39,7 @@
     "expo-notifications": "^0.31.4",
     "expo-random": "^14.0.1",
     "expo-router": "~5.1.4",
+    "expo-secure-store": "^14.2.3",
     "expo-splash-screen": "~0.30.10",
     "expo-status-bar": "~2.2.3",
     "expo-symbols": "~0.4.5",
@@ -49,10 +58,15 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@testing-library/jest-native": "^5.4.3",
+    "@testing-library/react-native": "^13.2.2",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.0.10",
     "babel-plugin-module-resolver": "^5.0.2",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
+    "jest": "~29.7.0",
+    "react-test-renderer": "^19.0.0",
     "typescript": "~5.8.3"
   },
   "private": true
