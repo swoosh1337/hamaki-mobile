@@ -10,9 +10,8 @@ export default function HomeScreen() {
   const { userProfile } = useAuth();
   const { videos, isLoading, error, hasNewVideos } = useVideos();
   
-  // Calculate XP percentage for progress bar (mock calculation)
-  const xpProgress = Math.min((userProfile?.xp_points || 0) / 1000, 1); // Assuming 1000 XP = 100%
-  const xpPercentage = Math.round(xpProgress * 100);
+  // Get user's XP points from database
+  const userXP = userProfile?.xp_points || 0;
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -26,12 +25,10 @@ export default function HomeScreen() {
         <Text style={styles.brandText}>HAMAKI</Text>
       </View>
 
-      {/* XP Progress Bar */}
+      {/* XP Counter */}
       <View style={styles.xpContainer}>
-        <View style={styles.xpBar}>
-          <View style={[styles.xpProgress, { width: `${xpPercentage}%` }]} />
-        </View>
-        <Text style={styles.xpText}>{xpPercentage}%</Text>
+        <Text style={styles.xpLabel}>XP Points</Text>
+        <Text style={styles.xpValue}>{userXP.toLocaleString()}</Text>
       </View>
 
       {/* Latest Videos Section */}
@@ -87,7 +84,12 @@ function VideoCard({ video }: VideoCardProps) {
   return (
     <View style={styles.videoCard}>
       <View style={styles.videoContent}>
-        <Image source={{ uri: video.thumbnail }} style={styles.thumbnail} />
+        <View style={styles.thumbnailContainer}>
+          <Image source={{ uri: video.thumbnail }} style={styles.thumbnail} />
+          <TouchableOpacity style={styles.watchButton} onPress={handleWatchPress}>
+            <Text style={styles.watchText}>WATCH</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.videoInfo}>
           <View style={styles.videoHeader}>
             <Text style={styles.videoTitle} numberOfLines={2}>
@@ -104,9 +106,6 @@ function VideoCard({ video }: VideoCardProps) {
           </Text>
         </View>
       </View>
-      <TouchableOpacity style={styles.watchButton} onPress={handleWatchPress}>
-        <Text style={styles.watchText}>WATCH</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -136,25 +135,24 @@ const styles = StyleSheet.create({
   xpContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 20,
     marginBottom: 30,
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    paddingVertical: 15,
+    borderRadius: 15,
+    marginHorizontal: 20,
   },
-  xpBar: {
-    flex: 1,
-    height: 8,
-    backgroundColor: 'rgba(196, 255, 0, 0.2)',
-    borderRadius: 4,
-    marginRight: 15,
-  },
-  xpProgress: {
-    height: '100%',
-    backgroundColor: Colors.dark.tint,
-    borderRadius: 4,
-  },
-  xpText: {
+  xpLabel: {
     fontFamily: 'SpaceMono',
     fontSize: 16,
     color: Colors.dark.text,
+    marginRight: 10,
+  },
+  xpValue: {
+    fontFamily: 'SpaceMono',
+    fontSize: 20,
+    color: Colors.dark.tint,
     fontWeight: 'bold',
   },
   sectionHeader: {
@@ -193,13 +191,15 @@ const styles = StyleSheet.create({
   },
   videoContent: {
     flexDirection: 'row',
-    marginBottom: 15,
+  },
+  thumbnailContainer: {
+    marginRight: 15,
   },
   thumbnail: {
     width: 80,
     height: 60,
     borderRadius: 8,
-    marginRight: 15,
+    marginBottom: 8,
   },
   videoInfo: {
     flex: 1,
@@ -238,14 +238,15 @@ const styles = StyleSheet.create({
   },
   watchButton: {
     backgroundColor: Colors.dark.tint,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    alignItems: 'center',
+    width: 80,
   },
   watchText: {
     fontFamily: 'SpaceMono',
-    fontSize: 14,
+    fontSize: 12,
     color: Colors.dark.background,
     fontWeight: 'bold',
   },

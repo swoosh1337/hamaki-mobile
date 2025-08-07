@@ -21,7 +21,7 @@ export default function ProfileScreen() {
         <Text style={styles.title}>👤 Profile Stats</Text>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>XP Points</Text>
-          <Text style={styles.statValue}>{userProfile?.xp_points || 0}</Text>
+          <Text style={styles.statValue}>{(userProfile?.xp_points || 0).toLocaleString()}</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>YouTube Subscriber</Text>
