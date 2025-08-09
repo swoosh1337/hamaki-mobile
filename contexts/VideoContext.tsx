@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
-import { fetchHamakiVideos, YouTubeVideo } from '../utils/youtube';
 import { checkForNewVideos } from '../utils/notifications';
+import { fetchHamakiVideos, YouTubeVideo } from '../utils/youtube';
 import { useAuth } from './AuthContext';
+
+
+const VIDEO_FETCH_LIMIT = 3;
 
 interface VideoContextType {
   videos: YouTubeVideo[];
@@ -40,7 +43,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       setIsLoading(true);
       setError(null);
-      const fetchedVideos = await fetchHamakiVideos(8);
+      const fetchedVideos = await fetchHamakiVideos(VIDEO_FETCH_LIMIT);
       setVideos(fetchedVideos);
       console.log(`Loaded ${fetchedVideos.length} videos`);
     } catch (err) {
@@ -67,7 +70,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       if (newVideos.length > 0) {
         // Update video list with new videos
-        const updatedVideos = await fetchHamakiVideos(8);
+        const updatedVideos = await fetchHamakiVideos(3);
         setVideos(updatedVideos);
         setHasNewVideos(true);
         console.log(`Updated feed with ${newVideos.length} new video(s)`);

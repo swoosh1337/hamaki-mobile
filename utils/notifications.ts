@@ -12,11 +12,16 @@ const VIDEO_CHECK_INTERVAL = 15 * 60 * 1000; // Check every 15 minutes
 
 // Configure notifications
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
+  handleNotification: async (_notification) => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
-  }),
+    // Newer Expo SDKs expect these additional fields on iOS
+    // Provide permissive defaults for visibility in foreground
+    ...(Platform.OS === 'ios'
+      ? { shouldShowBanner: true as const, shouldShowList: true as const }
+      : {}),
+  } as any),
 });
 
 /**

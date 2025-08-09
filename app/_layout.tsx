@@ -19,6 +19,7 @@ function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     HamakiGeo: require('../assets/fonts/HamakiGEO.otf'),
+    HamakiENG: require('../assets/fonts/Hamaki-ENG.otf'),
   });
 
   useEffect(() => {
