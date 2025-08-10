@@ -6,9 +6,10 @@ import { AvatarPicker } from '@/components/profile/AvatarPicker';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserPost, userService, XPStats } from '@/utils/supabase';
+import { XPStatsSkeleton, ProfilePostSkeleton } from '@/components/ui/SkeletonLoader';
 
 export default function ProfileScreen() {
-  const { userProfile } = useAuth();
+  const { userProfile, updateUserProfile } = useAuth();
   
   // State management
   const [selectedAvatar, setSelectedAvatar] = useState<string>('avatar-1');
@@ -26,12 +27,13 @@ export default function ProfileScreen() {
 
   const POSTS_PER_PAGE = 10;
 
-  // Initialize data on mount
+  // Initialize data only when the user identity changes (not on avatar/name updates)
   useEffect(() => {
-    if (userProfile) {
+    if (userProfile?.google_id) {
       initializeProfileData();
     }
-  }, [userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.google_id]);
 
   const initializeProfileData = async () => {
     if (!userProfile?.google_id) return;
@@ -102,6 +104,8 @@ export default function ProfileScreen() {
       
       if (updatedProfile) {
         setSelectedAvatar(avatarId);
+        // reflect immediately in global state so header image updates
+        updateUserProfile({ avatar_url: updatedProfile.avatar_url });
         Alert.alert('Success', 'Avatar updated successfully!');
       } else {
         Alert.alert('Error', 'Failed to update avatar. Please try again.');
@@ -138,6 +142,7 @@ export default function ProfileScreen() {
       
       if (updatedProfile) {
         setIsEditingName(false);
+        updateUserProfile({ full_name: updatedProfile.full_name });
         Alert.alert('Success', 'Name updated successfully!');
         // Note: In a real app, you'd want to update the AuthContext to reflect this change
       } else {
@@ -294,21 +299,25 @@ export default function ProfileScreen() {
 
         {/* Points Section */}
         <View style={styles.pointsSection}>
-          <Text style={styles.sectionTitle}>Posts</Text>
-          
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>This Week:</Text>
-            <Text style={styles.statValue}>
-              {isXpLoading ? '...' : `${(xpStats?.weeklyXP || 0).toLocaleString()} XP`}
-            </Text>
-          </View>
-          
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Total:</Text>
-            <Text style={styles.statValue}>
-              {isXpLoading ? '...' : `${(xpStats?.totalXP || 0).toLocaleString()} XP`}
-            </Text>
-          </View>
+          {isXpLoading ? (
+            <XPStatsSkeleton />
+          ) : (
+            <>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>This Week:</Text>
+                <Text style={styles.statValue}>
+                  {`${(xpStats?.weeklyXP || 0).toLocaleString()} XP`}
+                </Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Total:</Text>
+                <Text style={styles.statValue}>
+                  {`${(xpStats?.totalXP || 0).toLocaleString()} XP`}
+                </Text>
+              </View>
+            </>
+          )}
         </View>
 
         {/* My Posts Section */}
@@ -316,9 +325,11 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>My Posts</Text>
           
           {isPostsLoading ? (
-            <View style={styles.loadingContainer}>
-              <Text style={styles.loadingText}>Loading posts...</Text>
-            </View>
+            <ScrollView style={styles.postsScrollView} nestedScrollEnabled>
+              {[...Array(3)].map((_, index) => (
+                <ProfilePostSkeleton key={`profile-post-skeleton-${index}`} />
+              ))}
+            </ScrollView>
           ) : userPosts.length === 0 ? (
             <View style={styles.emptyPostsContainer}>
               <Text style={styles.emptyPostsText}>You haven&apos;t submitted any ideas yet.</Text>

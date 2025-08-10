@@ -17,6 +17,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
       style={styles.button}
       onPress={onPress}
       activeOpacity={0.8}
+      testID="google-sign-in-button"
     >
       <View style={styles.contentContainer}>
         <AntDesign name="google" size={24} color="#0B0C1A" style={styles.googleIcon} />

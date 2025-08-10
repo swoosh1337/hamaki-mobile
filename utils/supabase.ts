@@ -198,19 +198,28 @@ export const userService = {
 
   // Profile Management Methods
 
-  // Update user avatar
-  async updateUserAvatar(googleId: string, avatarId: string): Promise<UserProfile | null> {
+  // Update user avatar — now allows full URL or predefined id
+  async updateUserAvatar(googleId: string, avatar: string): Promise<UserProfile | null> {
     try {
-      // Validate avatar selection (predefined options)
-      const validAvatars = ['avatar-1', 'avatar-2', 'avatar-3'];
-      if (!validAvatars.includes(avatarId)) {
-        throw new Error('Invalid avatar selection');
+      // Accept either a full URL or legacy id; normalize to URL for storage
+      let avatarUrl = avatar;
+      const idToUrl: Record<string, string> = {
+        'avatar-1': 'https://hspaxdszcnrznqehblky.supabase.co/storage/v1/object/sign/avatars/avatar-1.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zMWE0YzgyOC1kNmZmLTRlZTAtYWQ2MC1hZjg1YTY1YzU2ZDEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJhdmF0YXJzL2F2YXRhci0xLnBuZyIsImlhdCI6MTc1NDc4NDY4OSwiZXhwIjoxNzg2MzIwNjg5fQ.SKfVTG5KuGqpDnU3vCvzSUoBShVeCzpKhteFy_Zeh9I',
+        'avatar-2': 'https://hspaxdszcnrznqehblky.supabase.co/storage/v1/object/sign/avatars/avatar-2.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zMWE0YzgyOC1kNmZmLTRlZTAtYWQ2MC1hZjg1YTY1YzU2ZDEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJhdmF0YXJzL2F2YXRhci0yLnBuZyIsImlhdCI6MTc1NDc4NDY5NywiZXhwIjoxNzg2MzIwNjk3fQ.hwjcOi7o3-9XRZ0uYYYTYFlcK8IWt2r-CJyo-38j2C8',
+        'avatar-3': 'https://hspaxdszcnrznqehblky.supabase.co/storage/v1/object/sign/avatars/avatar-3.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zMWE0YzgyOC1kNmZmLTRlZTAtYWQ2MC1hZjg1YTY1YzU2ZDEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJhdmF0YXJzL2F2YXRhci0zLnBuZyIsImlhdCI6MTc1NDc4NDcwOCwiZXhwIjoxNzg2MzIwNzA4fQ.QRFOWSPKG-lxwYKJKPd4wi-fPcUIKCUDLYGjasuIjdU',
+      };
+      if (!/^https?:\/\//i.test(avatar)) {
+        if (idToUrl[avatar]) {
+          avatarUrl = idToUrl[avatar];
+        } else {
+          throw new Error('Invalid avatar selection');
+        }
       }
 
       const { data, error } = await supabase
         .from('users')
         .update({
-          avatar_url: avatarId,
+          avatar_url: avatarUrl,
           updated_at: new Date().toISOString(),
         })
         .eq('google_id', googleId)

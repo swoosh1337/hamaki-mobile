@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
-import { authenticateWithGoogle, loadPersistedUser, clearUserSession, backgroundVerifySubscription, AuthResult } from '../utils/auth';
-import { userService, UserProfile } from '../utils/supabase';
-import { initializeNotifications, backgroundVideoCheck } from '../utils/notifications';
+import { authenticateWithGoogle, AuthResult, backgroundVerifySubscription, clearUserSession, loadPersistedUser, storeUserSessionWithTokens, storeUserSession } from '../utils/auth';
+import { backgroundVideoCheck, initializeNotifications } from '../utils/notifications';
+import { UserProfile, userService } from '../utils/supabase';
+import { RememberMeModal } from '../components/ui/RememberMeModal';
 
 interface AuthContextType {
   isLoading: boolean;
@@ -12,6 +13,7 @@ interface AuthContextType {
   signIn: () => Promise<AuthResult>;
   signOut: () => Promise<void>;
   error: string | null;
+  updateUserProfile: (updates: Partial<UserProfile>) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -22,6 +24,7 @@ const AuthContext = createContext<AuthContextType>({
   signIn: async () => ({ success: false }),
   signOut: async () => {},
   error: null,
+  updateUserProfile: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -32,6 +35,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Remember Me modal state
+  const [showRememberMeModal, setShowRememberMeModal] = useState(false);
+  const [pendingAuthResult, setPendingAuthResult] = useState<AuthResult | null>(null);
+  const [isTemporarySession, setIsTemporarySession] = useState(false);
 
   // Check for existing authentication on mount
   useEffect(() => {
@@ -90,12 +98,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isSubscribed) {
           await backgroundVideoCheck();
         }
+      } else if (nextAppState === 'background' && isAuthenticated && isTemporarySession) {
+        console.log('App went to background with temporary session - clearing session...');
+        await clearUserSession();
+        setIsAuthenticated(false);
+        setIsSubscribed(false);
+        setUserProfile(null);
+        setIsTemporarySession(false);
       }
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
-  }, [isAuthenticated, isSubscribed]);
+  }, [isAuthenticated, isSubscribed, isTemporarySession]);
 
   // Sign in with Google
   const signIn = async (): Promise<AuthResult> => {
@@ -106,32 +121,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const result = await authenticateWithGoogle();
       
       if (result.success && result.userData) {
-        // Save/update user data in Supabase
-        const supabaseUser = await userService.upsertUserProfile({
-          googleId: result.userData.id,
-          email: result.userData.email,
-          fullName: result.userData.name || result.userData.email,
-          avatarUrl: result.userData.picture,
-          isSubscribed: result.isSubscribed || false,
-        });
-
-        if (supabaseUser) {
-          setUserProfile(supabaseUser);
-          setIsAuthenticated(true);
-          setIsSubscribed(result.isSubscribed || false);
-          console.log('User saved to Supabase:', supabaseUser);
-          
-          // Initialize notifications for newly authenticated users
-          await initializeNotifications();
-        } else {
-          console.error('Failed to save user to Supabase');
-        }
+        // Store the pending result and show Remember Me modal
+        setPendingAuthResult(result);
+        setShowRememberMeModal(true);
+        setIsLoading(false);
+        
+        // Return success but user isn't fully authenticated until they choose remember me option
+        return { success: true, userData: result.userData, isSubscribed: result.isSubscribed };
       } else {
         setError(result.error || 'Authentication failed');
+        setIsLoading(false);
+        return result;
       }
-      
-      setIsLoading(false);
-      return result;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error during sign in';
       setError(errorMessage);
@@ -158,6 +159,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Handle Remember Me modal choice
+  const handleRememberMeChoice = async (rememberMe: boolean) => {
+    setIsLoading(true);
+    setShowRememberMeModal(false);
+    
+    if (!pendingAuthResult) {
+      setError('No pending authentication result');
+      setIsLoading(false);
+      return;
+    }
+    
+    try {
+      // Save/update user data in Supabase
+      const supabaseUser = await userService.upsertUserProfile({
+        googleId: pendingAuthResult.userData.id,
+        email: pendingAuthResult.userData.email,
+        fullName: pendingAuthResult.userData.name || pendingAuthResult.userData.email,
+        avatarUrl: pendingAuthResult.userData.picture,
+        isSubscribed: pendingAuthResult.isSubscribed || false,
+      });
+
+      if (supabaseUser) {
+        setUserProfile(supabaseUser);
+        setIsAuthenticated(true);
+        setIsSubscribed(pendingAuthResult.isSubscribed || false);
+        setIsTemporarySession(!rememberMe);
+        console.log('User saved to Supabase:', supabaseUser);
+        
+        // Store session based on user choice
+        if (pendingAuthResult.tokenData) {
+          await storeUserSessionWithTokens(
+            pendingAuthResult.tokenData,
+            pendingAuthResult.userData,
+            pendingAuthResult.isSubscribed || false,
+            rememberMe
+          );
+        } else {
+          // Fallback for legacy token format
+          await storeUserSession(
+            pendingAuthResult.token || '',
+            pendingAuthResult.userData,
+            pendingAuthResult.isSubscribed || false,
+            rememberMe
+          );
+        }
+        
+        // Initialize notifications for newly authenticated users
+        await initializeNotifications();
+      } else {
+        setError('Failed to save user to Supabase');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to complete authentication';
+      setError(errorMessage);
+    } finally {
+      setPendingAuthResult(null);
+      setIsLoading(false);
+    }
+  };
+
+  const updateUserProfile = (updates: Partial<UserProfile>) => {
+    setUserProfile((prev) => (prev ? { ...prev, ...updates } : prev));
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -168,9 +233,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signIn,
         signOut,
         error,
+        updateUserProfile,
       }}
     >
       {children}
+      
+      {/* Remember Me Modal */}
+      <RememberMeModal
+        visible={showRememberMeModal}
+        onContinue={handleRememberMeChoice}
+        userName={pendingAuthResult?.userData?.name || pendingAuthResult?.userData?.email}
+      />
     </AuthContext.Provider>
   );
 };

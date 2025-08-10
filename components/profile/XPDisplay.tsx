@@ -92,6 +92,14 @@ export const XPDisplay: React.FC<XPDisplayProps> = ({
           <View 
             style={styles.progressContainer}
             testID="weekly-progress-indicator"
+            accessibilityRole="progressbar"
+            accessibilityValue={{
+              min: 0,
+              max: 100,
+              now: weeklyProgressPercentage,
+              text: `${weeklyProgressPercentage}%`
+            }}
+            accessibilityLabel={`Weekly XP progress: ${weeklyXP} out of ${WEEKLY_XP_GOAL} XP`}
           >
             <View style={styles.progressTrack}>
               <View

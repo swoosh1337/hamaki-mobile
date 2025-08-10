@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 import { fetchHamakiVideos, YouTubeVideo } from './youtube';
 
@@ -69,7 +69,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 async function storeKnownVideos(videos: YouTubeVideo[]): Promise<void> {
   try {
     const videoIds = videos.map(video => video.id);
-    await AsyncStorage.setItem(KNOWN_VIDEOS_KEY, JSON.stringify(videoIds));
+    await SecureStore.setItemAsync(KNOWN_VIDEOS_KEY, JSON.stringify(videoIds));
   } catch (error) {
     console.error('Error storing known videos:', error);
   }
@@ -80,7 +80,7 @@ async function storeKnownVideos(videos: YouTubeVideo[]): Promise<void> {
  */
 async function getKnownVideos(): Promise<string[]> {
   try {
-    const knownVideosJson = await AsyncStorage.getItem(KNOWN_VIDEOS_KEY);
+    const knownVideosJson = await SecureStore.getItemAsync(KNOWN_VIDEOS_KEY);
     return knownVideosJson ? JSON.parse(knownVideosJson) : [];
   } catch (error) {
     console.error('Error getting known videos:', error);
@@ -117,7 +117,7 @@ export async function checkForNewVideos(): Promise<YouTubeVideo[]> {
     }
     
     // Update last check time
-    await AsyncStorage.setItem(LAST_VIDEO_CHECK_KEY, Date.now().toString());
+    await SecureStore.setItemAsync(LAST_VIDEO_CHECK_KEY, Date.now().toString());
     
     return newVideos;
   } catch (error) {
@@ -156,7 +156,7 @@ async function sendNewVideoNotification(video: YouTubeVideo): Promise<void> {
  */
 export async function shouldCheckForVideos(): Promise<boolean> {
   try {
-    const lastCheckString = await AsyncStorage.getItem(LAST_VIDEO_CHECK_KEY);
+    const lastCheckString = await SecureStore.getItemAsync(LAST_VIDEO_CHECK_KEY);
     if (!lastCheckString) return true;
     
     const lastCheck = parseInt(lastCheckString);

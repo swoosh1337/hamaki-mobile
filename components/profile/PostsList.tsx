@@ -44,8 +44,10 @@ export const PostsList: React.FC<PostsListProps> = ({
       return `${diffMinutes} minutes ago`;
     } else if (diffHours < 24) {
       return `${Math.floor(diffHours)} hours ago`;
-    } else if (diffDays < 1) {
-      return 'Today';
+    } else if (diffDays < 7) {
+      const dayCount = Math.floor(diffDays);
+      if (dayCount === 1) return '1 day ago';
+      return `${dayCount} days ago`;
     } else {
       return date.toLocaleDateString('en-US', {
         month: 'short',

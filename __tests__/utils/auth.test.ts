@@ -106,9 +106,18 @@ describe('Auth Utils', () => {
           name: 'Test User',
           picture: 'https://test.com/avatar.jpg',
         },
+        tokenData: {
+          accessToken: 'test-access-token',
+          refreshToken: undefined,
+          expiresIn: 3600,
+          expiresAt: expect.any(Number),
+          tokenType: 'Bearer',
+        },
       });
 
-      expect(mockSecureStore.setItemAsync).toHaveBeenCalled();
+      // Note: authenticateWithGoogle no longer stores the session directly
+      // Session storage happens in AuthContext after Remember Me choice
+      expect(mockSecureStore.setItemAsync).not.toHaveBeenCalled();
     });
 
     it('should fail when user cancels authentication', async () => {

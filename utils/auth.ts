@@ -1,4 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
@@ -39,6 +40,7 @@ export interface AuthResult {
   error?: string;
   userData?: any;
   fromCache?: boolean; // Indicates if loaded from persistent storage
+  tokenData?: TokenData; // Include full token data for new auth flows
 }
 
 /**
@@ -96,7 +98,7 @@ export async function authenticateWithGoogle(): Promise<AuthResult> {
       // Use extraParams for provider-specific params
       extraParams: {
         access_type: 'offline', // Request refresh token
-        prompt: 'select_account', // Force account selection for better UX
+        prompt: 'consent', // Force consent screen for reliable refresh tokens
       },
     });
 
@@ -130,14 +132,14 @@ export async function authenticateWithGoogle(): Promise<AuthResult> {
 
       const isSubscribed = await checkYouTubeSubscription(tokenData.accessToken);
 
-      // Store the session persistently with new token format
-      await storeUserSessionWithTokens(tokenData, userData, isSubscribed);
-
+      // Don't store session here - let AuthContext handle it after Remember Me choice
+      // Return token data for AuthContext to use
       return {
         success: true,
         isSubscribed,
         token: tokenData.accessToken,
         userData,
+        tokenData, // Include full token data
       };
     } else {
       return {
@@ -305,7 +307,7 @@ export async function getValidAccessToken(): Promise<string | null> {
           
           // Update stored session with new token data
           sessionData.tokenData = newTokenData;
-          await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(sessionData));
+          await SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(sessionData));
           
           console.log("Token refreshed successfully");
           return newTokenData.accessToken;
@@ -426,14 +428,14 @@ export async function checkYouTubeSubscriptionWithRefresh(): Promise<boolean> {
  * Get the stored authentication token
  */
 export async function getAuthToken(): Promise<string | null> {
-  return AsyncStorage.getItem(STORAGE_KEY);
+  return SecureStore.getItemAsync(STORAGE_KEY);
 }
 
 /**
  * Clear the stored authentication token
  */
 export async function clearAuthToken(): Promise<void> {
-  return AsyncStorage.removeItem(STORAGE_KEY);
+  return SecureStore.deleteItemAsync(STORAGE_KEY);
 }
 
 /**
@@ -445,31 +447,43 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 /**
- * Store user session data persistently with new token format
+ * Store user session data with persistence option
  */
 export async function storeUserSessionWithTokens(
   tokenData: TokenData,
   userData: any,
   isSubscribed: boolean,
+  isPersistent: boolean = true,
 ): Promise<void> {
   try {
+    // Calculate expiry based on persistence choice
+    let sessionExpiresAt = tokenData.expiresAt;
+    if (!isPersistent) {
+      // For temporary sessions, expire in 24 hours or when app is closed
+      sessionExpiresAt = Math.min(tokenData.expiresAt, Date.now() + 24 * 60 * 60 * 1000);
+    }
+
     const sessionData: StoredUserSession = {
-      tokenData,
+      tokenData: {
+        ...tokenData,
+        expiresAt: sessionExpiresAt,
+      },
       userData,
       isSubscribed,
       lastVerification: Date.now(),
       // Legacy fields for backward compatibility
       token: tokenData.accessToken,
-      expiresAt: tokenData.expiresAt,
+      expiresAt: sessionExpiresAt,
     };
 
-    await AsyncStorage.multiSet([
-      [STORAGE_KEY, tokenData.accessToken], // Keep legacy storage for old code
-      [USER_DATA_KEY, JSON.stringify(sessionData)],
-      [LAST_VERIFICATION_KEY, Date.now().toString()],
+    await Promise.all([
+      SecureStore.setItemAsync(STORAGE_KEY, tokenData.accessToken), // Keep legacy storage for old code
+      SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(sessionData)),
+      SecureStore.setItemAsync(LAST_VERIFICATION_KEY, Date.now().toString()),
     ]);
     
-    console.log("Session stored with token expiry:", new Date(tokenData.expiresAt).toISOString());
+    const persistenceMsg = isPersistent ? "persistently" : "temporarily";
+    console.log(`Session stored ${persistenceMsg} with expiry:`, new Date(sessionExpiresAt).toISOString());
   } catch (error) {
     console.error("Error storing user session:", error);
   }
@@ -482,6 +496,7 @@ export async function storeUserSession(
   token: string,
   userData: any,
   isSubscribed: boolean,
+  isPersistent: boolean = true,
 ): Promise<void> {
   try {
     // Create TokenData from legacy token
@@ -491,9 +506,59 @@ export async function storeUserSession(
       expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
     };
     
-    await storeUserSessionWithTokens(tokenData, userData, isSubscribed);
+    await storeUserSessionWithTokens(tokenData, userData, isSubscribed, isPersistent);
   } catch (error) {
     console.error("Error storing user session:", error);
+  }
+}
+
+/**
+ * Migrate legacy AsyncStorage session to SecureStore
+ */
+async function migrateLegacySession(): Promise<StoredUserSession | null> {
+  try {
+    console.log('Checking for legacy AsyncStorage session to migrate...');
+    
+    // Check if there's already a SecureStore session
+    const existingSession = await SecureStore.getItemAsync(USER_DATA_KEY);
+    if (existingSession) {
+      console.log('SecureStore session already exists, skipping migration');
+      return null;
+    }
+    
+    // Try to get legacy session from AsyncStorage
+    const legacySessionString = await AsyncStorage.getItem(USER_DATA_KEY);
+    if (!legacySessionString) {
+      console.log('No legacy session found');
+      return null;
+    }
+    
+    const legacySession: StoredUserSession = JSON.parse(legacySessionString);
+    
+    // Check if legacy session is still valid
+    if (legacySession.expiresAt && Date.now() > legacySession.expiresAt) {
+      console.log('Legacy session expired, cleaning up...');
+      await AsyncStorage.multiRemove([STORAGE_KEY, USER_DATA_KEY, LAST_VERIFICATION_KEY]);
+      return null;
+    }
+    
+    console.log('Migrating valid legacy session to SecureStore...');
+    
+    // Migrate to SecureStore (treat as persistent session for existing users)
+    await Promise.all([
+      SecureStore.setItemAsync(STORAGE_KEY, legacySession.token || ''),
+      SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(legacySession)),
+      SecureStore.setItemAsync(LAST_VERIFICATION_KEY, legacySession.lastVerification.toString()),
+    ]);
+    
+    // Clean up AsyncStorage
+    await AsyncStorage.multiRemove([STORAGE_KEY, USER_DATA_KEY, LAST_VERIFICATION_KEY]);
+    
+    console.log('Legacy session migrated successfully for user:', legacySession.userData?.email);
+    return legacySession;
+  } catch (error) {
+    console.error('Error migrating legacy session:', error);
+    return null;
   }
 }
 
@@ -502,18 +567,28 @@ export async function storeUserSession(
  */
 export async function getStoredUserSession(): Promise<StoredUserSession | null> {
   try {
-    const sessionDataString = await AsyncStorage.getItem(USER_DATA_KEY);
-    if (!sessionDataString) return null;
+    // First try to get from SecureStore
+    const sessionDataString = await SecureStore.getItemAsync(USER_DATA_KEY);
+    
+    if (sessionDataString) {
+      const sessionData: StoredUserSession = JSON.parse(sessionDataString);
 
-    const sessionData: StoredUserSession = JSON.parse(sessionDataString);
+      // Check if session has expired
+      if (sessionData.expiresAt && Date.now() > sessionData.expiresAt) {
+        await clearUserSession();
+        return null;
+      }
 
-    // Check if session has expired
-    if (sessionData.expiresAt && Date.now() > sessionData.expiresAt) {
-      await clearUserSession();
-      return null;
+      return sessionData;
     }
-
-    return sessionData;
+    
+    // If no SecureStore session, try to migrate from AsyncStorage
+    const migratedSession = await migrateLegacySession();
+    if (migratedSession) {
+      return migratedSession;
+    }
+    
+    return null;
   } catch (error) {
     console.error("Error getting stored user session:", error);
     return null;
@@ -544,9 +619,9 @@ export async function updateLastVerification(): Promise<void> {
     const sessionData = await getStoredUserSession();
     if (sessionData) {
       sessionData.lastVerification = Date.now();
-      await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(sessionData));
+      await SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(sessionData));
     }
-    await AsyncStorage.setItem(LAST_VERIFICATION_KEY, Date.now().toString());
+    await SecureStore.setItemAsync(LAST_VERIFICATION_KEY, Date.now().toString());
   } catch (error) {
     console.error("Error updating last verification:", error);
   }
@@ -580,7 +655,7 @@ export async function backgroundVerifySubscription(): Promise<boolean | null> {
       // Update stored session data
       sessionData.isSubscribed = isSubscribed;
       sessionData.lastVerification = Date.now();
-      await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(sessionData));
+      await SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(sessionData));
 
       return isSubscribed;
     } catch (apiError) {
@@ -590,7 +665,7 @@ export async function backgroundVerifySubscription(): Promise<boolean | null> {
         
         // Mark that we need verification next time but don't fail the session
         sessionData.lastVerification = Date.now() - (24 * 60 * 60 * 1000); // Mark as needing verification
-        await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(sessionData));
+        await SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(sessionData));
         
         // Return the last known subscription status instead of failing
         return sessionData.isSubscribed;
@@ -690,10 +765,10 @@ export async function loadPersistedUser(): Promise<AuthResult> {
  */
 export async function clearUserSession(): Promise<void> {
   try {
-    await AsyncStorage.multiRemove([
-      STORAGE_KEY,
-      USER_DATA_KEY,
-      LAST_VERIFICATION_KEY,
+    await Promise.all([
+      SecureStore.deleteItemAsync(STORAGE_KEY),
+      SecureStore.deleteItemAsync(USER_DATA_KEY),
+      SecureStore.deleteItemAsync(LAST_VERIFICATION_KEY),
     ]);
   } catch (error) {
     console.error("Error clearing user session:", error);

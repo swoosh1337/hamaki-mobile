@@ -3,7 +3,7 @@ import React from 'react';
 
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
+// Use flat background instead of custom component for now
 import { Colors } from '@/constants/Colors';
 
 export default function TabLayout() {
@@ -15,7 +15,7 @@ export default function TabLayout() {
         tabBarInactiveTintColor: Colors.dark.tabIconDefault,
         headerShown: false,
         tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
+        // Flat background (no custom component)
         tabBarStyle: {
           backgroundColor: Colors.dark.background,
           borderTopColor: Colors.dark.tint,

@@ -16,6 +16,7 @@ jest.mock('@supabase/supabase-js', () => ({
 describe('Supabase Utils', () => {
   let mockFrom: jest.MockedFunction<any>;
   let mockSelect: jest.MockedFunction<any>;
+  let mockInsert: jest.MockedFunction<any>;
   let mockUpsert: jest.MockedFunction<any>;
   let mockUpdate: jest.MockedFunction<any>;
   let mockEq: jest.MockedFunction<any>;
@@ -29,6 +30,7 @@ describe('Supabase Utils', () => {
     
     // Create a chain of mocked methods
     mockSelect = jest.fn().mockReturnThis();
+    mockInsert = jest.fn().mockReturnThis();
     mockUpsert = jest.fn().mockReturnThis();
     mockUpdate = jest.fn().mockReturnThis();
     mockEq = jest.fn().mockReturnThis();
@@ -38,6 +40,7 @@ describe('Supabase Utils', () => {
 
     mockFrom = jest.fn(() => ({
       select: mockSelect,
+      insert: mockInsert,
       upsert: mockUpsert,
       update: mockUpdate,
       eq: mockEq,
@@ -80,14 +83,14 @@ describe('Supabase Utils', () => {
 
       expect(result).toEqual(newUserProfile);
       expect(mockFrom).toHaveBeenCalledWith('users');
-      expect(mockUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
         google_id: mockUserData.googleId,
         email: mockUserData.email,
         full_name: mockUserData.fullName,
         avatar_url: mockUserData.avatarUrl,
         youtube_subscribed: mockUserData.isSubscribed,
         xp_points: 0,
-      }), { onConflict: 'google_id', returning: 'minimal' });
+      }));
     });
 
     it('should update existing user when data has changed', async () => {
@@ -109,13 +112,13 @@ describe('Supabase Utils', () => {
       const result = await userService.upsertUserProfile(mockUserData);
 
       expect(result).toEqual(updatedUser);
-      expect(mockUpsert).toHaveBeenCalledWith(expect.objectContaining({
-        google_id: mockUserData.googleId,
+      expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
         email: mockUserData.email,
         full_name: mockUserData.fullName,
         avatar_url: mockUserData.avatarUrl,
         youtube_subscribed: mockUserData.isSubscribed,
-      }), { onConflict: 'google_id', returning: 'minimal' });
+        updated_at: expect.any(String),
+      }));
     });
 
     it('should return existing user when no update is needed', async () => {
@@ -135,8 +138,9 @@ describe('Supabase Utils', () => {
       const result = await userService.upsertUserProfile(mockUserData);
 
       expect(result).toEqual(existingUser);
-      // With upsert, we don't call update or insert directly
-      expect(mockUpsert).toHaveBeenCalled();
+      // No update needed, so update should not be called
+      expect(mockUpdate).not.toHaveBeenCalled();
+      expect(mockInsert).not.toHaveBeenCalled();
     });
 
     it('should handle insert errors', async () => {
@@ -149,7 +153,7 @@ describe('Supabase Utils', () => {
       const result = await userService.upsertUserProfile(mockUserData);
 
       expect(result).toBeNull();
-      expect(console.error).toHaveBeenCalledWith('Error upserting user profile:', { message: 'Insert error' });
+      expect(console.error).toHaveBeenCalledWith('Error creating user profile:', { message: 'Insert error' });
     });
 
     it('should handle upsert errors for existing user', async () => {
@@ -166,7 +170,7 @@ describe('Supabase Utils', () => {
       const result = await userService.upsertUserProfile(mockUserData);
 
       expect(result).toBeNull();
-      expect(console.error).toHaveBeenCalledWith('Error upserting user profile:', { message: 'Update error' });
+      expect(console.error).toHaveBeenCalledWith('Error updating user profile:', { message: 'Update error' });
     });
 
     it('should handle exceptions gracefully', async () => {
@@ -370,9 +374,9 @@ describe('Supabase Utils', () => {
       const result = await userService.upsertUserProfile(userData);
 
       expect(result).toBeTruthy();
-      expect(mockUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
         avatar_url: undefined,
-      }), expect.any(Object));
+      }));
     });
 
     it('should handle very long user names and emails', async () => {

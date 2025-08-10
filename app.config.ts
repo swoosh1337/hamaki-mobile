@@ -4,15 +4,15 @@ export default {
     slug: "hamaki",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
+    icon: "./assets/images/hamaki-logo.png",
     scheme: "com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3",
     userInterfaceStyle: "dark",
     backgroundColor: "#0B0C1A",
-    splash: {
-      image: "./assets/images/logo-transparent.png",
-      resizeMode: "contain",
-      backgroundColor: "#0B0C1A"
-    },
+    // splash: {
+    //   image: "./assets/images/hamaki-logo.png",
+    //   resizeMode: "contain",
+    //   backgroundColor: "#0B0C1A"
+    // },
     newArchEnabled: true,
     ios: {
       supportsTablet: true,
@@ -40,7 +40,7 @@ export default {
     web: {
       bundler: "metro",
       output: "static",
-      favicon: "./assets/images/favicon.png"
+      favicon: "./assets/images/hamaki-logo.png"
     },
     plugins: [
       "expo-router",
@@ -48,10 +48,10 @@ export default {
         "expo-splash-screen",
         {
           backgroundColor: "#0B0C1A",
-          image: "./assets/images/logo-transparent.png",
+          image: "./assets/images/hamaki-logo.png",
           dark: {
             backgroundColor: "#0B0C1A",
-            image: "./assets/images/logo-transparent.png"
+            image: "./assets/images/hamaki-logo.png"
           }
         }
       ],

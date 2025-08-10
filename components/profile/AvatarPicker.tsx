@@ -1,13 +1,14 @@
+import { Colors } from '@/constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
+  ActivityIndicator,
+  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
 
 interface AvatarPickerProps {
   selectedAvatar: string;
@@ -18,13 +19,25 @@ interface AvatarPickerProps {
 interface AvatarOption {
   id: string;
   title: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  url: string;
 }
 
 const avatarOptions: AvatarOption[] = [
-  { id: 'avatar-1', title: 'Avatar 1', icon: 'person-circle' },
-  { id: 'avatar-2', title: 'Avatar 2', icon: 'happy' },
-  { id: 'avatar-3', title: 'Avatar 3', icon: 'star' },
+  {
+    id: 'avatar-1',
+    title: 'Avatar 1',
+    url: 'https://hspaxdszcnrznqehblky.supabase.co/storage/v1/object/sign/avatars/avatar-1.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zMWE0YzgyOC1kNmZmLTRlZTAtYWQ2MC1hZjg1YTY1YzU2ZDEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJhdmF0YXJzL2F2YXRhci0xLnBuZyIsImlhdCI6MTc1NDc4NDY4OSwiZXhwIjoxNzg2MzIwNjg5fQ.SKfVTG5KuGqpDnU3vCvzSUoBShVeCzpKhteFy_Zeh9I',
+  },
+  {
+    id: 'avatar-2',
+    title: 'Avatar 2',
+    url: 'https://hspaxdszcnrznqehblky.supabase.co/storage/v1/object/sign/avatars/avatar-2.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zMWE0YzgyOC1kNmZmLTRlZTAtYWQ2MC1hZjg1YTY1YzU2ZDEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJhdmF0YXJzL2F2YXRhci0yLnBuZyIsImlhdCI6MTc1NDc4NDY5NywiZXhwIjoxNzg2MzIwNjk3fQ.hwjcOi7o3-9XRZ0uYYYTYFlcK8IWt2r-CJyo-38j2C8',
+  },
+  {
+    id: 'avatar-3',
+    title: 'Avatar 3',
+    url: 'https://hspaxdszcnrznqehblky.supabase.co/storage/v1/object/sign/avatars/avatar-3.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zMWE0YzgyOC1kNmZmLTRlZTAtYWQ2MC1hZjg1YTY1YzU2ZDEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJhdmF0YXJzL2F2YXRhci0zLnBuZyIsImlhdCI6MTc1NDc4NDcwOCwiZXhwIjoxNzg2MzIwNzA4fQ.QRFOWSPKG-lxwYKJKPd4wi-fPcUIKCUDLYGjasuIjdU',
+  },
 ];
 
 export const AvatarPicker: React.FC<AvatarPickerProps> = ({
@@ -32,14 +45,7 @@ export const AvatarPicker: React.FC<AvatarPickerProps> = ({
   onSelect,
   isLoading = false,
 }) => {
-  const handleAvatarPress = (avatarId: string) => {
-    if (isLoading || avatarId === selectedAvatar) {
-      return;
-    }
-    onSelect(avatarId);
-  };
-
-  if (isLoading) {
+    if (isLoading) {
     return (
       <View style={styles.container} testID="avatar-picker-container">
         <Text style={styles.title}>Choose Your Avatar</Text>
@@ -56,28 +62,27 @@ export const AvatarPicker: React.FC<AvatarPickerProps> = ({
       <Text style={styles.title}>Choose Your Avatar</Text>
       <View style={styles.avatarGrid}>
         {avatarOptions.map((avatar) => {
-          const isSelected = avatar.id === selectedAvatar;
-          
+          const isSelected = avatar.url === selectedAvatar || avatar.id === selectedAvatar;
+          const isDisabled = isSelected || isLoading;
+
           return (
             <TouchableOpacity
               key={avatar.id}
               style={[
                 styles.avatarOption,
                 isSelected && styles.selectedAvatarOption,
+                isDisabled && styles.disabledAvatarOption,
               ]}
-              onPress={() => handleAvatarPress(avatar.id)}
-              activeOpacity={0.8}
+              onPress={() => onSelect(avatar.id)}
+              activeOpacity={isDisabled ? 1 : 0.8}
+              disabled={isDisabled}
               testID={`avatar-option-${avatar.id}`}
               accessibilityLabel={`Select ${avatar.title}`}
               accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
+              accessibilityState={{ selected: isSelected, disabled: isDisabled }}
             >
               <View style={styles.avatarIconContainer}>
-                <Ionicons
-                  name={avatar.icon}
-                  size={48}
-                  color={isSelected ? Colors.dark.tint : Colors.dark.icon}
-                />
+                <Image source={{ uri: avatar.url }} style={styles.avatarImage} />
                 {isSelected && (
                   <View 
                     style={styles.selectedIndicator}
@@ -142,9 +147,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  disabledAvatarOption: {
+    opacity: 0.6,
+  },
   avatarIconContainer: {
     position: 'relative',
     marginBottom: 8,
+  },
+  avatarImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(245,245,245,0.05)'
   },
   selectedIndicator: {
     position: 'absolute',

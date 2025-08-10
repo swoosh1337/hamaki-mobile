@@ -136,7 +136,7 @@ export const createMockSupabaseClient = () => ({
 export const waitForAsync = (ms = 0) => 
   new Promise(resolve => setTimeout(resolve, ms));
 
-export const mockTimestamp = 1640995200000; // 2022-01-01 00:00:00 UTC
+export const mockTimestamp = 1704240000000; // 2024-01-03 00:00:00 UTC
 
 let originalDate: DateConstructor;
 
