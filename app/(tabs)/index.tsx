@@ -3,18 +3,68 @@ import { Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } 
 
 import { Colors } from '@/constants/Colors';
 // import { useAuth } from '@/contexts/AuthContext';
-import { useVideos } from '@/contexts/VideoContext';
-import { formatTimeAgo, isVideoNew, YouTubeVideo } from '@/utils/youtube';
-import { VideoSkeleton, PostSkeleton } from '@/components/ui/SkeletonLoader';
+import { useContent } from '@/contexts/ContentContext';
+import { isVideoNew } from '@/utils/youtube';
+import { PostSkeleton, CarouselSkeleton } from '@/components/ui/SkeletonLoader';
+import { CarouselCard } from '@/components/ui/CarouselCard';
+
+// Unified Post Types
+interface Post {
+  id: string;
+  type: 'video' | 'blog' | 'hiring' | 'announcement';
+  title: string;
+  excerpt: string;
+  content: string;
+  thumbnail: string;
+  isPublished: boolean;
+  publishedAt: string;
+  isFeatured: boolean;
+  featuredOrder: number;
+  metadata: {
+    videoId?: string;
+    duration?: string;
+    viewCount?: string;
+    position?: string;
+    company?: string;
+    applicationUrl?: string;
+    badge?: string;
+    priority?: 'low' | 'medium' | 'high';
+    tags?: string[];
+    readTimeMinutes?: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
 
 export default function HomeScreen() {
   // Keep auth available for future header personalization
   // const { userProfile } = useAuth();
-  const { videos, isLoading, error, hasNewVideos } = useVideos();
+  const { posts, featuredPosts, isLoading, error, hasNewContent, refreshContent } = useContent();
+  const [expandedPostId, setExpandedPostId] = React.useState<string | null>(null);
+  const scrollViewRef = React.useRef<ScrollView>(null);
   
 
+  const handleCarouselPostTap = async (post: Post) => {
+    if (post.type === 'video' && post.metadata.videoId) {
+      // Open video in YouTube app
+      const appUrl = `youtube://watch?v=${post.metadata.videoId}`;
+      const webUrl = `https://www.youtube.com/watch?v=${post.metadata.videoId}`;
+      try {
+        const canOpen = await Linking.canOpenURL(appUrl);
+        await Linking.openURL(canOpen ? appUrl : webUrl);
+      } catch {
+        await Linking.openURL(webUrl);
+      }
+    } else {
+      // Scroll to post in list and expand it
+      setExpandedPostId(post.id);
+      // Scroll to posts section (approximate position)
+      scrollViewRef.current?.scrollTo({ y: 500, animated: true });
+    }
+  };
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollViewRef} style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header with Logo */}
       <View style={styles.header}>
         <Image
@@ -25,10 +75,10 @@ export default function HomeScreen() {
       </View>
 
 
-      {/* Latest Videos Section */}
+      {/* Featured Carousel Section */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>LATEST VIDEOS</Text>
-        {hasNewVideos && (
+        <Text style={styles.sectionTitle}>FEATURED</Text>
+        {hasNewContent && (
           <View style={styles.newIndicator}>
             <Text style={styles.newIndicatorText}>NEW</Text>
           </View>
@@ -39,10 +89,10 @@ export default function HomeScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.videoRow}
+          contentContainerStyle={styles.carouselRow}
         >
-          {[...Array(5)].map((_, index) => (
-            <VideoSkeleton key={`video-skeleton-${index}`} />
+          {[...Array(4)].map((_, index) => (
+            <CarouselSkeleton key={`carousel-skeleton-${index}`} />
           ))}
         </ScrollView>
       )}
@@ -57,17 +107,11 @@ export default function HomeScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.videoRow}
+          contentContainerStyle={styles.carouselRow}
         >
-          {videos.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No videos found</Text>
-            </View>
-          ) : (
-            videos.slice(0, 10).map((video) => (
-              <HorizontalVideoCard key={video.id} video={video} />
-            ))
-          )}
+          {featuredPosts.map((post) => (
+            <CarouselCard key={post.id} post={post} onPostTap={handleCarouselPostTap} />
+          ))}
         </ScrollView>
       )}
 
@@ -80,14 +124,13 @@ export default function HomeScreen() {
             <PostSkeleton key={`post-skeleton-${index}`} />
           ))
         ) : (
-          mockPosts.map((p) => (
-            <View key={p.id} style={styles.postCard}>
-              <Text style={styles.postTitle}>{p.title}</Text>
-              <Text style={styles.postExcerpt} numberOfLines={3}>{p.excerpt}</Text>
-              <View style={styles.postMetaRow}>
-                <Text style={styles.postMetaText}>{formatDate(p.createdAt)}</Text>
-              </View>
-            </View>
+          posts.map((post) => (
+            <PostCard 
+              key={post.id} 
+              post={post} 
+              isExpanded={expandedPostId === post.id}
+              onToggleExpand={() => setExpandedPostId(expandedPostId === post.id ? null : post.id)}
+            />
           ))
         )}
       </View>
@@ -95,68 +138,55 @@ export default function HomeScreen() {
   );
 }
 
-// Video Card Component (type reused by HorizontalVideoCard)
-type VideoCardProps = { video: YouTubeVideo };
+// Legacy components removed - using new carousel system
 
-// Retained for potential future vertical list usage (currently unused)
-// Note: keep for potential future vertical feed, not exported/used now
+// CarouselCard component extracted to separate file
 
-// Horizontal compact video card used in the carousel
-function HorizontalVideoCard({ video }: VideoCardProps) {
-  const timeAgo = formatTimeAgo(video.publishedAt);
-  const isNew = isVideoNew(video.publishedAt);
-
-  const handlePress = async () => {
-    const appUrl = `youtube://watch?v=${video.videoId}`;
-    const webUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
-    try {
-      const canOpen = await Linking.canOpenURL(appUrl);
-      await Linking.openURL(canOpen ? appUrl : webUrl);
-    } catch {
-      await Linking.openURL(webUrl);
-    }
-  };
-
+// Post Card Component for the posts list
+function PostCard({ post, isExpanded, onToggleExpand }: { post: Post; isExpanded: boolean; onToggleExpand: () => void }) {
   return (
-    <TouchableOpacity
-      style={styles.hVideoCard}
+    <TouchableOpacity 
+      style={[styles.postCard, isExpanded && styles.postCardExpanded]} 
+      onPress={onToggleExpand}
       activeOpacity={0.85}
-      onPress={handlePress}
-      accessibilityRole="button"
-      accessibilityLabel={`Watch ${video.title}`}
     >
-      <Image source={{ uri: video.thumbnail }} style={styles.hVideoThumb} />
-      <View style={styles.hVideoInfo}>
-        <Text style={styles.hVideoTitle} numberOfLines={2}>{video.title}</Text>
-        <Text style={styles.hVideoMeta} numberOfLines={1}>
-          {timeAgo}{isNew ? ' • NEW' : ''}
+      <Image source={{ uri: post.thumbnail }} style={styles.postThumbnail} />
+      <View style={styles.postContent}>
+        <View style={styles.postHeader}>
+          <Text style={styles.postTitle}>{post.title}</Text>
+          {post.type === 'announcement' && post.metadata.badge && (
+            <View style={styles.postBadge}>
+              <Text style={styles.postBadgeText}>{post.metadata.badge}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.postExcerpt} numberOfLines={isExpanded ? undefined : 2}>
+          {post.excerpt}
         </Text>
+        {isExpanded && (
+          <Text style={styles.postFullContent}>{post.content}</Text>
+        )}
+        <View style={styles.postMetaRow}>
+          <Text style={styles.postMetaText}>{formatDate(post.createdAt)}</Text>
+          {post.metadata.readTimeMinutes && (
+            <Text style={styles.postMetaText}>• {post.metadata.readTimeMinutes} min read</Text>
+          )}
+          {post.type === 'hiring' && post.metadata.position && (
+            <Text style={styles.postMetaText}>• {post.metadata.position}</Text>
+          )}
+        </View>
+        {isExpanded && (
+          <View style={styles.expandedActions}>
+            <Text style={styles.tapToCollapseText}>Tap to collapse</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
 }
 
-// Mock posts for now
-const mockPosts = [
-  {
-    id: 'p-1',
-    title: 'სტატია 1',
-    excerpt: 'გაგოშა გამოგვიყლევდა...',
-    createdAt: '2025-08-01T12:00:00Z',
-  },
-  {
-    id: 'p-2',
-    title: 'სტატია 2',
-    excerpt: 'კოსტა წაგვექცა და ძირს ტისკი იპოვა...',
-    createdAt: '2025-08-03T09:00:00Z',
-  },
-  {
-    id: 'p-3',
-    title: 'სტატია 3',
-    excerpt: 'ვერაა კაი ამბავი',
-    createdAt: '2025-08-05T19:30:00Z',
-  },
-];
+
+// Mock data removed - now using real-time database content
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
@@ -200,31 +230,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingBottom: 8,
   },
-  hVideoCard: {
-    width: 220,
-    marginHorizontal: 4,
-    backgroundColor: 'rgba(245, 245, 245, 0.05)',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  hVideoThumb: {
-    width: '100%',
-    height: 120,
-    backgroundColor: '#111318',
-  },
-  hVideoInfo: {
-    padding: 10,
-  },
-  hVideoTitle: {
-    color: Colors.dark.text,
-    fontSize: 13,
-    fontWeight: '600',
-    minHeight: 36,
-  },
-  hVideoMeta: {
-    color: Colors.dark.tabIconDefault,
-    fontSize: 11,
-    marginTop: 2,
+  carouselRow: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
   xpContainer: {
     flexDirection: 'row',
@@ -376,17 +384,60 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
     opacity: 0.7,
   },
+  // Carousel Styles
+  carouselCard: {
+    width: 180,
+    height: 100,
+    marginHorizontal: 4,
+    backgroundColor: 'rgba(245, 245, 245, 0.05)',
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  carouselThumb: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#111318',
+  },
+  carouselBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: Colors.dark.tint,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  carouselBadgeText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 8,
+    color: Colors.dark.background,
+    fontWeight: 'bold',
+  },
+  
+  // Posts Styles
   postsColumn: {
     paddingHorizontal: 12,
     paddingBottom: 24,
   },
   postCard: {
+    flexDirection: 'row',
     backgroundColor: 'rgba(245,245,245,0.05)',
     borderRadius: 12,
     padding: 14,
     marginVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(196,255,0,0.2)',
+  },
+  postThumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: '#111318',
+  },
+  postContent: {
+    flex: 1,
   },
   postTitle: {
     color: Colors.dark.text,
@@ -403,10 +454,56 @@ const styles = StyleSheet.create({
   },
   postMetaRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   postMetaText: {
     color: Colors.dark.tabIconDefault,
     fontSize: 12,
+  },
+  
+  // New styles for expanded posts
+  postCardExpanded: {
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(196, 255, 0, 0.3)',
+  },
+  postHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  postBadge: {
+    backgroundColor: Colors.dark.tint,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  postBadgeText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 8,
+    color: Colors.dark.background,
+    fontWeight: 'bold',
+  },
+  postFullContent: {
+    color: Colors.dark.text,
+    fontSize: 14,
+    lineHeight: 22,
+    opacity: 0.9,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(196, 255, 0, 0.2)',
+  },
+  expandedActions: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  tapToCollapseText: {
+    color: Colors.dark.tint,
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    opacity: 0.7,
   },
 });

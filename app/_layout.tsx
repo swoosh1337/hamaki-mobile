@@ -8,7 +8,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '@/contexts/AuthContext';
-import { VideoProvider } from '@/contexts/VideoContext';
+import { ContentProvider } from '@/contexts/ContentContext';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -37,7 +37,7 @@ function RootLayout() {
 
   return (
     <AuthProvider>
-      <VideoProvider>
+      <ContentProvider>
         <ThemeProvider value={DarkTheme}>
           <Stack initialRouteName="auth">
             <Stack.Screen name="auth" options={{ headerShown: false }} />
@@ -46,7 +46,7 @@ function RootLayout() {
           </Stack>
           <StatusBar style="light" />
         </ThemeProvider>
-      </VideoProvider>
+      </ContentProvider>
     </AuthProvider>
   );
 }

@@ -71,17 +71,16 @@ export const VideoSkeleton: React.FC = () => {
   );
 };
 
-// Post Skeleton for vertical post lists
+// Post Skeleton for horizontal post lists with thumbnail
 export const PostSkeleton: React.FC = () => {
   return (
     <View style={styles.postSkeleton}>
-      <SkeletonLoader width="80%" height={18} borderRadius={4} style={{ marginBottom: 8 }} />
-      <SkeletonLoader width="100%" height={14} borderRadius={4} style={{ marginBottom: 4 }} />
-      <SkeletonLoader width="100%" height={14} borderRadius={4} style={{ marginBottom: 4 }} />
-      <SkeletonLoader width="70%" height={14} borderRadius={4} style={{ marginBottom: 12 }} />
-      <View style={styles.postSkeletonMeta}>
-        <SkeletonLoader width={60} height={12} borderRadius={4} />
-        <SkeletonLoader width={40} height={12} borderRadius={4} />
+      <SkeletonLoader width={60} height={60} borderRadius={8} style={{ marginRight: 12 }} />
+      <View style={styles.postSkeletonContent}>
+        <SkeletonLoader width="80%" height={18} borderRadius={4} style={{ marginBottom: 8 }} />
+        <SkeletonLoader width="100%" height={14} borderRadius={4} style={{ marginBottom: 4 }} />
+        <SkeletonLoader width="70%" height={14} borderRadius={4} style={{ marginBottom: 12 }} />
+        <SkeletonLoader width={80} height={12} borderRadius={4} />
       </View>
     </View>
   );
@@ -115,6 +114,15 @@ export const XPStatsSkeleton: React.FC = () => {
   );
 };
 
+// Carousel Skeleton for mixed content carousel
+export const CarouselSkeleton: React.FC = () => {
+  return (
+    <View style={styles.carouselSkeleton}>
+      <SkeletonLoader width="100%" height={100} borderRadius={8} />
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   skeleton: {
     backgroundColor: 'rgba(245, 245, 245, 0.1)',
@@ -134,12 +142,16 @@ const styles = StyleSheet.create({
   
   // Post Skeleton Styles
   postSkeleton: {
+    flexDirection: 'row',
     backgroundColor: 'rgba(245, 245, 245, 0.05)',
     borderRadius: 12,
     padding: 14,
     marginVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(196, 255, 0, 0.2)',
+  },
+  postSkeletonContent: {
+    flex: 1,
   },
   postSkeletonMeta: {
     flexDirection: 'row',
@@ -171,5 +183,15 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(196, 255, 0, 0.2)',
+  },
+  
+  // Carousel Skeleton Styles
+  carouselSkeleton: {
+    width: 180,
+    marginHorizontal: 4,
+    backgroundColor: 'rgba(245, 245, 245, 0.05)',
+    borderRadius: 12,
+    overflow: 'hidden',
+    padding: 8,
   },
 });
