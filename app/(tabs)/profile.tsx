@@ -160,44 +160,7 @@ export default function ProfileScreen() {
     }
   };
 
-  // Handle post upvote
-  const handlePostUpvote = async (postId: string) => {
-    if (!userProfile?.id) return;
-
-    try {
-      const postIndex = userPosts.findIndex(p => p.id === postId);
-      if (postIndex === -1) return;
-
-      const post = userPosts[postIndex];
-      const isCurrentlyUpvoted = post.isUpvoted;
-
-      // Optimistic update
-      const updatedPosts = [...userPosts];
-      updatedPosts[postIndex] = {
-        ...post,
-        upvotes: isCurrentlyUpvoted ? post.upvotes - 1 : post.upvotes + 1,
-        isUpvoted: !isCurrentlyUpvoted,
-      };
-      setUserPosts(updatedPosts);
-
-      // Make API call
-      if (isCurrentlyUpvoted) {
-        await userService.downvotePost(postId, userProfile.id);
-      } else {
-        await userService.upvotePost(postId, userProfile.id);
-      }
-    } catch (error) {
-      console.error('Error updating post upvote:', error);
-      // Revert optimistic update on error
-      await loadUserPosts(0, true);
-      
-      if (error instanceof Error) {
-        Alert.alert('Error', error.message);
-      } else {
-        Alert.alert('Error', 'Failed to update upvote. Please try again.');
-      }
-    }
-  };
+  // Note: Users cannot upvote their own posts, so no upvote handler needed
 
   // Handle load more posts
   const handleLoadMorePosts = async () => {
@@ -340,22 +303,17 @@ export default function ProfileScreen() {
                 <View key={post.id} style={styles.postItem}>
                   <Text style={styles.postTitle}>{post.title}</Text>
                   <View style={styles.postMeta}>
-                    <TouchableOpacity 
-                      style={styles.upvoteButton}
-                      onPress={() => handlePostUpvote(post.id)}
-                    >
+                    {/* Show upvote count but make it non-interactive for own posts */}
+                    <View style={styles.upvoteDisplay}>
                       <Ionicons 
-                        name={post.isUpvoted ? "heart" : "heart-outline"} 
+                        name="heart-outline" 
                         size={16} 
-                        color={post.isUpvoted ? Colors.dark.tint : Colors.dark.tabIconDefault} 
+                        color={Colors.dark.tabIconDefault} 
                       />
-                      <Text style={[
-                        styles.upvoteCount,
-                        post.isUpvoted && { color: Colors.dark.tint }
-                      ]}>
+                      <Text style={styles.upvoteCount}>
                         {post.upvotes}
                       </Text>
-                    </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               ))}
@@ -574,12 +532,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
-  upvoteButton: {
+  upvoteDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
     gap: 4,
+    opacity: 0.7, // Make it look disabled
   },
   upvoteCount: {
     color: Colors.dark.tabIconDefault,

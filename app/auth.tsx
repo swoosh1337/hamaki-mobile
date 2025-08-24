@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
-import { ActivityIndicator, Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { ActivityIndicator, Image, SafeAreaView, StyleSheet, Text, View, AppState } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 
 import { GoogleSignInButton } from '@/components/ui/GoogleSignInButton';
 import { Colors } from '@/constants/Colors';
@@ -14,11 +15,52 @@ import { useAuth } from '@/contexts/AuthContext';
 function AuthScreen() {
   const { signIn, isLoading } = useAuth();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const appState = useRef(AppState.currentState);
+  const isAuthenticating = useRef(false);
+  
+  // Monitor app state changes to detect return from OAuth
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      console.log('🔍 App state changed from', appState.current, 'to', nextAppState);
+      
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active' &&
+        isAuthenticating.current
+      ) {
+        console.log('🔍 App became active after OAuth - checking for auth completion');
+        // Give a longer delay for any pending auth operations to complete
+        setTimeout(() => {
+          console.log('🔍 Checking if WebBrowser can complete auth session');
+          WebBrowser.maybeCompleteAuthSession();
+          
+          // Additional retry after a bit more time
+          setTimeout(() => {
+            console.log('🔍 Second attempt to complete auth session');
+            WebBrowser.maybeCompleteAuthSession();
+          }, 2000);
+        }, 1500);
+      }
+      
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
   
   // Handle sign-in button press with Google authentication
   const handleSignIn = async () => {
+    console.log('🔍 Starting authentication process');
+    setErrorMessage(null);
+    isAuthenticating.current = true;
+    
     try {
       const result = await signIn();
+      isAuthenticating.current = false;
+      
+      console.log('🔍 Authentication result received:', result);
       
       if (result.success) {
         if (result.isSubscribed) {
@@ -30,10 +72,12 @@ function AuthScreen() {
         }
       } else {
         // Authentication failed
+        console.log('🔍 Authentication failed:', result.error);
         setErrorMessage(result.error || 'Authentication failed. Please try again.');
       }
     } catch (error) {
-      console.error('Sign in error:', error);
+      console.error('🔍 Sign in error:', error);
+      isAuthenticating.current = false;
       setErrorMessage('An unexpected error occurred. Please try again.');
     }
   };

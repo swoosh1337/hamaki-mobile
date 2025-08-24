@@ -35,7 +35,11 @@ export interface UserPost {
   user_id: string;
   title: string;
   content: string;
+  category?: string;
+  status: string;
   upvotes: number;
+  approved_at?: string;
+  approved_by?: string;
   created_at: string;
   updated_at: string;
 }
@@ -335,7 +339,7 @@ export const userService = {
   // Post Management Methods
 
   // Create a new user post
-  async createUserPost(userId: string, title: string, content: string): Promise<UserPost | null> {
+  async createUserPost(userId: string, title: string, content: string, category?: string): Promise<UserPost | null> {
     try {
       // Validate post content
       if (!title || title.length < 5 || title.length > 100) {
@@ -345,14 +349,21 @@ export const userService = {
         throw new Error('Content must be between 10 and 1000 characters');
       }
 
+      const postData: any = {
+        user_id: userId,
+        title,
+        content,
+        status: 'pending', // All new posts start as pending
+        upvotes: 0,
+      };
+
+      if (category) {
+        postData.category = category;
+      }
+
       const { data, error } = await supabase
         .from('posts')
-        .insert({
-          user_id: userId,
-          title,
-          content,
-          upvotes: 0,
-        })
+        .insert(postData)
         .select()
         .single();
 
@@ -523,6 +534,106 @@ export const userService = {
     } catch (error) {
       console.error('Error getting upvote count:', error);
       return 0;
+    }
+  },
+
+  // Ideas Tab Methods
+
+  // Get approved posts sorted by upvotes for Ideas tab
+  async getApprovedPosts(limit: number = 20, offset: number = 0): Promise<UserPost[]> {
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('status', 'approved')
+        .order('upvotes', { ascending: false })
+        .order('created_at', { ascending: false }) // Secondary sort by date
+        .limit(limit)
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error('Error fetching approved posts:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching approved posts:', error);
+      return [];
+    }
+  },
+
+  // Get approved posts with user upvote status for Ideas tab
+  async getApprovedPostsWithUserUpvotes(userId: string, limit: number = 20, offset: number = 0): Promise<(UserPost & { isUpvoted?: boolean; user?: { full_name: string; avatar_url?: string } })[]> {
+    try {
+      console.log('🔍 Fetching approved posts from database...', { userId, limit, offset });
+      
+      // First get the approved posts with user information
+      // Use the specific foreign key relationship for the post creator
+      const { data: posts, error: postsError } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          users!posts_user_id_fkey(full_name, avatar_url)
+        `)
+        .eq('status', 'approved')
+        .order('upvotes', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(limit)
+        .range(offset, offset + limit - 1);
+
+      console.log('📊 Raw database response:', { posts, postsError });
+
+      if (postsError) {
+        console.error('Error fetching approved posts:', postsError);
+        return [];
+      }
+
+      if (!posts || posts.length === 0) {
+        console.log('🚫 No approved posts found in database');
+        return [];
+      }
+
+      console.log('✅ Found approved posts:', posts.map(p => ({ 
+        id: p.id, 
+        title: p.title, 
+        upvotes: p.upvotes, 
+        status: p.status 
+      })));
+
+      // Get user's upvotes for these posts
+      const postIds = posts.map(p => p.id);
+      const { data: upvotes, error: upvotesError } = await supabase
+        .from('post_upvotes')
+        .select('post_id')
+        .eq('user_id', userId)
+        .in('post_id', postIds);
+
+      if (upvotesError) {
+        console.error('Error fetching user upvotes:', upvotesError);
+        // Continue without upvote status rather than failing completely
+      }
+
+      // Combine the data
+      const upvotedPostIds = new Set(upvotes?.map(u => u.post_id) || []);
+      
+      const finalResult = posts.map(post => ({
+        ...post,
+        isUpvoted: upvotedPostIds.has(post.id),
+        user: Array.isArray(post.users) ? post.users[0] : post.users,
+      }));
+      
+      console.log('🎯 Final result being returned to UI:', finalResult.map(p => ({ 
+        id: p.id, 
+        title: p.title, 
+        upvotes: p.upvotes, 
+        isUpvoted: p.isUpvoted 
+      })));
+      
+      return finalResult;
+    } catch (error) {
+      console.error('Error fetching approved posts with upvotes:', error);
+      return [];
     }
   },
 };

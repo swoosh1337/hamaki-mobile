@@ -1,22 +1,29 @@
-import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from "expo-auth-session";
+import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
 
 // Constants
 
-// Register the redirect URI for your app
-WebBrowser.maybeCompleteAuthSession();
+// WebBrowser.maybeCompleteAuthSession() is called in app/_layout.tsx
 
 // OAuth client IDs
 const WEB_CLIENT_ID =
-  "986216455734-km0t9srahthpebl4dvb9gc8o9j2ehru5.apps.googleusercontent.com"; // existing web / dev
+  "986216455734-km0t9srahthpebl4dvb9gc8o9j2ehru5.apps.googleusercontent.com"; // Web OAuth client (Expo Go)
 const IOS_CLIENT_ID =
-  "986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3.apps.googleusercontent.com"; // new iOS client
+  "986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3.apps.googleusercontent.com"; // iOS native client (standalone)
 
-// Helper: choose correct client ID (back to original iOS-only approach)
-const CLIENT_ID = Platform?.OS === "ios" ? IOS_CLIENT_ID : WEB_CLIENT_ID;
+// Detect Expo Go to decide proxy usage and client ID
+const isExpoGo = (Constants?.appOwnership === 'expo') || (Constants as any)?.executionEnvironment === 'storeClient';
+// Expo Auth proxy base (we'll append returnUrl dynamically for Expo Go)
+const EXPO_PROXY_BASE = 'https://auth.expo.io/@igrigolia1/hamaki';
+
+// Choose correct client ID
+const CLIENT_ID = isExpoGo
+  ? WEB_CLIENT_ID
+  : (Platform?.OS === "ios" ? IOS_CLIENT_ID : WEB_CLIENT_ID);
 const HAMAKI_CHANNEL_ID = "UCSI5XbaxsX1USijrfFVuJqA";
 const STORAGE_KEY = "hamaki_auth_token";
 const USER_DATA_KEY = "hamaki_user_data";
@@ -73,16 +80,24 @@ export interface StoredUserSession {
  */
 export async function authenticateWithGoogle(): Promise<AuthResult> {
   try {
-    // Use original working redirect URI for iOS client
-    const redirectUri = AuthSession.makeRedirectUri({
-      native:
-        "com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3:/oauth2redirect/google",
-    });
+    // Build redirect URI.
+    // For Expo Go, force the proper proxy URL since makeRedirectUri isn't working correctly
+    const returnUrl = AuthSession.getDefaultReturnUrl();
+    const redirectUri = isExpoGo
+      ? `${EXPO_PROXY_BASE}?returnUrl=${encodeURIComponent(returnUrl)}`
+      : AuthSession.makeRedirectUri({
+          native:
+            "com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3:/oauth2redirect/google",
+        });
 
     console.log("🔍 OAuth Debug Info:");
     console.log("Platform:", Platform?.OS);
+    console.log("AppOwnership:", Constants?.appOwnership);
+    console.log("ExpoGo:", isExpoGo);
     console.log("Client ID:", CLIENT_ID);
     console.log("Redirect URI:", redirectUri);
+    console.log("Return URL:", returnUrl);
+    console.log("Using Proxy:", isExpoGo);
 
     // Create the auth request
     const request = new AuthSession.AuthRequest({
@@ -102,8 +117,21 @@ export async function authenticateWithGoogle(): Promise<AuthResult> {
       },
     });
 
-    const result = await request.promptAsync(discovery);
+    // Use promptAsync with proper proxy configuration for Expo Go
+    console.log("🔍 Calling promptAsync...");
+    const result = await request.promptAsync(discovery, {
+      useProxy: isExpoGo,
+      showInRecents: false,
+      dismissButtonStyle: 'done',
+    });
+    console.log("🔍 promptAsync completed");
 
+    console.log("🔍 OAuth Result:");
+    console.log("Result type:", result.type);
+    console.log("Result params:", result.params);
+    console.log("Result error:", result.error);
+    console.log("Result url:", result.url);
+    
     if (result.type === "success") {
       if (!request.codeVerifier) {
         throw new Error("PKCE code verifier not found");
@@ -141,10 +169,45 @@ export async function authenticateWithGoogle(): Promise<AuthResult> {
         userData,
         tokenData, // Include full token data
       };
-    } else {
+    } else if (result.type === "cancel") {
+      console.log("🔍 OAuth was cancelled - checking if this might be a successful auth");
+      
+      // In Expo Go, successful auth sometimes gets reported as "cancel" due to proxy issues
+      // Let's try to wait a moment and check if we can complete the session
+      console.log("🔍 Attempting to recover auth session...");
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Try once more to complete the auth session
+      try {
+        console.log("🔍 Final attempt to complete WebBrowser auth session");
+        const completedSuccessfully = await WebBrowser.maybeCompleteAuthSession();
+        console.log("🔍 WebBrowser completion result:", completedSuccessfully);
+      } catch (e) {
+        console.log("🔍 WebBrowser completion error:", e);
+      }
+      
       return {
         success: false,
-        error: "Authentication was cancelled or failed",
+        error: "Authentication was cancelled. If you completed Google sign-in, please try again.",
+      };
+    } else if (result.type === "dismiss") {
+      console.log("🔍 OAuth was dismissed");
+      return {
+        success: false,
+        error: "Authentication was dismissed",
+      };
+    } else if (result.type === "error") {
+      console.error("🔍 OAuth error:", result.error);
+      return {
+        success: false,
+        error: `Authentication error: ${result.error}`,
+      };
+    } else {
+      console.error("🔍 Unknown OAuth result type:", result.type);
+      return {
+        success: false,
+        error: `Unknown authentication result: ${result.type}`,
       };
     }
   } catch (error) {

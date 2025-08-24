@@ -3,6 +3,7 @@ import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as WebBrowser from 'expo-web-browser';
 import 'react-native-reanimated';
 import * as SplashScreen from 'expo-splash-screen';
 
@@ -12,6 +13,9 @@ import { ContentProvider } from '@/contexts/ContentContext';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
+
+// Complete auth session setup for OAuth redirects
+WebBrowser.maybeCompleteAuthSession();
 
 function RootLayout() {
   // We're using DarkTheme exclusively now
