@@ -3,10 +3,10 @@ import { Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } 
 
 import { Colors } from '@/constants/Colors';
 // import { useAuth } from '@/contexts/AuthContext';
-import { useContent } from '@/contexts/ContentContext';
-import { isVideoNew } from '@/utils/youtube';
-import { PostSkeleton, CarouselSkeleton } from '@/components/ui/SkeletonLoader';
 import { CarouselCard } from '@/components/ui/CarouselCard';
+import { CarouselSkeleton, PostSkeleton } from '@/components/ui/SkeletonLoader';
+import { useContent } from '@/contexts/ContentContext';
+import { trackPostClose, trackPostOpen } from '@/utils/analytics';
 
 // Unified Post Types
 interface Post {
@@ -39,8 +39,9 @@ interface Post {
 export default function HomeScreen() {
   // Keep auth available for future header personalization
   // const { userProfile } = useAuth();
-  const { posts, featuredPosts, isLoading, error, hasNewContent, refreshContent } = useContent();
+  const { posts, featuredPosts, isLoading, error, hasNewContent } = useContent();
   const [expandedPostId, setExpandedPostId] = React.useState<string | null>(null);
+  const expandStartedAtRef = React.useRef<number | null>(null);
   const scrollViewRef = React.useRef<ScrollView>(null);
   
 
@@ -57,9 +58,31 @@ export default function HomeScreen() {
       }
     } else {
       // Scroll to post in list and expand it
+      if (expandedPostId !== post.id) {
+        expandStartedAtRef.current = Date.now();
+        trackPostOpen(post.id, 'carousel');
+      }
       setExpandedPostId(post.id);
       // Scroll to posts section (approximate position)
       scrollViewRef.current?.scrollTo({ y: 500, animated: true });
+    }
+  };
+
+  const handleToggleExpand = (post: Post) => {
+    const now = Date.now();
+    if (expandedPostId === post.id) {
+      // collapsing
+      if (expandStartedAtRef.current) {
+        const dwell = Math.max(0, now - expandStartedAtRef.current);
+        trackPostClose(post.id, dwell, 'list');
+      }
+      expandStartedAtRef.current = null;
+      setExpandedPostId(null);
+    } else {
+      // expanding
+      expandStartedAtRef.current = now;
+      trackPostOpen(post.id, 'list');
+      setExpandedPostId(post.id);
     }
   };
 
@@ -129,7 +152,7 @@ export default function HomeScreen() {
               key={post.id} 
               post={post} 
               isExpanded={expandedPostId === post.id}
-              onToggleExpand={() => setExpandedPostId(expandedPostId === post.id ? null : post.id)}
+              onToggleExpand={() => handleToggleExpand(post)}
             />
           ))
         )}
@@ -175,11 +198,7 @@ function PostCard({ post, isExpanded, onToggleExpand }: { post: Post; isExpanded
             <Text style={styles.postMetaText}>• {post.metadata.position}</Text>
           )}
         </View>
-        {isExpanded && (
-          <View style={styles.expandedActions}>
-            <Text style={styles.tapToCollapseText}>Tap to collapse</Text>
-          </View>
-        )}
+        {/* Removed explicit "Tap to collapse" hint for cleaner UI */}
       </View>
     </TouchableOpacity>
   );
@@ -500,10 +519,5 @@ const styles = StyleSheet.create({
     marginTop: 12,
     alignItems: 'center',
   },
-  tapToCollapseText: {
-    color: Colors.dark.tint,
-    fontSize: 12,
-    fontFamily: 'SpaceMono',
-    opacity: 0.7,
-  },
+  // tapToCollapseText style removed
 });

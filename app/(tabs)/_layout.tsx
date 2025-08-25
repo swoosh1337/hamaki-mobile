@@ -5,6 +5,7 @@ import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 // Use flat background instead of custom component for now
 import { Colors } from '@/constants/Colors';
+import { trackTabTap } from '@/utils/analytics';
 
 export default function TabLayout() {
 
@@ -31,12 +32,18 @@ export default function TabLayout() {
           title: 'Home',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="house.fill" color={color} />,
         }}
+        listeners={{
+          tabPress: () => trackTabTap('Home'),
+        }}
       />
       <Tabs.Screen
         name="games"
         options={{
           title: 'Games',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="gamecontroller.fill" color={color} />,
+        }}
+        listeners={{
+          tabPress: () => trackTabTap('Games'),
         }}
       />
       <Tabs.Screen
@@ -45,6 +52,9 @@ export default function TabLayout() {
           title: 'Leaderboard',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="trophy.fill" color={color} />,
         }}
+        listeners={{
+          tabPress: () => trackTabTap('Leaderboard'),
+        }}
       />
       <Tabs.Screen
         name="community"
@@ -52,12 +62,18 @@ export default function TabLayout() {
           title: 'Community',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.3.fill" color={color} />,
         }}
+        listeners={{
+          tabPress: () => trackTabTap('Community'),
+        }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.fill" color={color} />,
+        }}
+        listeners={{
+          tabPress: () => trackTabTap('Profile'),
         }}
       />
     </Tabs>

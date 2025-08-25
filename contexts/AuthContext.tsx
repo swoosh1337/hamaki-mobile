@@ -1,9 +1,10 @@
+import { analytics } from '@/utils/analytics';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
-import { authenticateWithGoogle, AuthResult, backgroundVerifySubscription, clearUserSession, loadPersistedUser, storeUserSessionWithTokens, storeUserSession } from '../utils/auth';
+import { RememberMeModal } from '../components/ui/RememberMeModal';
+import { authenticateWithGoogle, AuthResult, backgroundVerifySubscription, clearUserSession, loadPersistedUser, storeUserSession, storeUserSessionWithTokens } from '../utils/auth';
 import { backgroundVideoCheck, initializeNotifications } from '../utils/notifications';
 import { UserProfile, userService } from '../utils/supabase';
-import { RememberMeModal } from '../components/ui/RememberMeModal';
 
 interface AuthContextType {
   isLoading: boolean;
@@ -158,6 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsSubscribed(false);
       setUserProfile(null);
       console.log('User signed out successfully');
+      analytics.setUserId(null);
     } catch (err) {
       console.error('Sign out error:', err);
       setError('Failed to sign out');
@@ -193,6 +195,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsSubscribed(pendingAuthResult.isSubscribed || false);
         setIsTemporarySession(!rememberMe);
         console.log('User saved to Supabase:', supabaseUser);
+
+        // Set analytics user id
+        analytics.setUserId(supabaseUser.google_id);
         
         // Store session based on user choice
         if (pendingAuthResult.tokenData) {

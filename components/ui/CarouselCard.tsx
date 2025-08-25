@@ -1,7 +1,8 @@
+import { Colors } from '@/constants/Colors';
+import { trackCarouselTap } from '@/utils/analytics';
+import { isVideoNew } from '@/utils/youtube';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Colors } from '@/constants/Colors';
-import { isVideoNew } from '@/utils/youtube';
 
 interface Post {
   id: string;
@@ -40,7 +41,10 @@ export const CarouselCard: React.FC<CarouselCardProps> = ({ post, onPostTap }) =
     <TouchableOpacity
       style={styles.carouselCard}
       activeOpacity={0.85}
-      onPress={() => onPostTap(post)}
+      onPress={() => {
+        trackCarouselTap(post.id, post.type);
+        onPostTap(post);
+      }}
       accessibilityRole="button"
       accessibilityLabel={`View ${post.type} post: ${post.title}`}
       testID={`carousel-card-${post.id}`}
