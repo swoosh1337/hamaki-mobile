@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { AvatarPicker } from '@/components/profile/AvatarPicker';
+import { SettingsModal } from '@/components/ui/SettingsModal';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserPost, userService, XPStats } from '@/utils/supabase';
@@ -24,6 +25,7 @@ export default function ProfileScreen() {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const POSTS_PER_PAGE = 10;
 
@@ -180,7 +182,15 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      {/* Settings Button */}
+      <TouchableOpacity
+        style={styles.settingsButton}
+        onPress={() => setShowSettingsModal(true)}
+      >
+        <Ionicons name="settings-outline" size={24} color={Colors.dark.text} />
+      </TouchableOpacity>
+
       <ScrollView 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -295,7 +305,10 @@ export default function ProfileScreen() {
             </ScrollView>
           ) : userPosts.length === 0 ? (
             <View style={styles.emptyPostsContainer}>
-              <Text style={styles.emptyPostsText}>You haven&apos;t submitted any ideas yet.</Text>
+              <Text style={styles.emptyPostsText}>No approved posts yet.</Text>
+              <Text style={styles.emptyPostsSubtext}>
+                Submit ideas in the Community tab. Once approved by admins, they'll appear here!
+              </Text>
             </View>
           ) : (
             <ScrollView style={styles.postsScrollView} nestedScrollEnabled>
@@ -331,7 +344,13 @@ export default function ProfileScreen() {
           )}
         </View>
       </ScrollView>
-    </View>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        visible={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+      />
+    </SafeAreaView>
   );
 }
 
@@ -339,6 +358,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.background,
+  },
+  settingsButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(245, 245, 245, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollView: {
     flex: 1,

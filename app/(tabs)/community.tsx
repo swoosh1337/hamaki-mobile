@@ -258,10 +258,10 @@ export default function IdeasScreen() {
             />
           }
         >
-          <Ionicons name="bulb-outline" size={64} color={Colors.dark.tabIconDefault} />
-          <Text style={styles.emptyTitle}>No Ideas Yet</Text>
+          <Ionicons name="people-outline" size={64} color={Colors.dark.tabIconDefault} />
+          <Text style={styles.emptyTitle}>No Community Posts Yet</Text>
           <Text style={styles.emptyDescription}>
-            Be the first to submit a video idea! Your suggestions help shape future content.
+            Be the first to share a video idea! Your suggestions help shape future content.
           </Text>
         </ScrollView>
         
@@ -310,8 +310,8 @@ export default function IdeasScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>💡 Video Ideas</Text>
-          <Text style={styles.subtitle}>Community suggestions sorted by popularity</Text>
+          <Text style={styles.title}>🌟 Community</Text>
+          <Text style={styles.subtitle}>Share video ideas and vote on suggestions</Text>
         </View>
 
         {/* Posts List */}

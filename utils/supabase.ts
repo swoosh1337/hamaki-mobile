@@ -385,13 +385,14 @@ export const userService = {
     }
   },
 
-  // Get user posts with pagination
+  // Get user posts with pagination (only approved posts)
   async getUserPosts(userId: string, limit: number = 10, offset: number = 0): Promise<UserPost[]> {
     try {
       const { data, error } = await supabase
         .from('posts')
         .select('*')
         .eq('user_id', userId)
+        .eq('status', 'approved') // Only show approved posts
         .order('created_at', { ascending: false })
         .limit(limit)
         .range(offset, offset + limit - 1);

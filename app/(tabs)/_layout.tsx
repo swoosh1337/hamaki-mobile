@@ -40,10 +40,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="ideas"
+        name="leaderboard"
         options={{
-          title: 'Ideas',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="lightbulb.fill" color={color} />,
+          title: 'Leaderboard',
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="trophy.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: 'Community',
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.3.fill" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -51,13 +58,6 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="gearshape.fill" color={color} />,
         }}
       />
     </Tabs>
