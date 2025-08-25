@@ -121,13 +121,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const result = await authenticateWithGoogle();
       
       if (result.success && result.userData) {
-        // Store the pending result and show Remember Me modal
-        setPendingAuthResult(result);
-        setShowRememberMeModal(true);
-        setIsLoading(false);
-        
-        // Return success but user isn't fully authenticated until they choose remember me option
-        return { success: true, userData: result.userData, isSubscribed: result.isSubscribed };
+        // Only show Remember Me modal if user is authenticated AND subscribed
+        if (result.isSubscribed) {
+          // Store the pending result and show Remember Me modal
+          setPendingAuthResult(result);
+          setShowRememberMeModal(true);
+          setIsLoading(false);
+          
+          // Return success but user isn't fully authenticated until they choose remember me option
+          return { success: true, userData: result.userData, isSubscribed: result.isSubscribed };
+        } else {
+          // User authenticated but not subscribed - don't show remember me modal
+          setIsLoading(false);
+          return { success: true, userData: result.userData, isSubscribed: false };
+        }
       } else {
         setError(result.error || 'Authentication failed');
         setIsLoading(false);

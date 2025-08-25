@@ -69,7 +69,7 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Image
           source={require('@/assets/images/logo-transparent.png')}
-          style={[styles.logo, { width: 180, height: 150}]}
+          style={[styles.logo, { width: 140, height: 120}]}
           resizeMode="contain"
         />
       </View>

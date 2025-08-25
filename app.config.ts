@@ -68,6 +68,9 @@ export default {
       typedRoutes: true
     },
     extra: {
+      eas: {
+        projectId: "0d720c0f-ee9a-4dbf-ad18-707be00e7765"
+      },
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
       youtubeApiKey: process.env.EXPO_PUBLIC_YOUTUBE_API_KEY,
