@@ -25,7 +25,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontFamily: 'HamakiGeo',
+    fontFamily: 'HamakiEng',
     color: Colors.dark.tint,
     marginBottom: 10,
   },

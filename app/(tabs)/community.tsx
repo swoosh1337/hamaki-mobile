@@ -23,6 +23,8 @@ type PostWithUserData = UserPost & {
   user?: { full_name: string; avatar_url?: string } 
 };
 
+type SortOption = 'upvotes' | 'latest';
+
 export default function IdeasScreen() {
   const { userProfile } = useAuth();
   
@@ -36,6 +38,7 @@ export default function IdeasScreen() {
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
   const [upvotingPosts, setUpvotingPosts] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<SortOption>('upvotes');
 
   const POSTS_PER_PAGE = 20;
 
@@ -54,7 +57,8 @@ export default function IdeasScreen() {
       const newPosts = await userService.getApprovedPostsWithUserUpvotes(
         userProfile.id,
         POSTS_PER_PAGE,
-        page * POSTS_PER_PAGE
+        page * POSTS_PER_PAGE,
+        sortBy
       );
 
       if (reset) {
@@ -73,7 +77,7 @@ export default function IdeasScreen() {
       setIsLoadingMore(false);
       setIsRefreshing(false);
     }
-  }, [userProfile?.id]);
+  }, [userProfile?.id, sortBy]);
 
   // Initial load
   useEffect(() => {
@@ -81,6 +85,13 @@ export default function IdeasScreen() {
       loadPosts(0, true);
     }
   }, [userProfile?.id, loadPosts]);
+
+  // Reload posts when sort option changes
+  useEffect(() => {
+    if (userProfile?.id) {
+      loadPosts(0, true);
+    }
+  }, [sortBy, loadPosts, userProfile?.id]);
 
   // Real-time subscriptions
   useEffect(() => {
@@ -237,7 +248,7 @@ export default function IdeasScreen() {
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.dark.tint} />
-          <Text style={styles.loadingText}>Loading ideas...</Text>
+          <Text style={styles.loadingText}>Loading Posts...</Text>
         </View>
       </View>
     );
@@ -312,6 +323,14 @@ export default function IdeasScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>🌟 Community</Text>
           <Text style={styles.subtitle}>Share video ideas and vote on suggestions</Text>
+          <TouchableOpacity
+            style={styles.sortToggle}
+            onPress={() => setSortBy(sortBy === 'latest' ? 'upvotes' : 'latest')}
+          >
+            <Text style={styles.sortToggleText}>
+              {sortBy === 'latest' ? 'Latest' : 'Popular'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Posts List */}
@@ -357,6 +376,7 @@ export default function IdeasScreen() {
         onSubmit={handleCreatePost}
         isSubmitting={isSubmittingPost}
       />
+
     </SafeAreaView>
   );
 }
@@ -386,7 +406,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 24,
-    fontFamily: 'HamakiGeo',
+    fontFamily: 'HamakiEng',
     color: Colors.dark.tint,
     marginTop: 16,
     marginBottom: 8,
@@ -411,9 +431,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(196, 255, 0, 0.2)',
   },
+  sortToggle: {
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(196, 255, 0, 0.3)',
+    alignSelf: 'flex-start',
+  },
+  sortToggleText: {
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.tint,
+    fontWeight: '600',
+  },
   title: {
     fontSize: 32,
-    fontFamily: 'HamakiEng',
+    fontFamily: 'hamaki-eng',
     color: Colors.dark.tint,
     marginBottom: 8,
   },

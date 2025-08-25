@@ -1,15 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-  Alert,
-  Modal,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    Modal,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
@@ -243,7 +243,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
           <View style={styles.infoBox}>
             <Ionicons name="information-circle-outline" size={20} color={Colors.dark.tint} />
             <Text style={styles.infoText}>
-              Your idea will be reviewed before appearing in the Ideas feed. You'll be notified once it's approved!
+              Your idea will be reviewed before appearing in the Ideas feed. You&apos;ll be notified once it&apos;s approved!
             </Text>
           </View>
         </ScrollView>
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontFamily: 'HamakiGeo',
+    fontFamily: 'HamakiEng',
     color: Colors.dark.tint,
     fontWeight: 'bold',
   },

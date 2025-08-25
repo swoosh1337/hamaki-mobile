@@ -14,7 +14,7 @@ export default function LeaderboardScreen() {
           Coming Soon!
         </Text>
         <Text style={styles.description}>
-          See who's leading the community with the most XP points and contributions.
+          See who&apos;s leading the community with the most XP points and contributions.
           {'\n\n'}
           Rankings, achievements, and rewards are being prepared for you!
         </Text>

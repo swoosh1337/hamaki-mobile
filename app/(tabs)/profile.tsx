@@ -307,7 +307,7 @@ export default function ProfileScreen() {
             <View style={styles.emptyPostsContainer}>
               <Text style={styles.emptyPostsText}>No approved posts yet.</Text>
               <Text style={styles.emptyPostsSubtext}>
-                Submit ideas in the Community tab. Once approved by admins, they'll appear here!
+                Submit ideas in the Community tab. Once approved by admins, they&apos;ll appear here!
               </Text>
             </View>
           ) : (

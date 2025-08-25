@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   brandText: {
-    fontFamily: 'HamakiGeo',
+    fontFamily: 'HamakiEng',
     fontSize: 32,
     color: Colors.dark.tint,
     textAlign: 'center',

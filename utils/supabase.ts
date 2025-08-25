@@ -565,21 +565,30 @@ export const userService = {
   },
 
   // Get approved posts with user upvote status for Ideas tab
-  async getApprovedPostsWithUserUpvotes(userId: string, limit: number = 20, offset: number = 0): Promise<(UserPost & { isUpvoted?: boolean; user?: { full_name: string; avatar_url?: string } })[]> {
+  async getApprovedPostsWithUserUpvotes(userId: string, limit: number = 20, offset: number = 0, sortBy: 'upvotes' | 'latest' = 'upvotes'): Promise<(UserPost & { isUpvoted?: boolean; user?: { full_name: string; avatar_url?: string } })[]> {
     try {
-      console.log('🔍 Fetching approved posts from database...', { userId, limit, offset });
+      console.log('🔍 Fetching approved posts from database...', { userId, limit, offset, sortBy });
       
       // First get the approved posts with user information
       // Use the specific foreign key relationship for the post creator
-      const { data: posts, error: postsError } = await supabase
+      let query = supabase
         .from('posts')
         .select(`
           *,
           users!posts_user_id_fkey(full_name, avatar_url)
         `)
-        .eq('status', 'approved')
-        .order('upvotes', { ascending: false })
-        .order('created_at', { ascending: false })
+        .eq('status', 'approved');
+
+      // Apply sorting based on sortBy parameter
+      if (sortBy === 'latest') {
+        query = query.order('created_at', { ascending: false });
+      } else {
+        query = query
+          .order('upvotes', { ascending: false })
+          .order('created_at', { ascending: false });
+      }
+
+      const { data: posts, error: postsError } = await query
         .limit(limit)
         .range(offset, offset + limit - 1);
 

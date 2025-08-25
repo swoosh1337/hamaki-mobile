@@ -1,15 +1,15 @@
-import React, { useEffect } from 'react';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
+import React, { useEffect } from 'react';
 import 'react-native-reanimated';
-import * as SplashScreen from 'expo-splash-screen';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ContentProvider } from '@/contexts/ContentContext';
+import { useColorScheme } from '@/hooks/useColorScheme';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -22,8 +22,8 @@ function RootLayout() {
   useColorScheme(); // Keep this hook to maintain theme context
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    'hamaki-eng': require('../assets/fonts/Hamaki-ENG.otf'),
     HamakiGeo: require('../assets/fonts/HamakiGEO.otf'),
-    HamakiENG: require('../assets/fonts/Hamaki-ENG.otf'),
   });
 
   useEffect(() => {

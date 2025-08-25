@@ -1,8 +1,8 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState, useEffect, useRef } from 'react';
-import { ActivityIndicator, Image, SafeAreaView, StyleSheet, Text, View, AppState } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { GoogleSignInButton } from '@/components/ui/GoogleSignInButton';
 import { Colors } from '@/constants/Colors';
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   brandText: {
-    fontFamily: 'HamakiGeo',
+    fontFamily: 'HamakiEng',
     fontSize: 64,
     color: Colors.dark.tint, // Neon green
     textAlign: 'center',
