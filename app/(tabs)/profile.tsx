@@ -10,7 +10,7 @@ import { UserPost, userService, XPStats } from '@/utils/supabase';
 import { XPStatsSkeleton, ProfilePostSkeleton } from '@/components/ui/SkeletonLoader';
 
 export default function ProfileScreen() {
-  const { userProfile, updateUserProfile } = useAuth();
+  const { userProfile, updateUserProfile, isDemoMode } = useAuth();
   
   // State management
   const [selectedAvatar, setSelectedAvatar] = useState<string>('avatar-1');
@@ -28,6 +28,42 @@ export default function ProfileScreen() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const POSTS_PER_PAGE = 10;
+
+  // Demo data for demo mode
+  const demoXPStats: XPStats = {
+    total_xp: 1250,
+    current_level: 8,
+    xp_to_next_level: 150,
+    rank: 12,
+    total_users: 347,
+  };
+
+  const demoPosts: (UserPost & { isUpvoted?: boolean })[] = [
+    {
+      id: 'demo-post-1',
+      title: 'Mobile App Tutorial Series',
+      content: 'What if we created a step-by-step mobile app development tutorial series covering React Native?',
+      upvotes: 23,
+      user_id: 'demo-user-id',
+      status: 'approved',
+      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      category: 'tutorial',
+      isUpvoted: false,
+    },
+    {
+      id: 'demo-post-2', 
+      title: 'Advanced JavaScript Concepts',
+      content: 'Could you cover advanced JS concepts like closures, prototypes, and async/await in detail?',
+      upvotes: 18,
+      user_id: 'demo-user-id',
+      status: 'approved', 
+      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      updated_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      category: 'content',
+      isUpvoted: true,
+    },
+  ];
 
   // Initialize data only when the user identity changes (not on avatar/name updates)
   useEffect(() => {
@@ -57,12 +93,24 @@ export default function ProfileScreen() {
 
     try {
       setIsXpLoading(true);
+      
+      if (isDemoMode) {
+        // Use demo data for demo mode
+        setTimeout(() => {
+          setXpStats(demoXPStats);
+          setIsXpLoading(false);
+        }, 500); // Simulate loading delay
+        return;
+      }
+      
       const stats = await userService.getUserXPStats(userProfile.google_id);
       setXpStats(stats);
     } catch (error) {
       console.error('Error loading XP stats:', error);
     } finally {
-      setIsXpLoading(false);
+      if (!isDemoMode) {
+        setIsXpLoading(false);
+      }
     }
   };
 
@@ -73,6 +121,22 @@ export default function ProfileScreen() {
       if (reset) {
         setIsPostsLoading(true);
         setUserPosts([]);
+      }
+
+      if (isDemoMode) {
+        // Use demo data for demo mode
+        setTimeout(() => {
+          if (reset) {
+            setUserPosts(demoPosts);
+          } else {
+            // For demo, don't add more posts on pagination
+            setUserPosts(prev => [...prev]);
+          }
+          setHasMorePosts(false); // Demo has limited posts
+          setCurrentPage(page);
+          setIsPostsLoading(false);
+        }, 600); // Simulate loading delay
+        return;
       }
 
       const posts = await userService.getUserPosts(
@@ -92,7 +156,9 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Error loading user posts:', error);
     } finally {
-      setIsPostsLoading(false);
+      if (!isDemoMode) {
+        setIsPostsLoading(false);
+      }
     }
   };
 
@@ -190,6 +256,13 @@ export default function ProfileScreen() {
       >
         <Ionicons name="settings-outline" size={24} color={Colors.dark.text} />
       </TouchableOpacity>
+
+      {/* Demo Mode Indicator */}
+      {isDemoMode && (
+        <View style={styles.demoModeIndicator}>
+          <Text style={styles.demoModeText}>Demo Mode</Text>
+        </View>
+      )}
 
       <ScrollView 
         style={styles.scrollView}
@@ -370,6 +443,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(245, 245, 245, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  demoModeIndicator: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(196, 255, 0, 0.9)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.dark.tint,
+  },
+  demoModeText: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.background,
+    fontWeight: 'bold',
   },
   scrollView: {
     flex: 1,

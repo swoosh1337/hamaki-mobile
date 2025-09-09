@@ -12,9 +12,11 @@ interface AuthContextType {
   isSubscribed: boolean;
   userProfile: UserProfile | null;
   signIn: () => Promise<AuthResult>;
+  signInDemo: () => Promise<void>;
   signOut: () => Promise<void>;
   error: string | null;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
+  isDemoMode: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -23,9 +25,11 @@ const AuthContext = createContext<AuthContextType>({
   isSubscribed: false,
   userProfile: null,
   signIn: async () => ({ success: false }),
+  signInDemo: async () => {},
   signOut: async () => {},
   error: null,
   updateUserProfile: () => {},
+  isDemoMode: false,
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -36,6 +40,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+
+  // Demo user profile
+  const demoUserProfile: UserProfile = {
+    id: 'demo-user-id',
+    google_id: 'demo-google-id',
+    email: 'demo@hamakistudio.com',
+    full_name: 'Demo User',
+    avatar_url: 'https://i.pravatar.cc/150?u=demo',
+    xp_points: 1250,
+    is_subscribed: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
   
   // Remember Me modal state
   const [showRememberMeModal, setShowRememberMeModal] = useState(false);
@@ -85,10 +103,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Listen for app state changes to perform background verification and video checking
   useEffect(() => {
     const handleAppStateChange = async (nextAppState: string) => {
-      if (nextAppState === 'active' && isAuthenticated) {
+      if (nextAppState === 'active' && isAuthenticated && !isDemoMode) {
         console.log('App became active, performing background checks...');
         
-        // Check subscription status
+        // Check subscription status (skip for demo users)
         const subscriptionStatus = await backgroundVerifySubscription();
         if (subscriptionStatus !== null && subscriptionStatus !== isSubscribed) {
           setIsSubscribed(subscriptionStatus);
@@ -99,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isSubscribed) {
           await backgroundVideoCheck();
         }
-      } else if (nextAppState === 'background' && isAuthenticated && isTemporarySession) {
+      } else if (nextAppState === 'background' && isAuthenticated && isTemporarySession && !isDemoMode) {
         console.log('App went to background with temporary session - clearing session...');
         await clearUserSession();
         setIsAuthenticated(false);
@@ -111,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
-  }, [isAuthenticated, isSubscribed, isTemporarySession]);
+  }, [isAuthenticated, isSubscribed, isTemporarySession, isDemoMode]);
 
   // Sign in with Google
   const signIn = async (): Promise<AuthResult> => {
@@ -149,15 +167,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Sign in with demo mode
+  const signInDemo = async (): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Set demo user profile
+      setUserProfile(demoUserProfile);
+      setIsAuthenticated(true);
+      setIsSubscribed(true);
+      setIsDemoMode(true);
+      
+      console.log('Demo mode activated');
+      
+      // Initialize notifications for demo user
+      await initializeNotifications();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Demo mode failed';
+      setError(errorMessage);
+      console.error('Demo sign in error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Sign out
   const signOut = async (): Promise<void> => {
     setIsLoading(true);
     
     try {
-      await clearUserSession();
+      // Only clear user session if not in demo mode
+      if (!isDemoMode) {
+        await clearUserSession();
+      }
+      
       setIsAuthenticated(false);
       setIsSubscribed(false);
       setUserProfile(null);
+      setIsDemoMode(false);
       console.log('User signed out successfully');
       analytics.setUserId(null);
     } catch (err) {
@@ -243,9 +291,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isSubscribed,
         userProfile,
         signIn,
+        signInDemo,
         signOut,
         error,
         updateUserProfile,
+        isDemoMode,
       }}
     >
       {children}

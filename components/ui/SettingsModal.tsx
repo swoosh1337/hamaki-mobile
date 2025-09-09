@@ -2,13 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
 import {
-    Alert,
-    Modal,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
@@ -23,16 +23,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   visible,
   onClose,
 }) => {
-  const { signOut, userProfile } = useAuth();
+  const { signOut, userProfile, isDemoMode } = useAuth();
 
   const handleSignOut = async () => {
+    const title = isDemoMode ? 'Exit Demo' : 'Sign Out';
+    const message = isDemoMode 
+      ? 'Are you sure you want to exit demo mode?'
+      : 'Are you sure you want to sign out?';
+    const buttonText = isDemoMode ? 'Exit Demo' : 'Sign Out';
+    
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
+      title,
+      message,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Sign Out',
+          text: buttonText,
           style: 'destructive',
           onPress: async () => {
             onClose();
@@ -78,10 +84,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <Text style={styles.label}>Name:</Text>
                 <Text style={styles.value}>{userProfile?.full_name}</Text>
               </View>
-              <View style={styles.accountRow}>
-                <Text style={styles.label}>XP Points:</Text>
-                <Text style={[styles.value, { color: Colors.dark.tint }]}>{userProfile?.xp_points || 0}</Text>
-              </View>
+              {isDemoMode && (
+                <View style={styles.accountRow}>
+                  <Text style={styles.label}>Account Type:</Text>
+                  <View style={styles.demoTag}>
+                    <Text style={styles.demoTagText}>Demo Account</Text>
+                  </View>
+                </View>
+              )}
             </View>
           </View>
 
@@ -90,15 +100,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <Text style={styles.sectionTitle}>About</Text>
             <Text style={styles.description}>
               Hamaki v1.0.0{'\n'}
-              Exclusive app for HamaKi Studio subscribers{'\n\n'}
-              Stay connected with the latest content and exclusive features!
+              {isDemoMode 
+                ? 'Demo Mode - For Apple Review' + '\n\n' + 'This is a demonstration version showing all app features without requiring YouTube subscription.'
+                : 'Exclusive app for HamaKi Studio subscribers' + '\n\n' + 'Stay connected with the latest content and exclusive features!'
+              }
             </Text>
           </View>
 
           {/* Sign Out Button */}
           <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
             <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.signOutText}>Sign Out</Text>
+            <Text style={styles.signOutText}>{isDemoMode ? 'Exit Demo' : 'Sign Out'}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -125,7 +137,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontFamily: 'HamakiEng',
+    fontFamily: 'hamaki-eng',
     color: Colors.dark.tint,
     fontWeight: 'bold',
   },
@@ -144,7 +156,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontFamily: 'HamakiEng',
+    fontFamily: 'hamaki-eng',
     color: Colors.dark.text,
     marginBottom: 15,
     fontWeight: 'bold',
@@ -176,6 +188,18 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
     marginLeft: 16,
+  },
+  demoTag: {
+    backgroundColor: Colors.dark.tint,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  demoTagText: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.background,
+    fontWeight: 'bold',
   },
   description: {
     fontSize: 16,

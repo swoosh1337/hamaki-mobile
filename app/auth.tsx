@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { GoogleSignInButton } from '@/components/ui/GoogleSignInButton';
 import { Colors } from '@/constants/Colors';
@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
  * Displays the welcome screen with Google sign-in option
  */
 function AuthScreen() {
-  const { signIn, isLoading } = useAuth();
+  const { signIn, isLoading, signInDemo } = useAuth();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const appState = useRef(AppState.currentState);
   const isAuthenticating = useRef(false);
@@ -50,6 +50,20 @@ function AuthScreen() {
     };
   }, []);
   
+  // Handle demo sign-in
+  const handleDemoSignIn = async () => {
+    console.log('🔍 Starting demo mode');
+    setErrorMessage(null);
+    
+    try {
+      await signInDemo();
+      router.replace('/(tabs)');
+    } catch (error) {
+      console.error('🔍 Demo sign in error:', error);
+      setErrorMessage('Demo mode failed. Please try again.');
+    }
+  };
+
   // Handle sign-in button press with Google authentication
   const handleSignIn = async () => {
     console.log('🔍 Starting authentication process');
@@ -116,6 +130,13 @@ function AuthScreen() {
           <GoogleSignInButton onPress={handleSignIn} />
         </View>
         
+        {/* Demo Button */}
+        <View style={styles.demoButtonContainer}>
+          <TouchableOpacity style={styles.demoButton} onPress={handleDemoSignIn}>
+            <Text style={styles.demoButtonText}>Demo Mode (For Reviewers)</Text>
+          </TouchableOpacity>
+        </View>
+        
         {/* Error Message */}
         {errorMessage && (
           <View style={styles.errorContainer}>
@@ -174,7 +195,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   brandText: {
-    fontFamily: 'HamakiEng',
+    fontFamily: 'hamaki-eng',
     fontSize: 64,
     color: Colors.dark.tint, // Neon green
     textAlign: 'center',
@@ -191,7 +212,27 @@ const styles = StyleSheet.create({
   buttonContainer: {
     width: '100%',
     maxWidth: 320,
-    marginBottom: 60,
+    marginBottom: 20,
+  },
+  demoButtonContainer: {
+    width: '100%',
+    maxWidth: 320,
+    marginBottom: 40,
+  },
+  demoButton: {
+    backgroundColor: 'rgba(245, 245, 245, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(196, 255, 0, 0.3)',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  demoButtonText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 14,
+    color: Colors.dark.text,
+    opacity: 0.8,
   },
   errorContainer: {
     marginTop: 20,
