@@ -646,4 +646,110 @@ export const userService = {
       return [];
     }
   },
+
+  // Leaderboard Management Methods
+
+  // Helper function to get week start date (Monday)
+  getWeekStartDate(): string {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diff);
+    monday.setHours(0, 0, 0, 0);
+    return monday.toISOString().split('T')[0];
+  },
+
+  // Update user's leaderboard points (called after game completion)
+  async updateLeaderboardPoints(userId: string, points: number): Promise<boolean> {
+    try {
+      const weekStartDate = this.getWeekStartDate();
+
+      // Update weekly leaderboard
+      const { data: weeklyEntry, error: weeklyCheckError } = await supabase
+        .from('leaderboard_entries')
+        .select('points')
+        .eq('user_id', userId)
+        .eq('period_type', 'weekly')
+        .eq('week_start_date', weekStartDate)
+        .single();
+
+      if (weeklyCheckError && weeklyCheckError.code !== 'PGRST116') {
+        console.error('Error checking weekly leaderboard:', weeklyCheckError);
+      }
+
+      if (weeklyEntry) {
+        // Update existing weekly entry
+        const { error: weeklyUpdateError } = await supabase
+          .from('leaderboard_entries')
+          .update({ points: weeklyEntry.points + points })
+          .eq('user_id', userId)
+          .eq('period_type', 'weekly')
+          .eq('week_start_date', weekStartDate);
+
+        if (weeklyUpdateError) {
+          console.error('Error updating weekly leaderboard:', weeklyUpdateError);
+        }
+      } else {
+        // Create new weekly entry
+        const { error: weeklyInsertError } = await supabase
+          .from('leaderboard_entries')
+          .insert({
+            user_id: userId,
+            points,
+            period_type: 'weekly',
+            week_start_date: weekStartDate,
+          });
+
+        if (weeklyInsertError) {
+          console.error('Error inserting weekly leaderboard:', weeklyInsertError);
+        }
+      }
+
+      // Update all-time leaderboard
+      const { data: allTimeEntry, error: allTimeCheckError } = await supabase
+        .from('leaderboard_entries')
+        .select('points')
+        .eq('user_id', userId)
+        .eq('period_type', 'all_time')
+        .single();
+
+      if (allTimeCheckError && allTimeCheckError.code !== 'PGRST116') {
+        console.error('Error checking all-time leaderboard:', allTimeCheckError);
+      }
+
+      if (allTimeEntry) {
+        // Update existing all-time entry
+        const { error: allTimeUpdateError } = await supabase
+          .from('leaderboard_entries')
+          .update({ points: allTimeEntry.points + points })
+          .eq('user_id', userId)
+          .eq('period_type', 'all_time');
+
+        if (allTimeUpdateError) {
+          console.error('Error updating all-time leaderboard:', allTimeUpdateError);
+          return false;
+        }
+      } else {
+        // Create new all-time entry
+        const { error: allTimeInsertError } = await supabase
+          .from('leaderboard_entries')
+          .insert({
+            user_id: userId,
+            points,
+            period_type: 'all_time',
+          });
+
+        if (allTimeInsertError) {
+          console.error('Error inserting all-time leaderboard:', allTimeInsertError);
+          return false;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error updating leaderboard points:', error);
+      return false;
+    }
+  },
 };

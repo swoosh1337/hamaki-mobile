@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { Colors } from '@/constants/Colors';
 import { HammockJumpGame } from '@/components/games/HammockJumpGame';
+import { NoPogodGame } from '@/components/games/NoPogodGame';
+import { Colors } from '@/constants/Colors';
 
 interface GameItem {
   id: string;
@@ -21,6 +22,14 @@ const GAMES: GameItem[] = [
     description: 'Jump to avoid the hammock and score points!',
     icon: 'person',
     color: '#4ECDC4',
+    isAvailable: true,
+  },
+  {
+    id: 'no-pogodi',
+    title: 'No Pogodi!',
+    description: 'Help Miro catch good items and avoid the bad ones!',
+    icon: 'game-controller',
+    color: '#FF6B6B',
     isAvailable: true,
   },
   {
@@ -53,7 +62,7 @@ export default function GamesScreen() {
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
 
   const handleGamePress = (gameId: string) => {
-    if (gameId === 'hammock-jump') {
+    if (gameId === 'hammock-jump' || gameId === 'no-pogodi') {
       setSelectedGame(gameId);
     }
   };
@@ -126,6 +135,12 @@ export default function GamesScreen() {
       {/* Hammock Jump Game Modal */}
       <HammockJumpGame
         visible={selectedGame === 'hammock-jump'}
+        onClose={closeGame}
+      />
+
+      {/* No Pogodi Game Modal */}
+      <NoPogodGame
+        visible={selectedGame === 'no-pogodi'}
         onClose={closeGame}
       />
     </SafeAreaView>

@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/utils/supabase';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 // Types from our unified model
 interface Post {
