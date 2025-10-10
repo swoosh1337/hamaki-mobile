@@ -39,10 +39,11 @@ interface Post {
 export default function HomeScreen() {
   // Keep auth available for future header personalization
   // const { userProfile } = useAuth();
-  const { posts, featuredPosts, isLoading, error, hasNewContent } = useContent();
+  const { posts, featuredPosts, isLoading, error, hasNewContent, refreshContent, isNetworkError } = useContent();
   const [expandedPostId, setExpandedPostId] = React.useState<string | null>(null);
   const expandStartedAtRef = React.useRef<number | null>(null);
   const scrollViewRef = React.useRef<ScrollView>(null);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
   
 
   const handleCarouselPostTap = async (post: Post) => {
@@ -86,6 +87,12 @@ export default function HomeScreen() {
     }
   };
 
+  const handleRetry = async () => {
+    setIsRefreshing(true);
+    await refreshContent();
+    setIsRefreshing(false);
+  };
+
   return (
     <ScrollView ref={scrollViewRef} style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header with Logo */}
@@ -121,9 +128,11 @@ export default function HomeScreen() {
       )}
 
       {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
+        <InlineError 
+          message={isNetworkError ? 'Unable to connect. Check your internet connection.' : error}
+          onRetry={handleRetry}
+          compact
+        />
       )}
 
       {!isLoading && !error && (
@@ -146,6 +155,11 @@ export default function HomeScreen() {
           [...Array(3)].map((_, index) => (
             <PostSkeleton key={`post-skeleton-${index}`} />
           ))
+        ) : error ? (
+          <InlineError 
+            message={isNetworkError ? 'Unable to load posts. Check your connection.' : 'Failed to load posts'}
+            onRetry={handleRetry}
+          />
         ) : (
           posts.map((post) => (
             <PostCard 

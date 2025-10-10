@@ -18,6 +18,10 @@ function AuthScreen() {
   const appState = useRef(AppState.currentState);
   const isAuthenticating = useRef(false);
   
+  // Secret demo mode activation
+  const [tapCount, setTapCount] = useState(0);
+  const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Monitor app state changes to detect return from OAuth
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
@@ -50,6 +54,31 @@ function AuthScreen() {
     };
   }, []);
   
+  // Handle secret tap to activate demo mode
+  const handleSecretTap = () => {
+    const newCount = tapCount + 1;
+    setTapCount(newCount);
+    
+    // Clear existing timeout
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current);
+    }
+    
+    // Reset tap count after 2 seconds of inactivity
+    tapTimeoutRef.current = setTimeout(() => {
+      setTapCount(0);
+    }, 2000);
+    
+    // Activate demo mode after 5 taps
+    if (newCount >= 5) {
+      setTapCount(0);
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current);
+      }
+      handleDemoSignIn();
+    }
+  };
+  
   // Handle demo sign-in
   const handleDemoSignIn = async () => {
     console.log('🔍 Starting demo mode');
@@ -63,6 +92,15 @@ function AuthScreen() {
       setErrorMessage('Demo mode failed. Please try again.');
     }
   };
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Handle sign-in button press with Google authentication
   const handleSignIn = async () => {
@@ -116,9 +154,15 @@ function AuthScreen() {
           />
         </View>
         
-        {/* Welcome Text */}
-        <Text style={styles.welcomeText}>WELCOME TO</Text>
-        <Text style={styles.brandText}>HAMAKI</Text>
+        {/* Welcome Text - Secret tap area for demo mode */}
+        <TouchableOpacity 
+          onPress={handleSecretTap}
+          activeOpacity={0.9}
+          style={styles.welcomeContainer}
+        >
+          <Text style={styles.welcomeText}>WELCOME TO</Text>
+          <Text style={styles.brandText}>HAMAKI</Text>
+        </TouchableOpacity>
         
         {/* Subtitle */}
         <Text style={styles.subtitle}>
@@ -128,13 +172,6 @@ function AuthScreen() {
         {/* Sign In Button */}
         <View style={styles.buttonContainer}>
           <GoogleSignInButton onPress={handleSignIn} />
-        </View>
-        
-        {/* Demo Button */}
-        <View style={styles.demoButtonContainer}>
-          <TouchableOpacity style={styles.demoButton} onPress={handleDemoSignIn}>
-            <Text style={styles.demoButtonText}>Demo Mode (For Reviewers)</Text>
-          </TouchableOpacity>
         </View>
         
         {/* Error Message */}
@@ -188,6 +225,9 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
   },
+  welcomeContainer: {
+    alignItems: 'center',
+  },
   welcomeText: {
     fontFamily: 'SpaceMono',
     fontSize: 28,
@@ -212,27 +252,7 @@ const styles = StyleSheet.create({
   buttonContainer: {
     width: '100%',
     maxWidth: 320,
-    marginBottom: 20,
-  },
-  demoButtonContainer: {
-    width: '100%',
-    maxWidth: 320,
     marginBottom: 40,
-  },
-  demoButton: {
-    backgroundColor: 'rgba(245, 245, 245, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(196, 255, 0, 0.3)',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  demoButtonText: {
-    fontFamily: 'SpaceMono',
-    fontSize: 14,
-    color: Colors.dark.text,
-    opacity: 0.8,
   },
   errorContainer: {
     marginTop: 20,

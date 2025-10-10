@@ -7,6 +7,7 @@ import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ContentProvider } from '@/contexts/ContentContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -40,18 +41,20 @@ function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <ContentProvider>
-        <ThemeProvider value={DarkTheme}>
-          <Stack initialRouteName="auth">
-            <Stack.Screen name="auth" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="+not-found" />
-          </Stack>
-          <StatusBar style="light" />
-        </ThemeProvider>
-      </ContentProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ContentProvider>
+          <ThemeProvider value={DarkTheme}>
+            <Stack initialRouteName="auth">
+              <Stack.Screen name="auth" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+            <StatusBar style="light" />
+          </ThemeProvider>
+        </ContentProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

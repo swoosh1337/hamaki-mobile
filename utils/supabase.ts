@@ -60,6 +60,9 @@ export interface PostUpvote {
 
 // User management functions
 export const userService = {
+  // Expose supabase client for direct queries
+  supabase,
+  
   // Create or update user profile after Google authentication
   async upsertUserProfile(userData: {
     googleId: string;
@@ -123,6 +126,20 @@ export const userService = {
           .single();
 
         if (error) {
+          // If duplicate key error, try to fetch the existing user by email
+          if (error.code === '23505') {
+            console.log('User already exists, fetching by email');
+            const { data: existingByEmail } = await supabase
+              .from('users')
+              .select('*')
+              .eq('email', userData.email)
+              .single();
+            
+            if (existingByEmail) {
+              return existingByEmail;
+            }
+          }
+          
           console.error('Error creating user profile:', error);
           return null;
         }
@@ -145,7 +162,10 @@ export const userService = {
         .single();
 
       if (error) {
-        console.error('Error fetching user profile:', error);
+        // Only log error if it's not "no rows returned"
+        if (error.code !== 'PGRST116') {
+          console.error('Error fetching user profile:', error);
+        }
         return null;
       }
 

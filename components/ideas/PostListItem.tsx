@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
@@ -14,13 +14,11 @@ interface PostListItemProps {
   isUpvoting?: boolean;
 }
 
-export const PostListItem: React.FC<PostListItemProps> = ({ 
+export const PostListItem: React.FC<PostListItemProps> = React.memo(({ 
   post, 
   onUpvote,
   isUpvoting = false,
 }) => {
-  // Debug logging
-  console.log(`Post ${post.title}: upvotes=${post.upvotes}, isUpvoted=${post.isUpvoted}`);
   const getCategoryColor = (category?: string) => {
     switch (category) {
       case 'tutorial': return '#4ECDC4';
@@ -41,8 +39,8 @@ export const PostListItem: React.FC<PostListItemProps> = ({
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+  const formattedDate = useMemo(() => {
+    const date = new Date(post.created_at);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -57,7 +55,7 @@ export const PostListItem: React.FC<PostListItemProps> = ({
     } else {
       return date.toLocaleDateString();
     }
-  };
+  }, [post.created_at]);
 
   const truncateContent = (content: string, maxLength: number = 120) => {
     if (content.length <= maxLength) return content;
@@ -78,7 +76,7 @@ export const PostListItem: React.FC<PostListItemProps> = ({
           )}
           <View style={styles.userTextInfo}>
             <Text style={styles.userName}>{post.user?.full_name || 'Anonymous'}</Text>
-            <Text style={styles.postDate}>{formatDate(post.created_at)}</Text>
+            <Text style={styles.postDate}>{formattedDate}</Text>
           </View>
         </View>
         
@@ -124,7 +122,7 @@ export const PostListItem: React.FC<PostListItemProps> = ({
       </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

@@ -171,8 +171,16 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     const miroImage = getCurrentMiroImage();
     const miroSprite = renderData.miro;
 
+    console.log('🦊 Rendering Miro:', { 
+      hasImage: !!miroImage, 
+      position: { x: miroSprite.x, y: miroSprite.y }, 
+      size: { width: miroSprite.width, height: miroSprite.height },
+      isMoving: gameState.player.isMoving
+    });
+
     // Always render fallback if image not loaded, or render image
     if (!miroImage) {
+      console.log('⚠️ Miro image not loaded, using fallback rectangle');
       // Fallback to colored rectangle - bright blue for visibility
       return (
         <Rect
@@ -202,7 +210,15 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     const shonzikaImage = getCurrentShonzikaImage();
     const shonzikaSprite = renderData.shonzika;
 
+    console.log('🐺 Rendering Shonzika:', { 
+      hasImage: !!shonzikaImage, 
+      position: { x: shonzikaSprite.x, y: shonzikaSprite.y }, 
+      size: { width: shonzikaSprite.width, height: shonzikaSprite.height },
+      isThrowing: gameState.shonzika.sprite === 'THROWING'
+    });
+
     if (!shonzikaImage) {
+      console.log('⚠️ Shonzika image not loaded, using fallback rectangle');
       // Fallback to colored rectangle - bright red for visibility
       return (
         <Rect

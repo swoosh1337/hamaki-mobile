@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { NetworkError } from '@/components/ui/NetworkError';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 import { supabase } from '@/utils/supabase';
 
 type TabType = 'weekly' | 'main' | 'prizes';
@@ -51,11 +53,71 @@ export default function LeaderboardScreen() {
   useEffect(() => {
     fetchLeaderboardData();
     fetchPrizes();
+
+    // Set up realtime subscriptions
+    const leaderboardChannel = supabase
+      .channel('leaderboard-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'leaderboard_entries',
+        },
+        (payload) => {
+          console.log('Leaderboard updated:', payload);
+          // Refresh leaderboard data
+          fetchLeaderboardData();
+        }
+      )
+      .subscribe();
+
+    const sponsorChannel = supabase
+      .channel('sponsor-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sponsors',
+        },
+        (payload) => {
+          console.log('Sponsor updated:', payload);
+          // Refresh prizes data
+          fetchPrizes();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sponsor_prizes',
+        },
+        (payload) => {
+          console.log('Prize updated:', payload);
+          // Refresh prizes data
+          fetchPrizes();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscriptions on unmount
+    return () => {
+      console.log('Cleaning up leaderboard subscriptions');
+      supabase.removeChannel(leaderboardChannel);
+      supabase.removeChannel(sponsorChannel);
+    };
   }, []);
+
+  const [error, setError] = useState<string | null>(null);
+  const [isNetworkError, setIsNetworkError] = useState(false);
 
   const fetchLeaderboardData = async () => {
     try {
       setLoading(true);
+      setError(null);
+      setIsNetworkError(false);
 
       // Fetch weekly leaderboard
       const weekStartDate = getWeekStartDate();
@@ -211,8 +273,11 @@ export default function LeaderboardScreen() {
           });
         }
       }
-    } catch (error) {
-      console.error('Error fetching leaderboard:', error);
+    } catch (err) {
+      console.error('Error fetching leaderboard:', err);
+      const isNetwork = checkNetworkError(err);
+      setIsNetworkError(isNetwork);
+      setError(getUserFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -297,13 +362,26 @@ export default function LeaderboardScreen() {
     </View>
   );
 
-  if (loading) {
+  if (loading && !error) {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>LEADERBOARD</Text>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.dark.tint} />
         </View>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>LEADERBOARD</Text>
+        <NetworkError 
+          message={isNetworkError ? 'Unable to connect. Check your internet connection.' : error}
+          onRetry={fetchLeaderboardData}
+          isRetrying={loading}
+        />
       </View>
     );
   }

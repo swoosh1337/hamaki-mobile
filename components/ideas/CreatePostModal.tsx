@@ -34,6 +34,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   onSubmit,
   isSubmitting,
 }) => {
+  console.log('🎨 CreatePostModal render', { visible, isSubmitting });
+  
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -89,20 +91,26 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   };
 
   const handleSubmit = async () => {
+    console.log('🎬 Modal handleSubmit called');
     const isTitleValid = validateTitle(title);
     const isContentValid = validateContent(content);
 
     if (!isTitleValid || !isContentValid) {
+      console.log('❌ Validation failed', { isTitleValid, isContentValid });
       return;
     }
 
+    console.log('✅ Validation passed, calling onSubmit...');
+    
     try {
       await onSubmit(title, content, selectedCategory || undefined);
+      console.log('✅ onSubmit completed, resetting and closing modal');
       handleReset();
       onClose();
+      console.log('✅ Modal closed');
     } catch (error) {
-      console.error('Error submitting post:', error);
-      Alert.alert('Error', 'Failed to submit your idea. Please try again.');
+      console.error('❌ Modal caught error:', error);
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to submit your idea. Please try again.');
     }
   };
 

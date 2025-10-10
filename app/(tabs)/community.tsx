@@ -14,8 +14,10 @@ import {
 
 import { CreatePostModal } from '@/components/ideas/CreatePostModal';
 import { PostListItem } from '@/components/ideas/PostListItem';
+import { NetworkError } from '@/components/ui/NetworkError';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 import { supabase, UserPost, userService } from '@/utils/supabase';
 
 type PostWithUserData = UserPost & { 
@@ -26,7 +28,7 @@ type PostWithUserData = UserPost & {
 type SortOption = 'upvotes' | 'latest';
 
 export default function IdeasScreen() {
-  const { userProfile } = useAuth();
+  const { userProfile, isDemoMode } = useAuth();
   
   // State management
   const [posts, setPosts] = useState<PostWithUserData[]>([]);
@@ -42,6 +44,9 @@ export default function IdeasScreen() {
 
   const POSTS_PER_PAGE = 20;
 
+  const [error, setError] = useState<string | null>(null);
+  const [isNetworkError, setIsNetworkError] = useState(false);
+
   // Load posts
   const loadPosts = useCallback(async (page: number = 0, reset: boolean = false) => {
     if (!userProfile?.id) return;
@@ -50,6 +55,8 @@ export default function IdeasScreen() {
       if (reset) {
         setIsLoading(true);
         setPosts([]);
+        setError(null);
+        setIsNetworkError(false);
       } else {
         setIsLoadingMore(true);
       }
@@ -69,9 +76,16 @@ export default function IdeasScreen() {
 
       setHasMorePosts(newPosts.length === POSTS_PER_PAGE);
       setCurrentPage(page);
-    } catch (error) {
-      console.error('Error loading posts:', error);
-      Alert.alert('Error', 'Failed to load posts. Please try again.');
+      setError(null);
+    } catch (err) {
+      console.error('Error loading posts:', err);
+      const isNetwork = checkNetworkError(err);
+      setIsNetworkError(isNetwork);
+      setError(getUserFriendlyErrorMessage(err));
+      
+      if (!reset) {
+        Alert.alert('Error', 'Failed to load more posts. Please try again.');
+      }
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
@@ -84,14 +98,16 @@ export default function IdeasScreen() {
     if (userProfile?.id) {
       loadPosts(0, true);
     }
-  }, [userProfile?.id, loadPosts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.id]);
 
   // Reload posts when sort option changes
   useEffect(() => {
     if (userProfile?.id) {
       loadPosts(0, true);
     }
-  }, [sortBy, loadPosts, userProfile?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortBy, userProfile?.id]);
 
   // Real-time subscriptions
   useEffect(() => {
@@ -117,10 +133,14 @@ export default function IdeasScreen() {
           } else if (payload.eventType === 'UPDATE') {
             // Post updated (possibly upvotes changed), refresh if we have it in our list
             const updatedPost = payload.new as UserPost;
-            const existingPost = posts.find(p => p.id === updatedPost.id);
-            if (existingPost) {
-              loadPosts(0, true);
-            }
+            // Use functional state update to access current posts without dependency
+            setPosts(currentPosts => {
+              const existingPost = currentPosts.find(p => p.id === updatedPost.id);
+              if (existingPost) {
+                loadPosts(0, true);
+              }
+              return currentPosts;
+            });
           }
         }
       )
@@ -140,13 +160,16 @@ export default function IdeasScreen() {
           console.log('Upvotes subscription triggered:', payload);
           
           // Check if the upvote change affects any of our displayed posts
-          const postId = payload.new?.post_id || payload.old?.post_id;
-          const affectedPost = posts.find(p => p.id === postId);
-          
-          if (affectedPost) {
-            // Refresh the specific post or all posts to get updated counts
-            loadPosts(0, true);
-          }
+          const postId = (payload.new as any)?.post_id || (payload.old as any)?.post_id;
+          // Use functional state update to access current posts without dependency
+          setPosts(currentPosts => {
+            const affectedPost = currentPosts.find(p => p.id === postId);
+            if (affectedPost) {
+              // Refresh the specific post or all posts to get updated counts
+              loadPosts(0, true);
+            }
+            return currentPosts;
+          });
         }
       )
       .subscribe();
@@ -157,59 +180,71 @@ export default function IdeasScreen() {
       supabase.removeChannel(postsSubscription);
       supabase.removeChannel(upvotesSubscription);
     };
-  }, [userProfile?.id, posts, loadPosts]);
+  }, [userProfile?.id]);
 
   // Refresh posts
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     loadPosts(0, true);
-  }, [loadPosts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load more posts
   const handleLoadMore = useCallback(() => {
     if (!isLoadingMore && hasMorePosts && !isLoading) {
       loadPosts(currentPage + 1, false);
     }
-  }, [isLoadingMore, hasMorePosts, isLoading, currentPage, loadPosts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoadingMore, hasMorePosts, isLoading, currentPage]);
 
   // Handle post upvote
-  const handlePostUpvote = async (postId: string) => {
+  const handlePostUpvote = useCallback(async (postId: string) => {
     if (!userProfile?.id || upvotingPosts.has(postId)) return;
 
     try {
       setUpvotingPosts(prev => new Set([...prev, postId]));
 
-      const postIndex = posts.findIndex(p => p.id === postId);
-      if (postIndex === -1) return;
+      // Use functional state update to avoid posts dependency
+      setPosts(currentPosts => {
+        const postIndex = currentPosts.findIndex(p => p.id === postId);
+        if (postIndex === -1) return currentPosts;
 
-      const post = posts[postIndex];
-      const isCurrentlyUpvoted = post.isUpvoted;
+        const post = currentPosts[postIndex];
+        const isCurrentlyUpvoted = post.isUpvoted;
 
-      // Optimistic update
-      const updatedPosts = [...posts];
-      updatedPosts[postIndex] = {
-        ...post,
-        upvotes: isCurrentlyUpvoted ? post.upvotes - 1 : post.upvotes + 1,
-        isUpvoted: !isCurrentlyUpvoted,
-      };
-      setPosts(updatedPosts);
+        // Optimistic update
+        const updatedPosts = [...currentPosts];
+        updatedPosts[postIndex] = {
+          ...post,
+          upvotes: isCurrentlyUpvoted ? post.upvotes - 1 : post.upvotes + 1,
+          isUpvoted: !isCurrentlyUpvoted,
+        };
 
-      // Make API call
-      if (isCurrentlyUpvoted) {
-        await userService.downvotePost(postId, userProfile.id);
-      } else {
-        await userService.upvotePost(postId, userProfile.id);
-      }
+        // Make API call asynchronously
+        (async () => {
+          try {
+            if (isCurrentlyUpvoted) {
+              await userService.downvotePost(postId, userProfile.id);
+            } else {
+              await userService.upvotePost(postId, userProfile.id);
+            }
+          } catch (error) {
+            console.error('Error updating post upvote:', error);
+            // Revert optimistic update on error
+            loadPosts(0, true);
+            
+            if (error instanceof Error) {
+              Alert.alert('Error', error.message);
+            } else {
+              Alert.alert('Error', 'Failed to update upvote. Please try again.');
+            }
+          }
+        })();
+
+        return updatedPosts;
+      });
     } catch (error) {
-      console.error('Error updating post upvote:', error);
-      // Revert optimistic update on error
-      loadPosts(0, true);
-      
-      if (error instanceof Error) {
-        Alert.alert('Error', error.message);
-      } else {
-        Alert.alert('Error', 'Failed to update upvote. Please try again.');
-      }
+      console.error('Error in handlePostUpvote:', error);
     } finally {
       setUpvotingPosts(prev => {
         const newSet = new Set(prev);
@@ -217,47 +252,77 @@ export default function IdeasScreen() {
         return newSet;
       });
     }
-  };
+  }, [userProfile?.id]);
 
   // Handle create post
-  const handleCreatePost = async (title: string, content: string, category?: string) => {
-    if (!userProfile?.id) return;
+  const handleCreatePost = useCallback(async (title: string, content: string, category?: string) => {
+    console.log('🎯 handleCreatePost called', { title, content, category, userId: userProfile?.id });
+    
+    if (!userProfile?.id) {
+      console.error('❌ No user profile ID');
+      throw new Error('User not authenticated');
+    }
 
+    console.log('⏳ Setting isSubmittingPost to true');
+    setIsSubmittingPost(true);
+    
     try {
-      setIsSubmittingPost(true);
-      await userService.createUserPost(userProfile.id, title, content, category);
-      Alert.alert(
-        'Success', 
-        'Your idea has been submitted for review! You\'ll be notified when it\'s approved.',
-        [{ text: 'OK' }]
-      );
+      console.log('📤 Calling userService.createUserPost...');
+      const result = await userService.createUserPost(userProfile.id, title, content, category);
+      console.log('✅ Post created successfully:', result);
+      
+      // Success - show alert after modal closes
+      setTimeout(() => {
+        console.log('🎉 Showing success alert');
+        Alert.alert(
+          'Success', 
+          'Your idea has been submitted for review! You\'ll be notified when it\'s approved.',
+          [{ text: 'OK' }]
+        );
+      }, 300);
+      
+      console.log('✅ handleCreatePost completed successfully');
+      
     } catch (error) {
-      console.error('Error creating post:', error);
-      if (error instanceof Error) {
-        throw new Error(error.message);
-      }
-      throw new Error('Failed to submit your idea. Please try again.');
+      console.error('❌ Error creating post:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      
+      // Re-throw the error so the modal can handle it
+      throw error;
     } finally {
+      console.log('🏁 Setting isSubmittingPost to false');
       setIsSubmittingPost(false);
     }
-  };
+  }, [userProfile?.id]);
 
-  // Loading state
-  if (isLoading && posts.length === 0) {
-    return (
-      <View style={styles.container}>
+
+
+  // Render content based on state
+  const renderContent = () => {
+    // Loading state
+    if (isLoading && posts.length === 0 && !error) {
+      return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.dark.tint} />
           <Text style={styles.loadingText}>Loading Posts...</Text>
         </View>
-      </View>
-    );
-  }
+      );
+    }
 
-  // Empty state
-  if (!isLoading && posts.length === 0) {
-    return (
-      <SafeAreaView style={styles.container}>
+    // Error state
+    if (error && posts.length === 0) {
+      return (
+        <NetworkError 
+          message={isNetworkError ? 'Unable to connect. Check your internet connection.' : error}
+          onRetry={() => loadPosts(0, true)}
+          isRetrying={isLoading}
+        />
+      );
+    }
+
+    // Empty state
+    if (!isLoading && posts.length === 0 && !error) {
+      return (
         <ScrollView
           contentContainerStyle={styles.emptyContainer}
           refreshControl={
@@ -275,28 +340,11 @@ export default function IdeasScreen() {
             Be the first to share a video idea! Your suggestions help shape future content.
           </Text>
         </ScrollView>
-        
-        {/* Floating Action Button */}
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => setIsCreateModalVisible(true)}
-        >
-          <Ionicons name="add" size={24} color={Colors.dark.background} />
-        </TouchableOpacity>
+      );
+    }
 
-        {/* Create Post Modal */}
-        <CreatePostModal
-          visible={isCreateModalVisible}
-          onClose={() => setIsCreateModalVisible(false)}
-          onSubmit={handleCreatePost}
-          isSubmitting={isSubmittingPost}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container}>
+    // Normal state with posts
+    return (
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -323,6 +371,15 @@ export default function IdeasScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>🌟 Community</Text>
           <Text style={styles.subtitle}>Share video ideas and vote on suggestions</Text>
+          
+          {isDemoMode && (
+            <View style={styles.demoNotice}>
+              <Text style={styles.demoNoticeText}>
+                🎭 Demo Mode - Viewing as demouser@apple.com
+              </Text>
+            </View>
+          )}
+          
           <TouchableOpacity
             style={styles.sortToggle}
             onPress={() => setSortBy(sortBy === 'latest' ? 'upvotes' : 'latest')}
@@ -360,6 +417,12 @@ export default function IdeasScreen() {
           )}
         </View>
       </ScrollView>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {renderContent()}
 
       {/* Floating Action Button */}
       <TouchableOpacity
@@ -430,6 +493,21 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(196, 255, 0, 0.2)',
+  },
+  demoNotice: {
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255, 165, 0, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 165, 0, 0.3)',
+  },
+  demoNoticeText: {
+    fontSize: 13,
+    fontFamily: 'SpaceMono',
+    color: '#FFA500',
+    textAlign: 'center',
   },
   sortToggle: {
     marginTop: 12,

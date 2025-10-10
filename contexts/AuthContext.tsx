@@ -41,19 +41,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
-
-  // Demo user profile
-  const demoUserProfile: UserProfile = {
-    id: 'demo-user-id',
-    google_id: 'demo-google-id',
-    email: 'demo@hamakistudio.com',
-    full_name: 'Demo User',
-    avatar_url: 'https://i.pravatar.cc/150?u=demo',
-    xp_points: 1250,
-    is_subscribed: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
   
   // Remember Me modal state
   const [showRememberMeModal, setShowRememberMeModal] = useState(false);
@@ -167,26 +154,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Sign in with demo mode
+  // Sign in with demo mode - loads real demo user from database
   const signInDemo = async (): Promise<void> => {
     setIsLoading(true);
     setError(null);
     
     try {
-      // Set demo user profile
-      setUserProfile(demoUserProfile);
+      console.log('🎭 Starting demo mode - fetching demouser@apple.com from database');
+      
+      // Fetch the real demo user from Supabase
+      const { data: demoUsers, error: fetchError } = await userService.supabase
+        .from('users')
+        .select('*')
+        .eq('email', 'demouser@apple.com')
+        .single();
+      
+      if (fetchError || !demoUsers) {
+        console.error('❌ Failed to fetch demo user:', fetchError);
+        throw new Error('Demo user not found in database. Please contact support.');
+      }
+      
+      console.log('✅ Demo user loaded from database:', demoUsers);
+      
+      // Set the real demo user profile
+      setUserProfile(demoUsers);
       setIsAuthenticated(true);
-      setIsSubscribed(true);
+      setIsSubscribed(demoUsers.is_subscribed || true);
       setIsDemoMode(true);
       
-      console.log('Demo mode activated');
+      // Set analytics user id
+      analytics.setUserId(demoUsers.google_id);
+      
+      console.log('🎭 Demo mode activated with real user');
       
       // Initialize notifications for demo user
       await initializeNotifications();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Demo mode failed';
       setError(errorMessage);
-      console.error('Demo sign in error:', err);
+      console.error('❌ Demo sign in error:', err);
     } finally {
       setIsLoading(false);
     }

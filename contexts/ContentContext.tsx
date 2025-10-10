@@ -1,3 +1,4 @@
+import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 import { supabase } from '@/utils/supabase';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
@@ -36,6 +37,7 @@ interface ContentContextType {
   error: string | null;
   hasNewContent: boolean;
   refreshContent: () => Promise<void>;
+  isNetworkError: boolean;
 }
 
 const ContentContext = createContext<ContentContextType | undefined>(undefined);
@@ -53,6 +55,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasNewContent, setHasNewContent] = useState(false);
+  const [isNetworkError, setIsNetworkError] = useState(false);
 
   // Transform database rows to our Post interface
   const transformDatabasePost = (dbPost: any): Post => ({
@@ -75,6 +78,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const fetchContent = async () => {
     try {
       setError(null);
+      setIsNetworkError(false);
       
       const { data, error: fetchError } = await supabase
         .from('content_posts')
@@ -84,7 +88,9 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (fetchError) {
         console.error('Error fetching content:', fetchError);
-        setError('Failed to load content');
+        const isNetwork = checkNetworkError(fetchError);
+        setIsNetworkError(isNetwork);
+        setError(getUserFriendlyErrorMessage(fetchError));
         return;
       }
 
@@ -93,7 +99,9 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
     } catch (err) {
       console.error('Error in fetchContent:', err);
-      setError('Failed to load content');
+      const isNetwork = checkNetworkError(err);
+      setIsNetworkError(isNetwork);
+      setError(getUserFriendlyErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -208,7 +216,8 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     isLoading,
     error,
     hasNewContent,
-    refreshContent
+    refreshContent,
+    isNetworkError
   };
 
   return (

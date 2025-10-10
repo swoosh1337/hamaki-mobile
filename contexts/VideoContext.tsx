@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
+import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '../utils/errorHandling';
 import { checkForNewVideos } from '../utils/notifications';
 import { fetchHamakiVideos, YouTubeVideo } from '../utils/youtube';
 import { useAuth } from './AuthContext';
@@ -13,6 +14,7 @@ interface VideoContextType {
   error: string | null;
   refreshVideos: () => Promise<void>;
   hasNewVideos: boolean;
+  isNetworkError: boolean;
 }
 
 const VideoContext = createContext<VideoContextType>({
@@ -21,6 +23,7 @@ const VideoContext = createContext<VideoContextType>({
   error: null,
   refreshVideos: async () => {},
   hasNewVideos: false,
+  isNetworkError: false,
 });
 
 export const useVideos = () => useContext(VideoContext);
@@ -31,6 +34,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasNewVideos, setHasNewVideos] = useState(false);
+  const [isNetworkError, setIsNetworkError] = useState(false);
 
   // Load initial videos
   const loadVideos = async () => {
@@ -43,12 +47,15 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       setIsLoading(true);
       setError(null);
+      setIsNetworkError(false);
       const fetchedVideos = await fetchHamakiVideos(VIDEO_FETCH_LIMIT);
       setVideos(fetchedVideos);
       console.log(`Loaded ${fetchedVideos.length} videos`);
     } catch (err) {
       console.error('Failed to load videos:', err);
-      setError('Failed to load videos. Please check your connection.');
+      const isNetwork = checkNetworkError(err);
+      setIsNetworkError(isNetwork);
+      setError(getUserFriendlyErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -118,6 +125,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         error,
         refreshVideos,
         hasNewVideos,
+        isNetworkError,
       }}
     >
       {children}
