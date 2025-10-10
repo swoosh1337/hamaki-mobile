@@ -46,6 +46,8 @@ export default function IdeasScreen() {
 
   const [error, setError] = useState<string | null>(null);
   const [isNetworkError, setIsNetworkError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [showPartialError, setShowPartialError] = useState(false);
 
   // Load posts
   const loadPosts = useCallback(async (page: number = 0, reset: boolean = false) => {
@@ -77,15 +79,24 @@ export default function IdeasScreen() {
       setHasMorePosts(newPosts.length === POSTS_PER_PAGE);
       setCurrentPage(page);
       setError(null);
+      setShowPartialError(false);
+      setRetryCount(0);
     } catch (err) {
       console.error('Error loading posts:', err);
       const isNetwork = checkNetworkError(err);
       setIsNetworkError(isNetwork);
-      setError(getUserFriendlyErrorMessage(err));
+      const errorMessage = getUserFriendlyErrorMessage(err);
       
-      if (!reset) {
-        Alert.alert('Error', 'Failed to load more posts. Please try again.');
+      if (reset) {
+        // For full reloads, show the main error state
+        setError(errorMessage);
+      } else {
+        // For "load more" failures, show a partial error banner
+        setShowPartialError(true);
+        setTimeout(() => setShowPartialError(false), 5000); // Auto-hide after 5 seconds
       }
+      
+      setRetryCount(prev => prev + 1);
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
@@ -185,6 +196,8 @@ export default function IdeasScreen() {
   // Refresh posts
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
+    setError(null);
+    setShowPartialError(false);
     loadPosts(0, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -311,9 +324,15 @@ export default function IdeasScreen() {
 
     // Error state
     if (error && posts.length === 0) {
+      const shouldShowOfflineMessage = isNetworkError && retryCount > 1;
       return (
         <NetworkError 
-          message={isNetworkError ? 'Unable to connect. Check your internet connection.' : error}
+          message={shouldShowOfflineMessage 
+            ? 'You appear to be offline. Posts will load when connection is restored.' 
+            : isNetworkError 
+              ? 'Unable to connect. Check your internet connection.' 
+              : error
+          }
           onRetry={() => loadPosts(0, true)}
           isRetrying={isLoading}
         />
@@ -379,6 +398,15 @@ export default function IdeasScreen() {
               </Text>
             </View>
           )}
+
+          {/* Partial Error Banner */}
+          {showPartialError && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>
+                ⚠️ Connection issue. Some content may not load.
+              </Text>
+            </View>
+          )}
           
           <TouchableOpacity
             style={styles.sortToggle}
@@ -415,6 +443,18 @@ export default function IdeasScreen() {
               )}
             </TouchableOpacity>
           )}
+
+          {/* Connection Status */}
+          {retryCount > 0 && !isLoading && !error && (
+            <View style={styles.connectionStatus}>
+              <Text style={styles.connectionStatusText}>
+                {isNetworkError 
+                  ? '📡 Connection restored' 
+                  : '✅ Connected'
+                }
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     );
@@ -432,7 +472,7 @@ export default function IdeasScreen() {
         <Ionicons name="add" size={24} color={Colors.dark.background} />
       </TouchableOpacity>
 
-      {/* Create Post Modal */}
+      {/* Create Post Modal - Fixed version without ScrollView */}
       <CreatePostModal
         visible={isCreateModalVisible}
         onClose={() => setIsCreateModalVisible(false)}
@@ -508,6 +548,32 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     color: '#FFA500',
     textAlign: 'center',
+  },
+  errorBanner: {
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 107, 0.3)',
+  },
+  errorBannerText: {
+    fontSize: 13,
+    fontFamily: 'SpaceMono',
+    color: '#FF6B6B',
+    textAlign: 'center',
+  },
+  connectionStatus: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  connectionStatusText: {
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.tint,
+    opacity: 0.7,
   },
   sortToggle: {
     marginTop: 12,

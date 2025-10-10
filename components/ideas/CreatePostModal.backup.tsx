@@ -1,19 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    Alert,
+    Modal,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
@@ -32,14 +28,21 @@ const CATEGORIES = [
   { value: 'bug', label: 'Bug Report', icon: 'bug-outline', color: '#FF6B6B' },
 ];
 
-export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: CreatePostModalProps) {
+export const CreatePostModal: React.FC<CreatePostModalProps> = ({
+  visible,
+  onClose,
+  onSubmit,
+  isSubmitting,
+}) => {
+  console.log('🎨 CreatePostModal render', { visible, isSubmitting });
+  
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [titleError, setTitleError] = useState('');
   const [contentError, setContentError] = useState('');
 
-  const validateTitle = (value: string): boolean => {
+  const validateTitle = (value: string) => {
     if (!value.trim()) {
       setTitleError('Title is required');
       return false;
@@ -56,7 +59,7 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
     return true;
   };
 
-  const validateContent = (value: string): boolean => {
+  const validateContent = (value: string) => {
     if (!value.trim()) {
       setContentError('Description is required');
       return false;
@@ -87,29 +90,36 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
     }
   };
 
-  const resetForm = () => {
+  const handleSubmit = async () => {
+    console.log('🎬 Modal handleSubmit called');
+    const isTitleValid = validateTitle(title);
+    const isContentValid = validateContent(content);
+
+    if (!isTitleValid || !isContentValid) {
+      console.log('❌ Validation failed', { isTitleValid, isContentValid });
+      return;
+    }
+
+    console.log('✅ Validation passed, calling onSubmit...');
+    
+    try {
+      await onSubmit(title, content, selectedCategory || undefined);
+      console.log('✅ onSubmit completed, resetting and closing modal');
+      handleReset();
+      onClose();
+      console.log('✅ Modal closed');
+    } catch (error) {
+      console.error('❌ Modal caught error:', error);
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to submit your idea. Please try again.');
+    }
+  };
+
+  const handleReset = () => {
     setTitle('');
     setContent('');
     setSelectedCategory('');
     setTitleError('');
     setContentError('');
-  };
-
-  const handleSubmit = async () => {
-    const isTitleValid = validateTitle(title);
-    const isContentValid = validateContent(content);
-
-    if (!isTitleValid || !isContentValid) {
-      return;
-    }
-
-    try {
-      await onSubmit(title, content, selectedCategory || undefined);
-      resetForm();
-      onClose();
-    } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to submit your idea. Please try again.');
-    }
   };
 
   const handleClose = () => {
@@ -121,7 +131,7 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Discard', style: 'destructive', onPress: () => {
-              resetForm();
+              handleReset();
               onClose();
             }},
           ]
@@ -132,10 +142,6 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
     }
   };
 
-  if (!visible) {
-    return null;
-  }
-
   return (
     <Modal
       visible={visible}
@@ -143,10 +149,9 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <SafeAreaView style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
+      <SafeAreaView style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
           <TouchableOpacity 
             style={styles.headerButton}
             onPress={handleClose}
@@ -170,10 +175,7 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
           </TouchableOpacity>
         </View>
 
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.scrollView}
-        >
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           {/* Title Input */}
           <View style={styles.inputSection}>
             <Text style={styles.label}>Title *</Text>
@@ -249,15 +251,14 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
           <View style={styles.infoBox}>
             <Ionicons name="information-circle-outline" size={20} color={Colors.dark.tint} />
             <Text style={styles.infoText}>
-              Your idea will be reviewed before appearing in the Ideas feed. You'll be notified once it's approved!
+              Your idea will be reviewed before appearing in the Ideas feed. You&apos;ll be notified once it&apos;s approved!
             </Text>
           </View>
-        </KeyboardAvoidingView>
-        </SafeAreaView>
-      </TouchableWithoutFeedback>
+        </ScrollView>
+      </SafeAreaView>
     </Modal>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
