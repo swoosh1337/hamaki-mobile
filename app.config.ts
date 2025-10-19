@@ -2,7 +2,7 @@ export default {
   expo: {
     name: "hamaki",
     slug: "hamaki",
-    version: "1.0.0",
+    version: "1.0.1",
     orientation: "portrait",
     icon: "./assets/images/hamaki-logo.png",
     scheme: "com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3",

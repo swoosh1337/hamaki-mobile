@@ -3,10 +3,10 @@
 
 // Import asset types from the asset management system
 import {
-    GameAnimations,
-    NoPogodGameAssets,
-    SpriteAnimationManager,
-    createGameAnimations
+  GameAnimations,
+  NoPogodGameAssets,
+  SpriteAnimationManager,
+  createGameAnimations
 } from './noPogodGameAssets';
 
 // Core game interfaces
@@ -36,6 +36,8 @@ export interface PlayerState {
   sprite: 'IDLE' | 'MOVING';
   animationProgress: number;
   movementStartTime: number;
+  speedBoostActive: boolean;
+  speedBoostEndTime: number;
 }
 
 export interface FallingItem {
@@ -48,13 +50,22 @@ export interface FallingItem {
   points: number;
   isBad: boolean;
   isDeadly: boolean;
+  mustCatch: boolean;
+  shouldAvoid: boolean;
 }
 
 export interface ShonzikaState {
+  position: 'LEFT' | 'CENTER' | 'RIGHT';
   x: number;
   y: number;
-  sprite: 'IDLE' | 'THROWING';
+  targetX: number;
+  startX: number;
+  isMoving: boolean;
+  sprite: 'IDLE' | 'THROWING' | 'WALKING';
   throwCooldown: number;
+  animationProgress: number;
+  movementStartTime: number;
+  nextMoveTime: number;
 }
 
 export type ItemType = 'EGG' | 'TOMATO' | 'PEPPER' | 'ELECTRIC_SHOCK' | 'BOMB';
@@ -73,8 +84,8 @@ export const NO_POGOD_CONFIG = {
   INITIAL_LIVES: 3,
   
   // Physics
-  ITEM_FALL_SPEED: 3,
-  ITEM_FALL_ACCELERATION: 0.1,
+  ITEM_FALL_SPEED: 2.5,
+  ITEM_FALL_ACCELERATION: 0.05,
   
   // Positions
   PLAYER_POSITIONS: {
@@ -92,6 +103,11 @@ export const NO_POGOD_CONFIG = {
   // Animation
   PLAYER_MOVE_DURATION: 200, // milliseconds for smooth movement
   PLAYER_MOVE_SPEED: 0.8, // movement interpolation speed
+  PLAYER_MOVE_DURATION_BOOSTED: 100, // milliseconds for boosted movement (2x faster)
+  SPEED_BOOST_DURATION: 5000, // 5 seconds speed boost duration
+  SHONZIKA_MOVE_DURATION: 2000, // milliseconds for Shonzika movement (slower, more deliberate)
+  SHONZIKA_MOVE_INTERVAL_MIN: 100, // minimum time between movements (very short for continuous movement)
+  SHONZIKA_MOVE_INTERVAL_MAX: 300, // maximum time between movements (very short for continuous movement)
   
   // Item probabilities
   ITEM_SPAWN_WEIGHTS: {
@@ -103,13 +119,49 @@ export const NO_POGOD_CONFIG = {
   },
 } as const;
 
-// Item type definitions
-export const ITEM_DEFINITIONS: Record<ItemType, { points: number; isBad: boolean; isDeadly: boolean }> = {
-  EGG: { points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS, isBad: false, isDeadly: false },
-  TOMATO: { points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS, isBad: false, isDeadly: false },
-  PEPPER: { points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS, isBad: false, isDeadly: false },
-  ELECTRIC_SHOCK: { points: 0, isBad: true, isDeadly: false },
-  BOMB: { points: 0, isBad: true, isDeadly: true },
+// Item type definitions with specific behaviors
+export const ITEM_DEFINITIONS: Record<ItemType, { 
+  points: number; 
+  isBad: boolean; 
+  isDeadly: boolean;
+  mustCatch: boolean; // If true, missing this item causes game over
+  shouldAvoid: boolean; // If true, catching this item is bad
+}> = {
+  EGG: { 
+    points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS, 
+    isBad: false, 
+    isDeadly: false,
+    mustCatch: false,
+    shouldAvoid: false,
+  },
+  TOMATO: { 
+    points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS, 
+    isBad: false, 
+    isDeadly: false,
+    mustCatch: false,
+    shouldAvoid: false,
+  },
+  PEPPER: { 
+    points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS, 
+    isBad: false, 
+    isDeadly: false,
+    mustCatch: false,
+    shouldAvoid: false,
+  },
+  ELECTRIC_SHOCK: { 
+    points: 0, 
+    isBad: true, 
+    isDeadly: false,
+    mustCatch: false, // Good to miss
+    shouldAvoid: true, // Should avoid catching
+  },
+  BOMB: { 
+    points: 0, 
+    isBad: false, // Not "bad" in the sense that catching it loses a life
+    isDeadly: true, // Deadly means game over when caught
+    mustCatch: true, // Must catch or game over
+    shouldAvoid: false, // Must catch, not avoid
+  },
 };
 
 export class NoPogodGameEngine {
@@ -150,6 +202,7 @@ export class NoPogodGameEngine {
   private createInitialState(screenWidth: number, screenHeight: number): NoPogodGameState {
     const miroY = screenHeight * NO_POGOD_CONFIG.MIRO_GROUND_Y;
     const shonzikaY = screenHeight * NO_POGOD_CONFIG.SHONZIKA_POSITION.y;
+    const shonzikaX = screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.CENTER;
     
     return {
       phase: 'MENU',
@@ -166,13 +219,22 @@ export class NoPogodGameEngine {
         sprite: 'IDLE',
         animationProgress: 1.0,
         movementStartTime: 0,
+        speedBoostActive: false,
+        speedBoostEndTime: 0,
       },
       items: [],
       shonzika: {
-        x: screenWidth * NO_POGOD_CONFIG.SHONZIKA_POSITION.x,
+        position: 'CENTER',
+        x: shonzikaX,
         y: shonzikaY,
+        targetX: shonzikaX,
+        startX: shonzikaX,
+        isMoving: false,
         sprite: 'IDLE',
         throwCooldown: 0,
+        animationProgress: 1.0,
+        movementStartTime: 0,
+        nextMoveTime: this.getRandomMoveTime(),
       },
       screenWidth,
       screenHeight,
@@ -235,8 +297,20 @@ export class NoPogodGameEngine {
     this.gameState.player.sprite = 'IDLE';
     this.gameState.player.animationProgress = 1.0;
     this.gameState.player.movementStartTime = 0;
+    this.gameState.player.speedBoostActive = false;
+    this.gameState.player.speedBoostEndTime = 0;
+    
+    const shonzikaX = this.gameState.screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.CENTER;
+    this.gameState.shonzika.position = 'CENTER';
+    this.gameState.shonzika.x = shonzikaX;
+    this.gameState.shonzika.targetX = shonzikaX;
+    this.gameState.shonzika.startX = shonzikaX;
+    this.gameState.shonzika.isMoving = false;
     this.gameState.shonzika.sprite = 'IDLE';
     this.gameState.shonzika.throwCooldown = 0;
+    this.gameState.shonzika.animationProgress = 1.0;
+    this.gameState.shonzika.movementStartTime = 0;
+    this.gameState.shonzika.nextMoveTime = this.getRandomMoveTime();
   }
 
   movePlayer(direction: 'LEFT' | 'CENTER' | 'RIGHT'): void {
@@ -297,7 +371,31 @@ export class NoPogodGameEngine {
     if (this.gameState.phase === 'PLAYING') {
       this.gameTimer += deltaTime;
       this.gameState.timeRemaining = Math.max(0, NO_POGOD_CONFIG.GAME_DURATION - this.gameTimer);
+      
+      // Update speed boost timer
+      this.updateSpeedBoost();
     }
+  }
+
+  /**
+   * Update speed boost state and automatically deactivate after duration
+   */
+  private updateSpeedBoost(): void {
+    if (this.gameState.player.speedBoostActive) {
+      // Check if speed boost has expired
+      if (this.gameTimer >= this.gameState.player.speedBoostEndTime) {
+        this.gameState.player.speedBoostActive = false;
+        this.gameState.player.speedBoostEndTime = 0;
+      }
+    }
+  }
+
+  /**
+   * Activate speed boost for 5 seconds
+   */
+  public activateSpeedBoost(): void {
+    this.gameState.player.speedBoostActive = true;
+    this.gameState.player.speedBoostEndTime = this.gameTimer + NO_POGOD_CONFIG.SPEED_BOOST_DURATION;
   }
 
   private updateAnimations(currentTime: number): void {
@@ -311,8 +409,13 @@ export class NoPogodGameEngine {
     
     if (player.isMoving) {
       // Calculate animation progress based on time elapsed
+      // Use boosted duration if speed boost is active
+      const moveDuration = player.speedBoostActive 
+        ? NO_POGOD_CONFIG.PLAYER_MOVE_DURATION_BOOSTED 
+        : NO_POGOD_CONFIG.PLAYER_MOVE_DURATION;
+      
       const elapsedTime = this.gameTimer - player.movementStartTime;
-      const progress = Math.min(elapsedTime / NO_POGOD_CONFIG.PLAYER_MOVE_DURATION, 1.0);
+      const progress = Math.min(elapsedTime / moveDuration, 1.0);
       
       // Update animation progress
       player.animationProgress = progress;
@@ -340,12 +443,31 @@ export class NoPogodGameEngine {
     return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
   }
 
+  private getRandomMoveTime(): number {
+    const min = NO_POGOD_CONFIG.SHONZIKA_MOVE_INTERVAL_MIN;
+    const max = NO_POGOD_CONFIG.SHONZIKA_MOVE_INTERVAL_MAX;
+    return min + Math.random() * (max - min);
+  }
+
+  private getRandomPosition(): 'LEFT' | 'CENTER' | 'RIGHT' {
+    const positions: ('LEFT' | 'CENTER' | 'RIGHT')[] = ['LEFT', 'CENTER', 'RIGHT'];
+    return positions[Math.floor(Math.random() * positions.length)];
+  }
+
   private updateItems(deltaTime: number): void {
     // Update existing items
     this.gameState.items = this.gameState.items.filter(item => {
       // Update item position
       item.y += item.velocityY;
       item.velocityY += NO_POGOD_CONFIG.ITEM_FALL_ACCELERATION;
+
+      // Check if item has fallen past the catch zone (missed)
+      const catchY = this.gameState.player.y;
+      if (item.y > catchY + NO_POGOD_CONFIG.ITEM_SIZE * 2) {
+        // Item was missed
+        this.handleItemMiss(item);
+        return false; // Remove missed item
+      }
 
       // Remove items that have fallen off screen
       return item.y < this.gameState.screenHeight + NO_POGOD_CONFIG.ITEM_SIZE;
@@ -360,15 +482,93 @@ export class NoPogodGameEngine {
   }
 
   private updateShonzika(deltaTime: number): void {
+    const shonzika = this.gameState.shonzika;
+    
     // Update throw cooldown
-    if (this.gameState.shonzika.throwCooldown > 0) {
-      this.gameState.shonzika.throwCooldown -= deltaTime;
-      if (this.gameState.shonzika.throwCooldown <= 0) {
-        this.gameState.shonzika.sprite = 'IDLE';
+    if (shonzika.throwCooldown > 0) {
+      shonzika.throwCooldown -= deltaTime;
+      if (shonzika.throwCooldown <= 0) {
+        shonzika.throwCooldown = 0;
+        // Only return to idle if not moving
+        if (!shonzika.isMoving) {
+          shonzika.sprite = 'IDLE';
+          
+          // Switch back to idle animation
+          if (this.gameAnimations) {
+            this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.idle);
+          }
+        } else {
+          // If moving, return to walking sprite
+          shonzika.sprite = 'WALKING';
+          if (this.gameAnimations) {
+            this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.walking);
+          }
+        }
+      }
+    }
+    
+    // Handle movement animation
+    if (shonzika.isMoving) {
+      // Calculate animation progress based on time elapsed
+      const elapsedTime = this.gameTimer - shonzika.movementStartTime;
+      const progress = Math.min(elapsedTime / NO_POGOD_CONFIG.SHONZIKA_MOVE_DURATION, 1.0);
+      
+      // Update animation progress
+      shonzika.animationProgress = progress;
+      
+      // Smooth interpolation between start and target position
+      const easedProgress = this.easeInOutQuad(progress);
+      shonzika.x = shonzika.startX + (shonzika.targetX - shonzika.startX) * easedProgress;
+      
+      // Check if movement is complete
+      if (progress >= 1.0) {
+        shonzika.x = shonzika.targetX;
+        shonzika.isMoving = false;
+        shonzika.animationProgress = 1.0;
         
-        // Switch back to idle animation
+        // Schedule next movement
+        shonzika.nextMoveTime = this.gameTimer + this.getRandomMoveTime();
+        
+        // Only set to idle if not throwing
+        if (shonzika.throwCooldown <= 0) {
+          shonzika.sprite = 'IDLE';
+          
+          // Switch back to idle animation
+          if (this.gameAnimations) {
+            this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.idle);
+          }
+        }
+      }
+    } else if (shonzika.throwCooldown <= 0) {
+      // Only check for new movement if not throwing
+      // Check if it's time to start a new movement
+      if (this.gameTimer >= shonzika.nextMoveTime) {
+        // Move in a continuous pattern: LEFT -> CENTER -> RIGHT -> CENTER -> LEFT
+        let newPosition: 'LEFT' | 'CENTER' | 'RIGHT';
+        
+        if (shonzika.position === 'LEFT') {
+          newPosition = 'CENTER';
+        } else if (shonzika.position === 'CENTER') {
+          // Determine direction based on previous movement
+          // If we just came from LEFT, go to RIGHT, and vice versa
+          const isMovingRight = shonzika.targetX > shonzika.startX;
+          newPosition = isMovingRight ? 'RIGHT' : 'LEFT';
+        } else { // RIGHT
+          newPosition = 'CENTER';
+        }
+        
+        // Start movement
+        shonzika.startX = shonzika.x;
+        shonzika.position = newPosition;
+        shonzika.targetX = this.gameState.screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS[newPosition];
+        shonzika.isMoving = true;
+        shonzika.sprite = 'WALKING';
+        shonzika.animationProgress = 0.0;
+        shonzika.movementStartTime = this.gameTimer;
+        
+        // Start walking animation
         if (this.gameAnimations) {
-          this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.idle);
+          this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.walking);
         }
       }
     }
@@ -400,16 +600,21 @@ export class NoPogodGameEngine {
       }
     }
     
+    // Calculate hand position based on Shonzika's current state
+    const handPosition = this.calculateShonzikaHandPosition();
+    
     const item: FallingItem = {
       id: `item_${Date.now()}_${Math.random()}`,
       type: itemType,
-      x: this.gameState.shonzika.x,
-      y: this.gameState.shonzika.y,
+      x: handPosition.x,
+      y: handPosition.y,
       velocityY: NO_POGOD_CONFIG.ITEM_FALL_SPEED,
       sprite: itemSprite,
       points: itemDef.points,
       isBad: itemDef.isBad,
       isDeadly: itemDef.isDeadly,
+      mustCatch: itemDef.mustCatch,
+      shouldAvoid: itemDef.shouldAvoid,
     };
 
     this.gameState.items.push(item);
@@ -421,6 +626,55 @@ export class NoPogodGameEngine {
     if (this.gameAnimations) {
       this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.throwing);
     }
+  }
+
+  /**
+   * Calculate Shonzika's hand position based on current sprite and position
+   * This ensures items spawn from the correct hand location
+   */
+  private calculateShonzikaHandPosition(): { x: number; y: number } {
+    const shonzika = this.gameState.shonzika;
+    const characterSize = 150; // Base character size (matches rendering)
+    
+    // Base hand offsets for different sprites (relative to character center)
+    // These values are based on the sprite artwork and may need fine-tuning
+    let handOffsetX = 0;
+    let handOffsetY = 0;
+    
+    // Determine hand offset based on current sprite state
+    if (shonzika.sprite === 'THROWING') {
+      // When throwing, hand is extended forward
+      // Hand is typically in front of the character
+      handOffsetX = 40; // Hand extends forward
+      handOffsetY = -10; // Hand is slightly above center
+    } else if (shonzika.sprite === 'WALKING' || shonzika.isMoving) {
+      // When walking, hand is at side
+      handOffsetX = 20; // Hand at side
+      handOffsetY = 0; // Hand at center height
+    } else {
+      // When idle, hand is at rest position
+      handOffsetX = 25; // Hand slightly forward
+      handOffsetY = 5; // Hand slightly below center
+    }
+    
+    // Adjust hand offset based on Shonzika's position (flip for left side)
+    // When Shonzika is on the left, we need to flip the horizontal offset
+    const isOnLeft = shonzika.position === 'LEFT' || 
+                     (shonzika.isMoving && shonzika.targetX < shonzika.x);
+    
+    if (isOnLeft) {
+      handOffsetX = -handOffsetX; // Flip horizontal offset for left-facing
+    }
+    
+    // Calculate final hand position
+    // Start from Shonzika's center position and apply offsets
+    const handX = shonzika.x + handOffsetX;
+    const handY = shonzika.y + handOffsetY + (characterSize * 0.2); // Offset down from center
+    
+    return {
+      x: handX,
+      y: handY,
+    };
   }
 
   private getRandomItemType(): ItemType {
@@ -468,16 +722,64 @@ export class NoPogodGameEngine {
     });
   }
 
+  /**
+   * Handle item catch with specific behaviors per item type
+   */
   private handleItemCatch(item: FallingItem): void {
-    if (item.isDeadly) {
-      // Bomb causes immediate game over
-      this.gameState.phase = 'GAME_OVER';
-    } else if (item.isBad) {
-      // Bad items cause life loss
-      this.gameState.lives--;
-    } else {
-      // Good items give points
-      this.gameState.score += item.points;
+    switch (item.type) {
+      case 'EGG':
+        // EGG: +10 points, award XP when caught
+        this.gameState.score += item.points;
+        // TODO: Award XP (will be handled by game component)
+        break;
+        
+      case 'TOMATO':
+        // TOMATO: +10 points, award XP when caught
+        this.gameState.score += item.points;
+        // TODO: Award XP (will be handled by game component)
+        break;
+        
+      case 'PEPPER':
+        // PEPPER: +10 points, award XP, activate 5-second speed boost when caught
+        this.gameState.score += item.points;
+        // TODO: Award XP (will be handled by game component)
+        // Activate speed boost
+        this.activateSpeedBoost();
+        break;
+        
+      case 'ELECTRIC_SHOCK':
+        // ELECTRIC_SHOCK: -1 life when caught (player should avoid)
+        this.gameState.lives--;
+        break;
+        
+      case 'BOMB':
+        // BOMB: Catching a bomb causes immediate game over
+        this.gameState.phase = 'GAME_OVER';
+        break;
+    }
+  }
+
+  /**
+   * Handle item miss with different consequences per item type
+   */
+  private handleItemMiss(item: FallingItem): void {
+    switch (item.type) {
+      case 'BOMB':
+        // BOMB miss: Immediate game over if bomb is not caught
+        this.gameState.phase = 'GAME_OVER';
+        break;
+        
+      case 'ELECTRIC_SHOCK':
+        // ELECTRIC_SHOCK miss: No penalty (good to miss)
+        // Do nothing - this is the desired outcome
+        break;
+        
+      case 'EGG':
+      case 'TOMATO':
+      case 'PEPPER':
+        // Good items: No penalty for missing (just lost opportunity for points)
+        // Do nothing
+        break;
     }
   }
 
@@ -563,6 +865,10 @@ export class NoPogodGameEngine {
       y: this.gameState.shonzika.y,
       sprite: this.gameState.shonzika.sprite,
     };
+  }
+
+  getShonzikaHandPosition(): { x: number; y: number } {
+    return this.calculateShonzikaHandPosition();
   }
 
   getFallingItems(): FallingItem[] {
@@ -662,5 +968,21 @@ export class NoPogodGameEngine {
 
   getShonzikaAnimationProgress(): number {
     return this.gameState.animations.shonzika.getAnimationProgress();
+  }
+
+  // Speed boost state queries
+  isSpeedBoostActive(): boolean {
+    return this.gameState.player.speedBoostActive;
+  }
+
+  getSpeedBoostTimeRemaining(): number {
+    if (!this.gameState.player.speedBoostActive) {
+      return 0;
+    }
+    return Math.max(0, this.gameState.player.speedBoostEndTime - this.gameTimer);
+  }
+
+  getSpeedBoostTimeRemainingSeconds(): number {
+    return Math.ceil(this.getSpeedBoostTimeRemaining() / 1000);
   }
 }

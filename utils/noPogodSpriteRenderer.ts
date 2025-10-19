@@ -76,10 +76,11 @@ export class NoPogodSpriteRenderer {
       sprite = playerState.isMoving ? this.assets.miro.step1 : this.assets.miro.idle;
     }
 
+    // Center the sprite on the player's x position
     return {
       sprite,
       x: playerState.x - characterSize / 2,
-      y: playerState.y - characterSize,
+      y: playerState.y - characterSize / 2, // Changed to center vertically too
       width: characterSize,
       height: characterSize,
     };
@@ -284,6 +285,50 @@ export class NoPogodSpriteRenderer {
           this.assets.shonzika.profile,
         ],
       },
+    };
+  }
+
+  /**
+   * Calculate Shonzika's hand position for item spawning
+   * This matches the calculation in the game engine for visual coordination
+   */
+  public calculateShonzikaHandPosition(shonzikaState: ShonzikaState): { x: number; y: number } {
+    const characterSize = 150 * this.config.characterScale;
+    
+    // Base hand offsets for different sprites (relative to character center)
+    let handOffsetX = 0;
+    let handOffsetY = 0;
+    
+    // Determine hand offset based on current sprite state
+    if (shonzikaState.sprite === 'THROWING') {
+      // When throwing, hand is extended forward
+      handOffsetX = 40 * this.config.characterScale;
+      handOffsetY = -10 * this.config.characterScale;
+    } else if (shonzikaState.sprite === 'WALKING' || shonzikaState.isMoving) {
+      // When walking, hand is at side
+      handOffsetX = 20 * this.config.characterScale;
+      handOffsetY = 0;
+    } else {
+      // When idle, hand is at rest position
+      handOffsetX = 25 * this.config.characterScale;
+      handOffsetY = 5 * this.config.characterScale;
+    }
+    
+    // Adjust hand offset based on Shonzika's position (flip for left side)
+    const isOnLeft = shonzikaState.position === 'LEFT' || 
+                     (shonzikaState.isMoving && shonzikaState.targetX < shonzikaState.x);
+    
+    if (isOnLeft) {
+      handOffsetX = -handOffsetX;
+    }
+    
+    // Calculate final hand position
+    const handX = shonzikaState.x + handOffsetX;
+    const handY = shonzikaState.y + handOffsetY + (characterSize * 0.2);
+    
+    return {
+      x: handX,
+      y: handY,
     };
   }
 }

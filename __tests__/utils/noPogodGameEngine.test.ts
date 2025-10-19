@@ -226,6 +226,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: ITEM_DEFINITIONS.EGG.points,
         isBad: false,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
       };
 
       // Access private gameState to add test item
@@ -268,6 +270,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: ITEM_DEFINITIONS.EGG.points,
         isBad: false,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(testItem);
@@ -309,6 +313,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: ITEM_DEFINITIONS.TOMATO.points,
         isBad: false,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(testItem);
@@ -350,6 +356,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: ITEM_DEFINITIONS.EGG.points,
         isBad: false,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(testItem);
@@ -393,6 +401,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: ITEM_DEFINITIONS.TOMATO.points,
         isBad: false,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(testItem);
@@ -431,6 +441,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: ITEM_DEFINITIONS.PEPPER.points,
         isBad: false,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(testItem);
@@ -469,6 +481,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: ITEM_DEFINITIONS.ELECTRIC_SHOCK.points,
         isBad: true,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: true,
       };
 
       (gameEngine as any).gameState.items.push(testItem);
@@ -509,6 +523,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: ITEM_DEFINITIONS.ELECTRIC_SHOCK.points,
         isBad: true,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: true,
       };
 
       (gameEngine as any).gameState.items.push(testItem);
@@ -547,6 +563,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: ITEM_DEFINITIONS.BOMB.points,
         isBad: true,
         isDeadly: true,
+        mustCatch: true,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(testItem);
@@ -588,6 +606,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: ITEM_DEFINITIONS.BOMB.points,
         isBad: true,
         isDeadly: true,
+        mustCatch: true,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(testItem);
@@ -606,18 +626,24 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: 10,
         isBad: false,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
       });
       
       expect(ITEM_DEFINITIONS.TOMATO).toEqual({
         points: 10,
         isBad: false,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
       });
       
       expect(ITEM_DEFINITIONS.PEPPER).toEqual({
         points: 10,
         isBad: false,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
       });
     });
 
@@ -626,12 +652,16 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: 0,
         isBad: true,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: true,
       });
       
       expect(ITEM_DEFINITIONS.BOMB).toEqual({
         points: 0,
-        isBad: true,
+        isBad: false,
         isDeadly: true,
+        mustCatch: true,
+        shouldAvoid: false,
       });
     });
   });
@@ -673,6 +703,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
           points: itemData.points,
           isBad: false,
           isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
         };
 
         (gameEngine as any).gameState.items.push(testItem);
@@ -714,6 +746,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: 10,
         isBad: false,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
       };
 
       const badItem: FallingItem = {
@@ -726,6 +760,8 @@ describe('NoPogodGameEngine - Collision Detection and Scoring', () => {
         points: 0,
         isBad: true,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: true,
       };
 
       (gameEngine as any).gameState.items.push(goodItem, badItem);
@@ -1033,6 +1069,8 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
         points: ITEM_DEFINITIONS.ELECTRIC_SHOCK.points,
         isBad: true,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: true,
       };
 
       (gameEngine as any).gameState.items.push(electricShockItem);
@@ -1073,6 +1111,8 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
         points: 0,
         isBad: true,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: true,
       };
 
       const electricShock2: FallingItem = {
@@ -1085,6 +1125,8 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
         points: 0,
         isBad: true,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: true,
       };
 
       (gameEngine as any).gameState.items.push(electricShock1, electricShock2);
@@ -1124,6 +1166,8 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
         points: 10,
         isBad: false,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(goodItem);
@@ -1164,6 +1208,8 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
         points: ITEM_DEFINITIONS.BOMB.points,
         isBad: true,
         isDeadly: true,
+        mustCatch: true,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(bombItem);
@@ -1206,6 +1252,8 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
         points: 0,
         isBad: true,
         isDeadly: true,
+        mustCatch: true,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(bombItem);
@@ -1246,6 +1294,8 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
         points: 0,
         isBad: true,
         isDeadly: true,
+        mustCatch: true,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(bombItem);
@@ -1290,6 +1340,8 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
         points: 0,
         isBad: true,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: true,
       };
 
       (gameEngine as any).gameState.items.push(electricShockItem);
@@ -1432,6 +1484,8 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
         points: 0,
         isBad: true,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: true,
       };
 
       const electricShock2: FallingItem = {
@@ -1444,6 +1498,8 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
         points: 0,
         isBad: true,
         isDeadly: false,
+        mustCatch: false,
+        shouldAvoid: true,
       };
 
       (gameEngine as any).gameState.items.push(electricShock1, electricShock2);
@@ -1485,6 +1541,8 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
         points: 0,
         isBad: true,
         isDeadly: true,
+        mustCatch: true,
+        shouldAvoid: false,
       };
 
       (gameEngine as any).gameState.items.push(bombItem);
@@ -1494,6 +1552,582 @@ describe('NoPogodGameEngine - Lives and Game Over System', () => {
 
       expect(gameEngine.isGameOver()).toBe(true);
       expect(gameEngine.getLives()).toBe(0);
+    });
+  });
+});
+describe('NoPogodGameEngine - Item Spawning from Shonzika Hand Position', () => {
+  let gameEngine: NoPogodGameEngine;
+  const screenWidth = 400;
+  const screenHeight = 600;
+
+  beforeEach(() => {
+    gameEngine = new NoPogodGameEngine(screenWidth, screenHeight);
+    gameEngine.startGame();
+  });
+
+  describe('Hand Position Calculation', () => {
+    test('should calculate hand position for idle Shonzika', () => {
+      const handPosition = gameEngine.getShonzikaHandPosition();
+      const shonzikaPosition = gameEngine.getShonzikaPosition();
+      
+      // Hand should be offset from Shonzika's center position
+      expect(handPosition.x).not.toBe(shonzikaPosition.x);
+      expect(handPosition.y).not.toBe(shonzikaPosition.y);
+      
+      // Hand should be near Shonzika (within reasonable distance)
+      const distance = Math.sqrt(
+        Math.pow(handPosition.x - shonzikaPosition.x, 2) + 
+        Math.pow(handPosition.y - shonzikaPosition.y, 2)
+      );
+      expect(distance).toBeLessThan(100); // Hand should be within 100 pixels
+    });
+
+    test('should adjust hand position when Shonzika is on LEFT', () => {
+      const gameState = gameEngine.getState();
+      
+      // Force Shonzika to LEFT position
+      gameState.shonzika.position = 'LEFT';
+      gameState.shonzika.x = screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.LEFT;
+      
+      const handPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Hand position should reflect LEFT position
+      expect(handPosition.x).toBeLessThan(screenWidth * 0.5);
+    });
+
+    test('should adjust hand position when Shonzika is on RIGHT', () => {
+      const gameState = gameEngine.getState();
+      
+      // Force Shonzika to RIGHT position
+      gameState.shonzika.position = 'RIGHT';
+      gameState.shonzika.x = screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.RIGHT;
+      
+      const handPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Hand position should reflect RIGHT position
+      expect(handPosition.x).toBeGreaterThan(screenWidth * 0.5);
+    });
+
+    test('should adjust hand position when Shonzika is throwing', () => {
+      const gameState = gameEngine.getState();
+      
+      // Set Shonzika to throwing state
+      gameState.shonzika.sprite = 'THROWING';
+      
+      const throwingHandPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Set Shonzika to idle state
+      gameState.shonzika.sprite = 'IDLE';
+      
+      const idleHandPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Hand positions should be different for different sprites
+      expect(throwingHandPosition.x).not.toBe(idleHandPosition.x);
+    });
+  });
+
+  describe('Item Spawning from Hand Position', () => {
+    test('should spawn items from Shonzika hand position, not center', () => {
+      const gameState = gameEngine.getState();
+      
+      // Clear any existing items
+      gameState.items = [];
+      
+      // Get hand position before spawning
+      const handPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Trigger item spawn by advancing time
+      const spawnTime = NO_POGOD_CONFIG.ITEM_SPAWN_INTERVAL + NO_POGOD_CONFIG.ITEM_SPAWN_VARIANCE + 100;
+      gameEngine.update(0);
+      gameEngine.update(spawnTime);
+      
+      const items = gameEngine.getFallingItems();
+      
+      if (items.length > 0) {
+        const spawnedItem = items[0];
+        
+        // Item should spawn near hand position, not exactly at Shonzika's center
+        const distanceFromHand = Math.sqrt(
+          Math.pow(spawnedItem.x - handPosition.x, 2) + 
+          Math.pow(spawnedItem.y - handPosition.y, 2)
+        );
+        
+        const distanceFromCenter = Math.sqrt(
+          Math.pow(spawnedItem.x - gameState.shonzika.x, 2) + 
+          Math.pow(spawnedItem.y - gameState.shonzika.y, 2)
+        );
+        
+        // Item should be closer to hand than to center (or at least not exactly at center)
+        expect(distanceFromHand).toBeLessThanOrEqual(distanceFromCenter + 1); // +1 for floating point tolerance
+      }
+    });
+
+    test('should spawn items at different x positions when Shonzika moves', () => {
+      const gameState = gameEngine.getState();
+      
+      // Clear any existing items
+      gameState.items = [];
+      
+      // Spawn item when Shonzika is at CENTER
+      gameState.shonzika.position = 'CENTER';
+      gameState.shonzika.x = screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.CENTER;
+      
+      const centerHandPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Move Shonzika to LEFT
+      gameState.shonzika.position = 'LEFT';
+      gameState.shonzika.x = screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.LEFT;
+      
+      const leftHandPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Hand positions should be different
+      expect(leftHandPosition.x).not.toBe(centerHandPosition.x);
+      expect(Math.abs(leftHandPosition.x - centerHandPosition.x)).toBeGreaterThan(50);
+    });
+
+    test('should coordinate item spawn timing with throwing animation', () => {
+      // Get initial item count
+      const initialItemCount = gameEngine.getFallingItems().length;
+      
+      // Trigger item spawn by simulating time passing in small increments
+      // First update initializes timing
+      gameEngine.update(0);
+      
+      // Advance time in small steps to avoid the deltaTime > 100 skip
+      let currentTime = 0;
+      const targetTime = NO_POGOD_CONFIG.ITEM_SPAWN_INTERVAL + NO_POGOD_CONFIG.ITEM_SPAWN_VARIANCE + 200;
+      const step = 50; // 50ms steps
+      
+      while (currentTime < targetTime) {
+        currentTime += step;
+        gameEngine.update(currentTime);
+      }
+      
+      // Items should have been spawned
+      const items = gameEngine.getFallingItems();
+      expect(items.length).toBeGreaterThan(initialItemCount);
+      
+      // When an item spawns, it should be from Shonzika's hand position
+      // Verify the spawned item is positioned correctly
+      if (items.length > initialItemCount) {
+        const newItem = items[items.length - 1];
+        const shonzikaPos = gameEngine.getShonzikaPosition();
+        
+        // Item should be near Shonzika (spawned from hand, not from far away)
+        const distance = Math.abs(newItem.x - shonzikaPos.x);
+        expect(distance).toBeLessThan(100); // Should be within 100 pixels horizontally
+      }
+    });
+  });
+
+  describe('Hand Position for Different Poses', () => {
+    test('should calculate different hand positions for IDLE pose', () => {
+      const gameState = gameEngine.getState();
+      gameState.shonzika.sprite = 'IDLE';
+      gameState.shonzika.isMoving = false;
+      
+      const handPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Hand should be calculated (not null/undefined)
+      expect(handPosition.x).toBeDefined();
+      expect(handPosition.y).toBeDefined();
+      expect(typeof handPosition.x).toBe('number');
+      expect(typeof handPosition.y).toBe('number');
+    });
+
+    test('should calculate different hand positions for WALKING pose', () => {
+      const gameState = gameEngine.getState();
+      gameState.shonzika.sprite = 'WALKING';
+      gameState.shonzika.isMoving = true;
+      
+      const walkingHandPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Set to idle for comparison
+      gameState.shonzika.sprite = 'IDLE';
+      gameState.shonzika.isMoving = false;
+      
+      const idleHandPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Positions should be different
+      expect(walkingHandPosition.x).not.toBe(idleHandPosition.x);
+    });
+
+    test('should calculate different hand positions for THROWING pose', () => {
+      const gameState = gameEngine.getState();
+      gameState.shonzika.sprite = 'THROWING';
+      
+      const throwingHandPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Set to idle for comparison
+      gameState.shonzika.sprite = 'IDLE';
+      
+      const idleHandPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Throwing hand should be extended more forward
+      expect(Math.abs(throwingHandPosition.x - idleHandPosition.x)).toBeGreaterThan(0);
+    });
+
+    test('should flip hand position horizontally when facing left', () => {
+      const gameState = gameEngine.getState();
+      
+      // Position Shonzika on RIGHT (facing left in profile)
+      gameState.shonzika.position = 'RIGHT';
+      gameState.shonzika.x = screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.RIGHT;
+      gameState.shonzika.sprite = 'IDLE';
+      
+      const rightHandPosition = gameEngine.getShonzikaHandPosition();
+      
+      // Position Shonzika on LEFT (facing right in profile)
+      gameState.shonzika.position = 'LEFT';
+      gameState.shonzika.x = screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.LEFT;
+      
+      const leftHandPosition = gameEngine.getShonzikaHandPosition();
+      
+      // The relative offset from center should be mirrored
+      const rightOffset = rightHandPosition.x - gameState.shonzika.x;
+      const leftOffset = leftHandPosition.x - (screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.LEFT);
+      
+      // Offsets should have opposite signs (mirrored)
+      expect(Math.sign(rightOffset)).not.toBe(Math.sign(leftOffset));
+    });
+  });
+
+  describe('NoPogodGameEngine - Item Miss Detection and Specific Behaviors', () => {
+    describe('Item-Specific Collision Behaviors', () => {
+      test('should award points for catching EGG', () => {
+        gameEngine.movePlayer('CENTER');
+        
+        // Complete movement animation
+        let currentTime = 0;
+        gameEngine.update(currentTime);
+        currentTime += NO_POGOD_CONFIG.PLAYER_MOVE_DURATION + 100;
+        gameEngine.update(currentTime);
+        
+        const initialScore = gameEngine.getScore();
+        const playerState = gameEngine.getPlayerState();
+        
+        const eggItem: FallingItem = {
+          id: 'test_egg',
+          type: 'EGG',
+          x: playerState.x,
+          y: playerState.y,
+          velocityY: NO_POGOD_CONFIG.ITEM_FALL_SPEED,
+          sprite: null,
+          points: 10,
+          isBad: false,
+          isDeadly: false,
+          mustCatch: false,
+          shouldAvoid: false,
+        };
+        
+        (gameEngine as any).gameState.items.push(eggItem);
+        gameEngine.update(currentTime + 50);
+        
+        expect(gameEngine.getScore()).toBe(initialScore + 10);
+        expect(gameEngine.getLives()).toBe(3);
+      });
+
+      test('should award points for catching TOMATO', () => {
+        gameEngine.movePlayer('CENTER');
+        
+        let currentTime = 0;
+        gameEngine.update(currentTime);
+        currentTime += NO_POGOD_CONFIG.PLAYER_MOVE_DURATION + 100;
+        gameEngine.update(currentTime);
+        
+        const initialScore = gameEngine.getScore();
+        const playerState = gameEngine.getPlayerState();
+        
+        const tomatoItem: FallingItem = {
+          id: 'test_tomato',
+          type: 'TOMATO',
+          x: playerState.x,
+          y: playerState.y,
+          velocityY: NO_POGOD_CONFIG.ITEM_FALL_SPEED,
+          sprite: null,
+          points: 10,
+          isBad: false,
+          isDeadly: false,
+          mustCatch: false,
+          shouldAvoid: false,
+        };
+        
+        (gameEngine as any).gameState.items.push(tomatoItem);
+        gameEngine.update(currentTime + 50);
+        
+        expect(gameEngine.getScore()).toBe(initialScore + 10);
+        expect(gameEngine.getLives()).toBe(3);
+      });
+
+      test('should award points for catching PEPPER', () => {
+        gameEngine.movePlayer('CENTER');
+        
+        let currentTime = 0;
+        gameEngine.update(currentTime);
+        currentTime += NO_POGOD_CONFIG.PLAYER_MOVE_DURATION + 100;
+        gameEngine.update(currentTime);
+        
+        const initialScore = gameEngine.getScore();
+        const playerState = gameEngine.getPlayerState();
+        
+        const pepperItem: FallingItem = {
+          id: 'test_pepper',
+          type: 'PEPPER',
+          x: playerState.x,
+          y: playerState.y,
+          velocityY: NO_POGOD_CONFIG.ITEM_FALL_SPEED,
+          sprite: null,
+          points: 10,
+          isBad: false,
+          isDeadly: false,
+          mustCatch: false,
+          shouldAvoid: false,
+        };
+        
+        (gameEngine as any).gameState.items.push(pepperItem);
+        gameEngine.update(currentTime + 50);
+        
+        expect(gameEngine.getScore()).toBe(initialScore + 10);
+        expect(gameEngine.getLives()).toBe(3);
+      });
+
+      test('should lose life when catching ELECTRIC_SHOCK', () => {
+        gameEngine.movePlayer('CENTER');
+        
+        let currentTime = 0;
+        gameEngine.update(currentTime);
+        currentTime += NO_POGOD_CONFIG.PLAYER_MOVE_DURATION + 100;
+        gameEngine.update(currentTime);
+        
+        const initialLives = gameEngine.getLives();
+        const initialScore = gameEngine.getScore();
+        const playerState = gameEngine.getPlayerState();
+        
+        const shockItem: FallingItem = {
+          id: 'test_shock',
+          type: 'ELECTRIC_SHOCK',
+          x: playerState.x,
+          y: playerState.y,
+          velocityY: NO_POGOD_CONFIG.ITEM_FALL_SPEED,
+          sprite: null,
+          points: 0,
+          isBad: true,
+          isDeadly: false,
+          mustCatch: false,
+          shouldAvoid: true,
+        };
+        
+        (gameEngine as any).gameState.items.push(shockItem);
+        gameEngine.update(currentTime + 50);
+        
+        expect(gameEngine.getLives()).toBe(initialLives - 1);
+        expect(gameEngine.getScore()).toBe(initialScore); // No points
+      });
+
+      test('should trigger game over when catching BOMB', () => {
+        gameEngine.movePlayer('CENTER');
+        
+        let currentTime = 0;
+        gameEngine.update(currentTime);
+        currentTime += NO_POGOD_CONFIG.PLAYER_MOVE_DURATION + 100;
+        gameEngine.update(currentTime);
+        
+        const playerState = gameEngine.getPlayerState();
+        
+        const bombItem: FallingItem = {
+          id: 'test_bomb',
+          type: 'BOMB',
+          x: playerState.x,
+          y: playerState.y,
+          velocityY: NO_POGOD_CONFIG.ITEM_FALL_SPEED,
+          sprite: null,
+          points: 0,
+          isBad: false,
+          isDeadly: true,
+          mustCatch: true,
+          shouldAvoid: false,
+        };
+        
+        (gameEngine as any).gameState.items.push(bombItem);
+        gameEngine.update(currentTime + 50);
+        
+        expect(gameEngine.isGameOver()).toBe(true);
+      });
+    });
+
+    describe('Item Miss Detection', () => {
+      test('should trigger game over when BOMB is missed', () => {
+        gameEngine.movePlayer('LEFT'); // Move away from center
+        
+        let currentTime = 0;
+        gameEngine.update(currentTime);
+        currentTime += NO_POGOD_CONFIG.PLAYER_MOVE_DURATION + 100;
+        gameEngine.update(currentTime);
+        
+        const playerState = gameEngine.getPlayerState();
+        const catchY = playerState.y;
+        const missThreshold = catchY + NO_POGOD_CONFIG.ITEM_SIZE * 2;
+        
+        // Create bomb at CENTER position (away from player at LEFT)
+        // Place it just above the miss threshold
+        const bombItem: FallingItem = {
+          id: 'test_bomb_miss',
+          type: 'BOMB',
+          x: screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.CENTER,
+          y: missThreshold - 50, // Just above miss threshold
+          velocityY: 10, // Faster fall speed to ensure it crosses threshold
+          sprite: null,
+          points: 0,
+          isBad: false,
+          isDeadly: true,
+          mustCatch: true,
+          shouldAvoid: false,
+        };
+        
+        (gameEngine as any).gameState.items.push(bombItem);
+        
+        // Update a few times to let bomb fall past miss threshold
+        for (let i = 0; i < 10; i++) {
+          currentTime += 50;
+          gameEngine.update(currentTime);
+          if (gameEngine.isGameOver()) break;
+        }
+        
+        expect(gameEngine.isGameOver()).toBe(true);
+      });
+
+      test('should not penalize when ELECTRIC_SHOCK is missed', () => {
+        gameEngine.movePlayer('LEFT'); // Move away from center
+        
+        let currentTime = 0;
+        gameEngine.update(currentTime);
+        currentTime += NO_POGOD_CONFIG.PLAYER_MOVE_DURATION + 100;
+        gameEngine.update(currentTime);
+        
+        const initialLives = gameEngine.getLives();
+        const initialScore = gameEngine.getScore();
+        const playerState = gameEngine.getPlayerState();
+        
+        // Create electric shock at CENTER position (away from player at LEFT)
+        const shockItem: FallingItem = {
+          id: 'test_shock_miss',
+          type: 'ELECTRIC_SHOCK',
+          x: screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.CENTER,
+          y: playerState.y - 100, // Above catch zone
+          velocityY: NO_POGOD_CONFIG.ITEM_FALL_SPEED,
+          sprite: null,
+          points: 0,
+          isBad: true,
+          isDeadly: false,
+          mustCatch: false,
+          shouldAvoid: true,
+        };
+        
+        (gameEngine as any).gameState.items.push(shockItem);
+        
+        // Update multiple times to let shock fall past catch zone
+        for (let i = 0; i < 20; i++) {
+          currentTime += 50;
+          gameEngine.update(currentTime);
+        }
+        
+        // No penalty for missing electric shock
+        expect(gameEngine.getLives()).toBe(initialLives);
+        expect(gameEngine.getScore()).toBe(initialScore);
+        expect(gameEngine.isGameOver()).toBe(false);
+      });
+
+      test('should not penalize when good items (EGG, TOMATO, PEPPER) are missed', () => {
+        gameEngine.movePlayer('LEFT'); // Move away from center
+        
+        let currentTime = 0;
+        gameEngine.update(currentTime);
+        currentTime += NO_POGOD_CONFIG.PLAYER_MOVE_DURATION + 100;
+        gameEngine.update(currentTime);
+        
+        const initialLives = gameEngine.getLives();
+        const initialScore = gameEngine.getScore();
+        const playerState = gameEngine.getPlayerState();
+        
+        // Create good items at CENTER position (away from player at LEFT)
+        const goodItems: FallingItem[] = [
+          {
+            id: 'test_egg_miss',
+            type: 'EGG',
+            x: screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.CENTER,
+            y: playerState.y - 100,
+            velocityY: NO_POGOD_CONFIG.ITEM_FALL_SPEED,
+            sprite: null,
+            points: 10,
+            isBad: false,
+            isDeadly: false,
+            mustCatch: false,
+            shouldAvoid: false,
+          },
+          {
+            id: 'test_tomato_miss',
+            type: 'TOMATO',
+            x: screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.CENTER,
+            y: playerState.y - 150,
+            velocityY: NO_POGOD_CONFIG.ITEM_FALL_SPEED,
+            sprite: null,
+            points: 10,
+            isBad: false,
+            isDeadly: false,
+            mustCatch: false,
+            shouldAvoid: false,
+          },
+          {
+            id: 'test_pepper_miss',
+            type: 'PEPPER',
+            x: screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.CENTER,
+            y: playerState.y - 200,
+            velocityY: NO_POGOD_CONFIG.ITEM_FALL_SPEED,
+            sprite: null,
+            points: 10,
+            isBad: false,
+            isDeadly: false,
+            mustCatch: false,
+            shouldAvoid: false,
+          },
+        ];
+        
+        goodItems.forEach(item => {
+          (gameEngine as any).gameState.items.push(item);
+        });
+        
+        // Update multiple times to let items fall past catch zone
+        for (let i = 0; i < 20; i++) {
+          currentTime += 50;
+          gameEngine.update(currentTime);
+        }
+        
+        // No penalty for missing good items (just lost opportunity)
+        expect(gameEngine.getLives()).toBe(initialLives);
+        expect(gameEngine.getScore()).toBe(initialScore);
+        expect(gameEngine.isGameOver()).toBe(false);
+      });
+    });
+
+    describe('Item Definition Flags', () => {
+      test('should have correct mustCatch flag for BOMB', () => {
+        expect(ITEM_DEFINITIONS.BOMB.mustCatch).toBe(true);
+      });
+
+      test('should have correct shouldAvoid flag for ELECTRIC_SHOCK', () => {
+        expect(ITEM_DEFINITIONS.ELECTRIC_SHOCK.shouldAvoid).toBe(true);
+      });
+
+      test('should have correct flags for good items', () => {
+        expect(ITEM_DEFINITIONS.EGG.mustCatch).toBe(false);
+        expect(ITEM_DEFINITIONS.EGG.shouldAvoid).toBe(false);
+        
+        expect(ITEM_DEFINITIONS.TOMATO.mustCatch).toBe(false);
+        expect(ITEM_DEFINITIONS.TOMATO.shouldAvoid).toBe(false);
+        
+        expect(ITEM_DEFINITIONS.PEPPER.mustCatch).toBe(false);
+        expect(ITEM_DEFINITIONS.PEPPER.shouldAvoid).toBe(false);
+      });
     });
   });
 });

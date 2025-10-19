@@ -106,12 +106,14 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
   // Handle swipe gestures for player movement
   const handleSwipe = useCallback((direction: 'LEFT' | 'RIGHT' | 'CENTER') => {
+    console.log('🎮 Swipe detected:', direction, 'Game phase:', gameState?.phase);
     if (gameEngineRef.current && gameState?.phase === 'PLAYING') {
       const now = Date.now();
       // Prevent too frequent swipes
       if (now - lastSwipeTime.current < 150) return;
       lastSwipeTime.current = now;
       
+      console.log('🎮 Moving player to:', direction);
       gameEngineRef.current.movePlayer(direction);
       updateGameState();
       
@@ -140,23 +142,29 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       onStartShouldSetPanResponder: () => gameState?.phase === 'PLAYING',
       onMoveShouldSetPanResponder: () => gameState?.phase === 'PLAYING',
       onPanResponderRelease: (_evt, gestureState) => {
+        console.log('👆 Touch released:', gestureState);
         if (gameState?.phase !== 'PLAYING') return;
         
         const { dx, vx } = gestureState;
         const swipeThreshold = 30;
         const velocityThreshold = 0.5;
         
+        console.log('👆 Gesture data:', { dx, vx, swipeThreshold, velocityThreshold });
+        
         // Determine swipe direction based on translation and velocity
         if (Math.abs(dx) > swipeThreshold || Math.abs(vx) > velocityThreshold) {
           if (dx < -swipeThreshold || vx < -velocityThreshold) {
             // Swipe left
+            console.log('👆 Detected LEFT swipe');
             handleSwipe('LEFT');
           } else if (dx > swipeThreshold || vx > velocityThreshold) {
             // Swipe right
+            console.log('👆 Detected RIGHT swipe');
             handleSwipe('RIGHT');
           }
         } else {
           // Tap in center (no significant swipe)
+          console.log('👆 Detected CENTER tap');
           handleSwipe('CENTER');
         }
       },
@@ -268,12 +276,21 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const renderGameUI = () => {
     if (gameState?.phase !== 'PLAYING') return null;
 
+    const isSpeedBoostActive = gameEngineRef.current?.isSpeedBoostActive() || false;
+    const speedBoostTimeRemaining = gameEngineRef.current?.getSpeedBoostTimeRemainingSeconds() || 0;
+
     return (
       <View style={styles.gameUI}>
         <View style={styles.topLeftUI}>
           <Text style={styles.scoreText}>Score: {gameState.score}</Text>
           <Text style={styles.livesText}>Lives: {gameState.lives}</Text>
           <Text style={styles.timerText}>Time: {Math.ceil(gameState.timeRemaining / 1000)}s</Text>
+          {isSpeedBoostActive && (
+            <View style={styles.speedBoostContainer}>
+              <Text style={styles.speedBoostText}>⚡ SPEED BOOST ⚡</Text>
+              <Text style={styles.speedBoostTimer}>{speedBoostTimeRemaining}s</Text>
+            </View>
+          )}
         </View>
         <TouchableOpacity style={styles.pauseButton} onPress={pauseGame} activeOpacity={0.7}>
           <Text style={styles.pauseButtonText}>⏸️</Text>
@@ -486,6 +503,33 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  speedBoostContainer: {
+    marginTop: 12,
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+  },
+  speedBoostText: {
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+    color: '#FFD700',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    textShadowColor: 'rgba(255, 215, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
+  },
+  speedBoostTimer: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    color: '#FFD700',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 2,
   },
   pauseButton: {
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

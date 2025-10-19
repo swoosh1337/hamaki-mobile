@@ -6,7 +6,6 @@
 
 import {
   Canvas,
-  Group,
   Image,
   Rect,
   useImage
@@ -52,6 +51,7 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   
   // Shonzika sprites
   const shonzikaIdleImage = useImage(require('@/assets/images/game/shonzika/დგომა პროფილი.png'));
+  const shonzikaIdle90Image = useImage(require('@/assets/images/game/shonzika/დგომა 90 გრადუსი.png'));
   const shonzikaWalk1Image = useImage(require('@/assets/images/game/shonzika/სიარული 1.png'));
   const shonzikaWalk2Image = useImage(require('@/assets/images/game/shonzika/სიარული 2~.png'));
   const shonzikaHandProfileImage = useImage(require('@/assets/images/game/shonzika/ხელი პროფილი.png'));
@@ -71,8 +71,11 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     
     if (gameState.player.isMoving) {
       // Alternate between step sprites based on animation progress
-      return gameState.player.animationProgress < 0.5 ? miroStep1Image : miroStep2Image;
+      const sprite = gameState.player.animationProgress < 0.5 ? miroStep1Image : miroStep2Image;
+      console.log('Miro moving sprite:', sprite ? 'loaded' : 'null');
+      return sprite;
     }
+    console.log('Miro idle sprite:', miroIdleImage ? 'loaded' : 'null');
     return miroIdleImage;
   };
 
@@ -82,8 +85,10 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     
     if (gameState.shonzika.sprite === 'THROWING') {
       // Use hand profile for throwing animation
+      console.log('Shonzika throwing sprite:', shonzikaHandProfileImage ? 'loaded' : 'null');
       return shonzikaHandProfileImage;
     }
+    console.log('Shonzika idle sprite:', shonzikaIdleImage ? 'loaded' : 'null');
     return shonzikaIdleImage;
   };
 
@@ -104,7 +109,6 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     if (!spriteRenderer) {
       // Return default render data when sprite renderer is not available
       const positions = scaling.getPositions();
-      console.log('⚠️ No sprite renderer, using fallback positions:', positions);
       return {
         background: { sprite: null, x: 0, y: 0, width: scalingConfig.screenWidth, height: scalingConfig.screenHeight },
         miro: { 
@@ -128,15 +132,7 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     const currentMiroSprite = getCurrentMiroImage();
     const currentShonzikaSprite = getCurrentShonzikaImage();
     
-    const sprites = spriteRenderer.getAllSprites(gameState, currentMiroSprite, currentShonzikaSprite);
-    console.log('🎮 Sprite render data:', {
-      miro: { x: sprites.miro.x, y: sprites.miro.y, width: sprites.miro.width, height: sprites.miro.height },
-      shonzika: { x: sprites.shonzika.x, y: sprites.shonzika.y, width: sprites.shonzika.width, height: sprites.shonzika.height },
-      itemCount: sprites.items.length,
-      screenSize: { width: scalingConfig.screenWidth, height: scalingConfig.screenHeight }
-    });
-    
-    return sprites;
+    return spriteRenderer.getAllSprites(gameState, currentMiroSprite, currentShonzikaSprite);
   }, [gameState, spriteRenderer, scaling, scalingConfig, responsiveSizes, getCurrentMiroImage(), getCurrentShonzikaImage()]);
 
   // Render background with responsive scaling
@@ -168,68 +164,87 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
 
   // Render Miro character
   const renderMiro = () => {
-    const miroImage = getCurrentMiroImage();
     const miroSprite = renderData.miro;
+    
+    // Determine which sprite to use based on player state
+    let miroImage;
+    if (gameState.player.isMoving) {
+      // Alternate between step sprites for walking animation
+      miroImage = gameState.player.animationProgress < 0.5 ? miroStep1Image : miroStep2Image;
+    } else {
+      // Use idle sprite (90 degree angle sprite) - this is the correct idle pose
+      miroImage = miroAngle90Image;
+    }
 
-    console.log('🦊 Rendering Miro:', { 
-      hasImage: !!miroImage, 
-      position: { x: miroSprite.x, y: miroSprite.y }, 
-      size: { width: miroSprite.width, height: miroSprite.height },
-      isMoving: gameState.player.isMoving
-    });
-
-    // Always render fallback if image not loaded, or render image
     if (!miroImage) {
-      console.log('⚠️ Miro image not loaded, using fallback rectangle');
-      // Fallback to colored rectangle - bright blue for visibility
       return (
         <Rect
           x={miroSprite.x}
           y={miroSprite.y}
           width={miroSprite.width}
           height={miroSprite.height}
-          color={gameState.player.isMoving ? "#00FF00" : "#FF00FF"}
+          color="#00FF00"
         />
       );
     }
 
+    // Make Miro bigger - increase size by 30%
+    const biggerWidth = miroSprite.width * 1.3;
+    const biggerHeight = miroSprite.height * 1.3;
+    
+    // Adjust position to keep centered
+    const adjustedX = miroSprite.x - (biggerWidth - miroSprite.width) / 2;
+    const adjustedY = miroSprite.y - (biggerHeight - miroSprite.height) / 2;
+
+    // Determine if we need to flip horizontally (for left movement)
+    const shouldFlip = gameState.player.position === 'LEFT' || 
+                      (gameState.player.isMoving && gameState.player.targetX < gameState.player.x);
+    
     return (
       <Image
         image={miroImage}
-        x={miroSprite.x}
-        y={miroSprite.y}
-        width={miroSprite.width}
-        height={miroSprite.height}
+        x={adjustedX}
+        y={adjustedY}
+        width={biggerWidth}
+        height={biggerHeight}
         fit="contain"
+        transform={shouldFlip ? [{ scaleX: -1 }] : undefined}
       />
     );
   };
 
   // Render Shonzika character
   const renderShonzika = () => {
-    const shonzikaImage = getCurrentShonzikaImage();
     const shonzikaSprite = renderData.shonzika;
-
-    console.log('🐺 Rendering Shonzika:', { 
-      hasImage: !!shonzikaImage, 
-      position: { x: shonzikaSprite.x, y: shonzikaSprite.y }, 
-      size: { width: shonzikaSprite.width, height: shonzikaSprite.height },
-      isThrowing: gameState.shonzika.sprite === 'THROWING'
-    });
+    
+    // Determine which sprite to use based on Shonzika's state
+    let shonzikaImage;
+    if (gameState.shonzika.sprite === 'THROWING') {
+      // When throwing, use hand profile sprite
+      shonzikaImage = shonzikaHandProfileImage;
+    } else if (gameState.shonzika.sprite === 'WALKING' || gameState.shonzika.isMoving) {
+      // When walking, alternate between walking sprites based on animation progress
+      shonzikaImage = gameState.shonzika.animationProgress % 0.5 < 0.25 ? shonzikaWalk1Image : shonzikaWalk2Image;
+    } else {
+      // When idle, use the profile idle sprite (დგომა პროფილი.png)
+      shonzikaImage = shonzikaIdleImage;
+    }
 
     if (!shonzikaImage) {
-      console.log('⚠️ Shonzika image not loaded, using fallback rectangle');
-      // Fallback to colored rectangle - bright red for visibility
       return (
         <Rect
           x={shonzikaSprite.x}
           y={shonzikaSprite.y}
           width={shonzikaSprite.width}
           height={shonzikaSprite.height}
-          color={gameState.shonzika.sprite === 'THROWING' ? "#FFFF00" : "#FF0000"}
+          color="#FF0000"
         />
       );
     }
+
+    // Determine if we need to flip horizontally (when moving left)
+    const shouldFlip = gameState.shonzika.position === 'LEFT' || 
+                      (gameState.shonzika.isMoving && gameState.shonzika.targetX < gameState.shonzika.x);
 
     return (
       <Image
@@ -239,6 +254,7 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
         width={shonzikaSprite.width}
         height={shonzikaSprite.height}
         fit="contain"
+        transform={shouldFlip ? [{ scaleX: -1 }] : undefined}
       />
     );
   };
@@ -301,15 +317,16 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
         {/* Background */}
         {renderBackground()}
 
-        {/* Game elements - always render so characters are visible */}
-        <Group>
-          {/* Characters */}
-          {renderMiro()}
-          {renderShonzika()}
-          
-          {/* Falling items */}
-          {renderItems()}
-        </Group>
+
+
+
+
+        {/* Characters - render directly, not in Group */}
+        {renderMiro()}
+        {renderShonzika()}
+        
+        {/* Falling items */}
+        {renderItems()}
       </Canvas>
     </View>
   );
@@ -342,6 +359,7 @@ export const SPRITE_MAPPING = {
   },
   shonzika: {
     idle: require('@/assets/images/game/shonzika/დგომა პროფილი.png'),
+    idle90: require('@/assets/images/game/shonzika/დგომა 90 გრადუსი.png'),
     walking1: require('@/assets/images/game/shonzika/სიარული 1.png'),
     walking2: require('@/assets/images/game/shonzika/სიარული 2~.png'),
     handProfile: require('@/assets/images/game/shonzika/ხელი პროფილი.png'),
