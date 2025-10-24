@@ -112,7 +112,7 @@ export class ResponsiveScalingManager {
     
     // Adjust ground level based on screen aspect ratio
     const groundYRatio = isLandscape ? 0.75 : 0.8;
-    const shonzikaYRatio = isLandscape ? 0.15 : 0.2;
+    const shonzikaYRatio = isLandscape ? 0.3 : 0.35;  // Moved down to 35% to ensure visibility
     
     return {
       miroGroundY: screenHeight * groundYRatio,

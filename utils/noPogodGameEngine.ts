@@ -93,8 +93,8 @@ export const NO_POGOD_CONFIG = {
     CENTER: 0.5,
     RIGHT: 0.75,
   },
-  SHONZIKA_POSITION: { x: 0.5, y: 0.15 },
-  MIRO_GROUND_Y: 0.8,
+  SHONZIKA_POSITION: { x: 0.5, y: 0.35 },  // 35% from top to ensure visibility below safe area
+  MIRO_GROUND_Y: 0.75,  // 75% from top - good position for catching
   
   // Sprites
   CHARACTER_SIZE: 80,
@@ -313,22 +313,56 @@ export class NoPogodGameEngine {
     this.gameState.shonzika.nextMoveTime = this.getRandomMoveTime();
   }
 
+  /**
+   * Start continuous movement in a direction (hold-to-move)
+   */
+  startContinuousMovement(direction: 'LEFT' | 'RIGHT'): void {
+    if (this.gameState.phase !== 'PLAYING') return;
+
+    console.log('🎮 ENGINE: Start continuous movement:', direction);
+
+    this.gameState.player.position = direction;
+    this.gameState.player.isMoving = true;
+    this.gameState.player.sprite = 'MOVING';
+
+    // Start walking animation
+    if (this.gameAnimations) {
+      this.gameState.animations.miro.startAnimation(this.gameAnimations.miro.walking);
+    }
+  }
+
+  /**
+   * Stop continuous movement
+   */
+  stopContinuousMovement(): void {
+    console.log('🎮 ENGINE: Stop continuous movement at x:', this.gameState.player.x);
+
+    this.gameState.player.isMoving = false;
+    this.gameState.player.sprite = 'IDLE';
+    this.gameState.player.animationProgress = 1.0;
+
+    // Switch back to idle animation
+    if (this.gameAnimations) {
+      this.gameState.animations.miro.startAnimation(this.gameAnimations.miro.idle);
+    }
+  }
+
+  // OLD DISCRETE MOVEMENT (DEPRECATED - keeping for backwards compatibility)
   movePlayer(direction: 'LEFT' | 'CENTER' | 'RIGHT'): void {
     if (this.gameState.phase !== 'PLAYING') return;
 
     const previousPosition = this.gameState.player.position;
-    
+
     // Only start movement if position is different
     if (previousPosition !== direction) {
-      this.gameState.player.startX = this.gameState.player.x; // Store current position as start
+      this.gameState.player.startX = this.gameState.player.x;
       this.gameState.player.position = direction;
       this.gameState.player.targetX = this.gameState.screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS[direction];
       this.gameState.player.isMoving = true;
       this.gameState.player.sprite = 'MOVING';
       this.gameState.player.animationProgress = 0.0;
       this.gameState.player.movementStartTime = this.gameTimer;
-      
-      // Start walking animation
+
       if (this.gameAnimations) {
         this.gameState.animations.miro.startAnimation(this.gameAnimations.miro.walking);
       }
@@ -406,35 +440,59 @@ export class NoPogodGameEngine {
 
   private updatePlayer(deltaTime: number): void {
     const player = this.gameState.player;
-    
+
     if (player.isMoving) {
-      // Calculate animation progress based on time elapsed
-      // Use boosted duration if speed boost is active
-      const moveDuration = player.speedBoostActive 
-        ? NO_POGOD_CONFIG.PLAYER_MOVE_DURATION_BOOSTED 
-        : NO_POGOD_CONFIG.PLAYER_MOVE_DURATION;
-      
-      const elapsedTime = this.gameTimer - player.movementStartTime;
-      const progress = Math.min(elapsedTime / moveDuration, 1.0);
-      
-      // Update animation progress
-      player.animationProgress = progress;
-      
-      // Smooth interpolation between start and target position
-      const easedProgress = this.easeInOutQuad(progress);
-      player.x = player.startX + (player.targetX - player.startX) * easedProgress;
-      
-      // Check if movement is complete
-      if (progress >= 1.0) {
-        player.x = player.targetX;
-        player.isMoving = false;
-        player.sprite = 'IDLE';
-        player.animationProgress = 1.0;
-        
-        // Switch back to idle animation
-        if (this.gameAnimations) {
-          this.gameState.animations.miro.startAnimation(this.gameAnimations.miro.idle);
+      // Continuous movement system
+      const moveSpeed = player.speedBoostActive ? 8 : 4;  // Pixels per frame (faster!)
+
+      const oldX = player.x;
+
+      // Move in the current direction
+      if (player.position === 'LEFT') {
+        console.log('⬅️ MOVING LEFT: Before move - x:', player.x, 'moveSpeed:', moveSpeed);
+        player.x -= moveSpeed;
+        console.log('⬅️ MOVING LEFT: After move - x:', player.x);
+
+        // Clamp to left edge - needs to account for character size!
+        // Character is 150px wide (scaled), so half is 75px
+        // Left edge should be 75px from left (so character doesn't go off-screen)
+        const characterHalfWidth = 75;
+        const leftEdge = characterHalfWidth + 10;  // 85px from left edge
+        const leftSpriteEdge = player.x - characterHalfWidth;  // Actual left edge of sprite
+        const rightSpriteEdge = player.x + characterHalfWidth;  // Actual right edge of sprite
+
+        console.log('⬅️ LEFT BOUNDS CHECK: Center x:', player.x, '| Sprite left edge:', leftSpriteEdge, '| Sprite right edge:', rightSpriteEdge, '| Screen width:', this.gameState.screenWidth);
+        console.log('⬅️ LEFT VISIBILITY: Left edge on screen?', leftSpriteEdge >= 0, '| Right edge on screen?', rightSpriteEdge <= this.gameState.screenWidth);
+
+        if (player.x < leftEdge) {
+          console.log('⬅️ HIT LEFT BOUNDARY! Clamping from', player.x, 'to', leftEdge);
+          player.x = leftEdge;
         }
+      } else if (player.position === 'RIGHT') {
+        console.log('➡️ MOVING RIGHT: Before move - x:', player.x, 'moveSpeed:', moveSpeed);
+        player.x += moveSpeed;
+        console.log('➡️ MOVING RIGHT: After move - x:', player.x);
+
+        // Clamp to right edge
+        const characterHalfWidth = 75;
+        const rightEdge = this.gameState.screenWidth - characterHalfWidth - 10;  // Stay within screen
+        const leftSpriteEdge = player.x - characterHalfWidth;  // Actual left edge of sprite
+        const rightSpriteEdge = player.x + characterHalfWidth;  // Actual right edge of sprite
+
+        console.log('➡️ RIGHT BOUNDS CHECK: Center x:', player.x, '| Sprite left edge:', leftSpriteEdge, '| Sprite right edge:', rightSpriteEdge, '| Screen width:', this.gameState.screenWidth);
+        console.log('➡️ RIGHT VISIBILITY: Left edge on screen?', leftSpriteEdge >= 0, '| Right edge on screen?', rightSpriteEdge <= this.gameState.screenWidth);
+
+        if (player.x > rightEdge) {
+          console.log('➡️ HIT RIGHT BOUNDARY! Clamping from', player.x, 'to', rightEdge);
+          player.x = rightEdge;
+        }
+      }
+
+      // Update animation progress for walking cycle
+      player.animationProgress = (player.animationProgress + 0.05) % 1.0;
+
+      if (oldX !== player.x) {
+        console.log('🎮 ENGINE: Player moved', player.position, 'from', oldX, '→', player.x, '(delta:', player.x - oldX, ')');
       }
     }
   }
@@ -525,14 +583,16 @@ export class NoPogodGameEngine {
         shonzika.x = shonzika.targetX;
         shonzika.isMoving = false;
         shonzika.animationProgress = 1.0;
-        
+
+        console.log('🎯 Shonzika COMPLETED movement to position:', shonzika.position, 'at x:', shonzika.x);
+
         // Schedule next movement
         shonzika.nextMoveTime = this.gameTimer + this.getRandomMoveTime();
-        
+
         // Only set to idle if not throwing
         if (shonzika.throwCooldown <= 0) {
           shonzika.sprite = 'IDLE';
-          
+
           // Switch back to idle animation
           if (this.gameAnimations) {
             this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.idle);
@@ -543,20 +603,32 @@ export class NoPogodGameEngine {
       // Only check for new movement if not throwing
       // Check if it's time to start a new movement
       if (this.gameTimer >= shonzika.nextMoveTime) {
-        // Move in a continuous pattern: LEFT -> CENTER -> RIGHT -> CENTER -> LEFT
+        // New movement pattern: bounce between LEFT and RIGHT edges continuously
         let newPosition: 'LEFT' | 'CENTER' | 'RIGHT';
-        
+
+        console.log('🎯 Shonzika deciding movement - current position:', shonzika.position, 'x:', shonzika.x, 'targetX:', shonzika.targetX, 'startX:', shonzika.startX);
+
+        // Simple bounce: if at LEFT, go RIGHT; if at RIGHT, go LEFT
         if (shonzika.position === 'LEFT') {
-          newPosition = 'CENTER';
-        } else if (shonzika.position === 'CENTER') {
-          // Determine direction based on previous movement
-          // If we just came from LEFT, go to RIGHT, and vice versa
-          const isMovingRight = shonzika.targetX > shonzika.startX;
-          newPosition = isMovingRight ? 'RIGHT' : 'LEFT';
-        } else { // RIGHT
-          newPosition = 'CENTER';
+          newPosition = 'RIGHT';
+          console.log('🎯 At LEFT → moving RIGHT');
+        } else if (shonzika.position === 'RIGHT') {
+          newPosition = 'LEFT';
+          console.log('🎯 At RIGHT → moving LEFT');
+        } else {
+          // At CENTER - determine direction based on LAST completed movement
+          // Check which direction we just came from
+          if (shonzika.x > this.gameState.screenWidth * 0.5) {
+            // We're on the right side of center, go LEFT
+            newPosition = 'LEFT';
+            console.log('🎯 At CENTER (right side) → moving LEFT');
+          } else {
+            // We're on the left side of center, go RIGHT
+            newPosition = 'RIGHT';
+            console.log('🎯 At CENTER (left side) → moving RIGHT');
+          }
         }
-        
+
         // Start movement
         shonzika.startX = shonzika.x;
         shonzika.position = newPosition;
@@ -565,7 +637,9 @@ export class NoPogodGameEngine {
         shonzika.sprite = 'WALKING';
         shonzika.animationProgress = 0.0;
         shonzika.movementStartTime = this.gameTimer;
-        
+
+        console.log('🎯 Shonzika STARTING movement to:', newPosition, 'targetX:', shonzika.targetX, 'startX:', shonzika.startX);
+
         // Start walking animation
         if (this.gameAnimations) {
           this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.walking);

@@ -43,9 +43,11 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const [xpAwarded, setXpAwarded] = useState(false);
   
   // Touch feedback state
-  const [activeTouchZone, setActiveTouchZone] = useState<'LEFT' | 'CENTER' | 'RIGHT' | null>(null);
+  const [activeTouchZone, setActiveTouchZone] = useState<'LEFT' | 'RIGHT' | null>(null);
   const touchFeedbackOpacity = useRef(new Animated.Value(0)).current;
-  const lastSwipeTime = useRef(0);
+  const gamePhaseRef = useRef<string>('MENU');
+  const isTouchingRef = useRef(false);
+  const touchDirectionRef = useRef<'LEFT' | 'RIGHT' | null>(null);
 
 
 
@@ -61,8 +63,15 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
   // Handle game state updates
   const updateGameState = useCallback(() => {
-    if (gameEngineRef.current) {
-      setGameState(gameEngineRef.current.getState());
+    try {
+      if (gameEngineRef.current) {
+        const state = gameEngineRef.current.getState();
+        setGameState(state);
+        gamePhaseRef.current = state.phase;  // Keep ref in sync for PanResponder
+      }
+    } catch (error) {
+      console.error('❌ Error updating game state:', error);
+      // Don't crash the game, just log the error
     }
   }, []);
 
@@ -104,78 +113,89 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     }
   }, [updateGameState]);
 
-  // Handle swipe gestures for player movement
-  const handleSwipe = useCallback((direction: 'LEFT' | 'RIGHT' | 'CENTER') => {
-    console.log('🎮 Swipe detected:', direction, 'Game phase:', gameState?.phase);
-    if (gameEngineRef.current && gameState?.phase === 'PLAYING') {
-      const now = Date.now();
-      // Prevent too frequent swipes
-      if (now - lastSwipeTime.current < 150) return;
-      lastSwipeTime.current = now;
-      
-      console.log('🎮 Moving player to:', direction);
-      gameEngineRef.current.movePlayer(direction);
+  // Handle continuous movement based on touch direction
+  const startMovement = useCallback((direction: 'LEFT' | 'RIGHT') => {
+    console.log('🎮 START movement:', direction, 'Phase:', gamePhaseRef.current);
+    if (gameEngineRef.current && gamePhaseRef.current === 'PLAYING') {
+      isTouchingRef.current = true;
+      touchDirectionRef.current = direction;
+      gameEngineRef.current.startContinuousMovement(direction);
       updateGameState();
-      
+
       // Trigger visual feedback
       setActiveTouchZone(direction);
-      Animated.sequence([
-        Animated.timing(touchFeedbackOpacity, {
-          toValue: 0.2,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(touchFeedbackOpacity, {
-          toValue: 0,
-          duration: 150,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setActiveTouchZone(null);
-      });
+      Animated.timing(touchFeedbackOpacity, {
+        toValue: 0.15,
+        duration: 100,
+        useNativeDriver: true,
+      }).start();
     }
-  }, [gameState, updateGameState, touchFeedbackOpacity]);
+  }, [updateGameState, touchFeedbackOpacity]);
 
-  // Create pan responder for swipe detection
+  const stopMovement = useCallback(() => {
+    console.log('🎮 STOP movement');
+    if (gameEngineRef.current) {
+      isTouchingRef.current = false;
+      touchDirectionRef.current = null;
+      gameEngineRef.current.stopContinuousMovement();
+      updateGameState();
+
+      // Clear visual feedback
+      setActiveTouchZone(null);
+      Animated.timing(touchFeedbackOpacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [updateGameState, touchFeedbackOpacity]);
+
+  // Create pan responder for hold-to-move controls
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => gameState?.phase === 'PLAYING',
-      onMoveShouldSetPanResponder: () => gameState?.phase === 'PLAYING',
-      onPanResponderRelease: (_evt, gestureState) => {
-        console.log('👆 Touch released:', gestureState);
-        if (gameState?.phase !== 'PLAYING') return;
-        
-        const { dx, vx } = gestureState;
-        const swipeThreshold = 30;
-        const velocityThreshold = 0.5;
-        
-        console.log('👆 Gesture data:', { dx, vx, swipeThreshold, velocityThreshold });
-        
-        // Determine swipe direction based on translation and velocity
-        if (Math.abs(dx) > swipeThreshold || Math.abs(vx) > velocityThreshold) {
-          if (dx < -swipeThreshold || vx < -velocityThreshold) {
-            // Swipe left
-            console.log('👆 Detected LEFT swipe');
-            handleSwipe('LEFT');
-          } else if (dx > swipeThreshold || vx > velocityThreshold) {
-            // Swipe right
-            console.log('👆 Detected RIGHT swipe');
-            handleSwipe('RIGHT');
-          }
-        } else {
-          // Tap in center (no significant swipe)
-          console.log('👆 Detected CENTER tap');
-          handleSwipe('CENTER');
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => false,  // Don't track movement, just press/release
+      onPanResponderGrant: (evt) => {
+        if (gamePhaseRef.current !== 'PLAYING') {
+          console.log('👆 Touch ignored - phase:', gamePhaseRef.current);
+          return;
         }
+
+        const touchX = evt.nativeEvent.pageX;
+        const screenWidth = SCREEN_WIDTH;
+
+        console.log('👆 TOUCH START at X:', touchX, 'Screen:', screenWidth);
+
+        // Simple: LEFT half = move left, RIGHT half = move right
+        if (touchX < screenWidth / 2) {
+          console.log('👆 LEFT half - moving LEFT');
+          startMovement('LEFT');
+        } else {
+          console.log('👆 RIGHT half - moving RIGHT');
+          startMovement('RIGHT');
+        }
+      },
+      onPanResponderRelease: () => {
+        console.log('👆 TOUCH RELEASE - stopping movement');
+        stopMovement();
+      },
+      onPanResponderTerminate: () => {
+        console.log('👆 TOUCH TERMINATED - stopping movement');
+        stopMovement();
       },
     })
   ).current;
 
   // Game update loop
   const handleGameUpdate = useCallback((currentTime: number) => {
-    if (gameEngineRef.current) {
-      gameEngineRef.current.update(currentTime);
-      updateGameState();
+    try {
+      if (gameEngineRef.current) {
+        gameEngineRef.current.update(currentTime);
+        updateGameState();
+      }
+    } catch (error) {
+      console.error('❌ Error in game update loop:', error);
+      // Don't crash the game loop, just log and continue
     }
   }, [updateGameState]);
 
@@ -206,26 +226,48 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     const awardXP = async () => {
       if (gameState?.phase === 'GAME_OVER' && !xpAwarded && userProfile && gameState.score > 0) {
         setXpAwarded(true);
-        
+
         // Calculate XP based on score (1 XP per 10 points scored)
         const xpToAward = Math.floor(gameState.score / 10);
-        
+
         if (xpToAward > 0) {
           const newXP = userProfile.xp_points + xpToAward;
-          
-          // Update XP in database
-          const success = await userService.updateUserXP(userProfile.google_id, newXP);
-          
-          if (success) {
-            // Update local user profile
+
+          try {
+            // Update XP in database with error handling
+            const success = await userService.updateUserXP(userProfile.google_id, newXP);
+
+            if (success) {
+              // Update local user profile
+              updateUserProfile({ xp_points: newXP });
+              console.log(`✅ Awarded ${xpToAward} XP for No Pogodi game!`);
+              
+              // Update leaderboard entries (weekly and all-time)
+              const leaderboardSuccess = await userService.updateLeaderboardPoints(userProfile.id, xpToAward);
+              
+              if (leaderboardSuccess) {
+                console.log(`✅ Updated leaderboard with ${xpToAward} points!`);
+              } else {
+                console.error('❌ Failed to update leaderboard entries');
+              }
+            } else {
+              // Silently update local profile even if server update fails
+              updateUserProfile({ xp_points: newXP });
+              console.warn(`⚠️ XP update failed on server, but updated locally: ${xpToAward} XP`);
+            }
+          } catch (error) {
+            // Network error or other issue - still update locally to prevent data loss
+            console.error('❌ Error awarding XP, updating locally only:', error);
             updateUserProfile({ xp_points: newXP });
-            console.log(`Awarded ${xpToAward} XP for No Pogodi game!`);
           }
         }
       }
     };
-    
-    awardXP();
+
+    // Use Promise.resolve to ensure errors don't crash the app
+    awardXP().catch((error) => {
+      console.error('❌ Critical error in awardXP:', error);
+    });
   }, [gameState?.phase, gameState?.score, xpAwarded, userProfile, updateUserProfile]);
 
   // Cleanup on close
@@ -266,7 +308,8 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
           styles.swipeFeedback,
           {
             opacity: touchFeedbackOpacity,
-            left: activeTouchZone === 'LEFT' ? 0 : activeTouchZone === 'CENTER' ? '33%' : '66%',
+            left: activeTouchZone === 'LEFT' ? 0 : '50%',
+            width: '50%',
           },
         ]}
       />
@@ -395,13 +438,12 @@ const styles = StyleSheet.create({
   canvas: {
     flex: 1,
   },
-  // Swipe feedback styles
+  // Swipe feedback styles - DISABLED (transparent)
   swipeFeedback: {
     position: 'absolute',
     top: 0,
-    width: '33.33%',
     height: '100%',
-    backgroundColor: Colors.dark.tint,
+    backgroundColor: 'transparent',  // Removed yellow highlight
     pointerEvents: 'none',
   },
   menuContainer: {

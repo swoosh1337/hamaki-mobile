@@ -165,18 +165,46 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   // Render Miro character
   const renderMiro = () => {
     const miroSprite = renderData.miro;
-    
+
+    // Calculate actual sprite bounds on screen
+    const spriteLeft = miroSprite.x;
+    const spriteRight = miroSprite.x + miroSprite.width;
+    const spriteTop = miroSprite.y;
+    const spriteBottom = miroSprite.y + miroSprite.height;
+    const isOnScreen = spriteRight >= 0 && spriteLeft <= scalingConfig.screenWidth &&
+                       spriteBottom >= 0 && spriteTop <= scalingConfig.screenHeight;
+
+    console.log('🎨 RENDER Miro:', {
+      isMoving: gameState.player.isMoving,
+      position: gameState.player.position,
+      centerX: gameState.player.x,
+      centerY: gameState.player.y,
+      renderX: miroSprite.x,
+      renderY: miroSprite.y,
+      width: miroSprite.width,
+      height: miroSprite.height,
+      spriteLeft: spriteLeft,
+      spriteRight: spriteRight,
+      screenWidth: scalingConfig.screenWidth,
+      screenHeight: scalingConfig.screenHeight,
+      isOnScreen: isOnScreen,
+      fullyOnScreen: spriteLeft >= 0 && spriteRight <= scalingConfig.screenWidth,
+    });
+
     // Determine which sprite to use based on player state
     let miroImage;
     if (gameState.player.isMoving) {
       // Alternate between step sprites for walking animation
       miroImage = gameState.player.animationProgress < 0.5 ? miroStep1Image : miroStep2Image;
+      console.log('🎨 Using walking sprite:', gameState.player.animationProgress < 0.5 ? 'step1' : 'step2', 'Image loaded?', miroImage ? 'YES' : 'NO');
     } else {
       // Use idle sprite (90 degree angle sprite) - this is the correct idle pose
       miroImage = miroAngle90Image;
+      console.log('🎨 Using idle sprite (angle90). Image loaded?', miroImage ? 'YES' : 'NO');
     }
 
     if (!miroImage) {
+      console.log('🎨 ⚠️ MIRO IMAGE NOT LOADED - showing green rectangle fallback');
       return (
         <Rect
           x={miroSprite.x}
@@ -188,27 +216,29 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
       );
     }
 
-    // Make Miro bigger - increase size by 30%
-    const biggerWidth = miroSprite.width * 1.3;
-    const biggerHeight = miroSprite.height * 1.3;
-    
-    // Adjust position to keep centered
-    const adjustedX = miroSprite.x - (biggerWidth - miroSprite.width) / 2;
-    const adjustedY = miroSprite.y - (biggerHeight - miroSprite.height) / 2;
-
     // Determine if we need to flip horizontally (for left movement)
-    const shouldFlip = gameState.player.position === 'LEFT' || 
-                      (gameState.player.isMoving && gameState.player.targetX < gameState.player.x);
-    
+    // In continuous movement, flip when position is LEFT (moving or stopped on left side)
+    const shouldFlip = gameState.player.position === 'LEFT';
+
+    console.log('🎨 RENDERING MIRO IMAGE at x:', miroSprite.x, 'y:', miroSprite.y, 'flipped?', shouldFlip, 'position:', gameState.player.position, 'width:', miroSprite.width);
+
+    // When flipping, use origin to specify the center point of the flip
+    // This ensures the sprite flips in place around its center
+    const transforms = shouldFlip ? [{ scaleX: -1 }] : undefined;
+    const origin = shouldFlip
+      ? { x: miroSprite.x + miroSprite.width / 2, y: miroSprite.y + miroSprite.height / 2 }
+      : undefined;
+
     return (
       <Image
         image={miroImage}
-        x={adjustedX}
-        y={adjustedY}
-        width={biggerWidth}
-        height={biggerHeight}
+        x={miroSprite.x}
+        y={miroSprite.y}
+        width={miroSprite.width}
+        height={miroSprite.height}
         fit="contain"
-        transform={shouldFlip ? [{ scaleX: -1 }] : undefined}
+        transform={transforms}
+        origin={origin}
       />
     );
   };
@@ -216,21 +246,34 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   // Render Shonzika character
   const renderShonzika = () => {
     const shonzikaSprite = renderData.shonzika;
-    
+
+    console.log('🎨 RENDER Shonzika:', {
+      sprite: gameState.shonzika.sprite,
+      position: gameState.shonzika.position,
+      isMoving: gameState.shonzika.isMoving,
+      x: shonzikaSprite.x,
+      y: shonzikaSprite.y,
+      width: shonzikaSprite.width,
+      height: shonzikaSprite.height,
+    });
+
     // Determine which sprite to use based on Shonzika's state
-    let shonzikaImage;
+    let bodyImage;
+    let showHand = false;
+
     if (gameState.shonzika.sprite === 'THROWING') {
-      // When throwing, use hand profile sprite
-      shonzikaImage = shonzikaHandProfileImage;
+      // When throwing, show BOTH body AND extended hand
+      bodyImage = shonzikaIdleImage;  // Use idle body
+      showHand = true;  // Overlay hand sprite
     } else if (gameState.shonzika.sprite === 'WALKING' || gameState.shonzika.isMoving) {
       // When walking, alternate between walking sprites based on animation progress
-      shonzikaImage = gameState.shonzika.animationProgress % 0.5 < 0.25 ? shonzikaWalk1Image : shonzikaWalk2Image;
+      bodyImage = gameState.shonzika.animationProgress % 0.5 < 0.25 ? shonzikaWalk1Image : shonzikaWalk2Image;
     } else {
-      // When idle, use the profile idle sprite (დგომა პროფილი.png)
-      shonzikaImage = shonzikaIdleImage;
+      // When idle, use the profile idle sprite
+      bodyImage = shonzikaIdleImage;
     }
 
-    if (!shonzikaImage) {
+    if (!bodyImage) {
       return (
         <Rect
           x={shonzikaSprite.x}
@@ -242,20 +285,47 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
       );
     }
 
-    // Determine if we need to flip horizontally (when moving left)
-    const shouldFlip = gameState.shonzika.position === 'LEFT' || 
-                      (gameState.shonzika.isMoving && gameState.shonzika.targetX < gameState.shonzika.x);
+    // Determine if we need to flip horizontally
+    // Flip when moving LEFT (so character faces left)
+    const shouldFlip = gameState.shonzika.isMoving && gameState.shonzika.targetX < gameState.shonzika.x;
+
+    console.log('🎨 Shonzika flip:', shouldFlip, 'targetX:', gameState.shonzika.targetX, 'currentX:', gameState.shonzika.x);
+
+    // Use origin for proper flip point
+    const transforms = shouldFlip ? [{ scaleX: -1 }] : undefined;
+    const origin = shouldFlip
+      ? { x: shonzikaSprite.x + shonzikaSprite.width / 2, y: shonzikaSprite.y + shonzikaSprite.height / 2 }
+      : undefined;
 
     return (
-      <Image
-        image={shonzikaImage}
-        x={shonzikaSprite.x}
-        y={shonzikaSprite.y}
-        width={shonzikaSprite.width}
-        height={shonzikaSprite.height}
-        fit="contain"
-        transform={shouldFlip ? [{ scaleX: -1 }] : undefined}
-      />
+      <>
+        {/* Body sprite */}
+        <Image
+          image={bodyImage}
+          x={shonzikaSprite.x}
+          y={shonzikaSprite.y}
+          width={shonzikaSprite.width}
+          height={shonzikaSprite.height}
+          fit="contain"
+          transform={transforms}
+          origin={origin}
+        />
+
+        {/* Hand overlay when throwing */}
+        {showHand && shonzikaHandProfileImage && (
+          <Image
+            image={shonzikaHandProfileImage}
+            x={shonzikaSprite.x}
+            y={shonzikaSprite.y}
+            width={shonzikaSprite.width}
+            height={shonzikaSprite.height}
+            fit="contain"
+            transform={transforms}
+            origin={origin}
+            opacity={0.9}
+          />
+        )}
+      </>
     );
   };
 

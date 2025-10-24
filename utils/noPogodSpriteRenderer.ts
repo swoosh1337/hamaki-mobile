@@ -40,13 +40,13 @@ export class NoPogodSpriteRenderer {
   private calculateRenderConfig(screenWidth: number, screenHeight: number): SpriteRenderConfig {
     // Scale characters based on screen size, making them appropriately sized
     const characterScale = Math.min(screenWidth / 400, screenHeight / 600);
-    const itemScale = characterScale * 1.2; // Items should be more visible
+    const itemScale = characterScale * 0.7; // Items proportional to characters
 
     return {
       screenWidth,
       screenHeight,
-      characterScale: Math.max(characterScale, 1.5), // Larger minimum scale for characters
-      itemScale: Math.max(itemScale, 1.0), // Larger minimum scale for items
+      characterScale: Math.max(characterScale, 0.8), // Reasonable minimum scale
+      itemScale: Math.max(itemScale, 0.6), // Proportional item scale
     };
   }
 
@@ -68,7 +68,7 @@ export class NoPogodSpriteRenderer {
 
   // Get Miro (player) sprite info based on current state
   public getMiroSprite(playerState: PlayerState, currentSprite?: ImageRequireSource): SpriteRenderInfo {
-    const characterSize = 150 * this.config.characterScale; // Increased from 80 to 150
+    const characterSize = 150 * this.config.characterScale; // Match ResponsiveScaling base size
     
     // Use provided sprite or fall back to state-based sprite selection
     let sprite = currentSprite;
@@ -88,7 +88,7 @@ export class NoPogodSpriteRenderer {
 
   // Get Shonzika sprite info based on current state
   public getShonzikaSprite(shonzikaState: ShonzikaState, currentSprite?: ImageRequireSource): SpriteRenderInfo {
-    const characterSize = 150 * this.config.characterScale; // Increased from 80 to 150
+    const characterSize = 150 * this.config.characterScale; // Match ResponsiveScaling base size
     
     // Use provided sprite or fall back to state-based sprite selection
     let sprite = currentSprite;
@@ -107,7 +107,7 @@ export class NoPogodSpriteRenderer {
 
   // Get falling item sprite info
   public getItemSprite(item: FallingItem): SpriteRenderInfo {
-    const itemSize = 80 * this.config.itemScale; // Increased from 40 to 80
+    const itemSize = 80 * this.config.itemScale; // Match ResponsiveScaling base size
     
     // Get sprite based on item type
     let sprite = item.sprite;
@@ -293,7 +293,7 @@ export class NoPogodSpriteRenderer {
    * This matches the calculation in the game engine for visual coordination
    */
   public calculateShonzikaHandPosition(shonzikaState: ShonzikaState): { x: number; y: number } {
-    const characterSize = 150 * this.config.characterScale;
+    const characterSize = 150 * this.config.characterScale; // Matches character rendering size
     
     // Base hand offsets for different sprites (relative to character center)
     let handOffsetX = 0;
