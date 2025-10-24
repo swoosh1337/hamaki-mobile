@@ -115,8 +115,8 @@ export class NoPogodSpriteRenderer {
       sprite = this.getItemSpriteByType(item.type);
     }
 
-    // Add slight rotation for visual interest
-    const rotation = Math.sin(item.y * 0.01) * 15; // Gentle rotation based on position
+    // No rotation - keep items upright for clearer visibility
+    const rotation = 0; // Removed rotation to prevent visual confusion
 
     return {
       sprite,

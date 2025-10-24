@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -41,7 +42,9 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const [gameState, setGameState] = useState<any>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const [xpAwarded, setXpAwarded] = useState(false);
-  
+  const [highScore, setHighScore] = useState<number>(0);
+  const [isNewHighScore, setIsNewHighScore] = useState(false);
+
   // Touch feedback state
   const [activeTouchZone, setActiveTouchZone] = useState<'LEFT' | 'RIGHT' | null>(null);
   const touchFeedbackOpacity = useRef(new Animated.Value(0)).current;
@@ -50,6 +53,11 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const touchDirectionRef = useRef<'LEFT' | 'RIGHT' | null>(null);
 
 
+
+  // Load high score on mount
+  useEffect(() => {
+    loadHighScore();
+  }, []);
 
   // Initialize game engine, sprite renderer, and responsive scaling
   useEffect(() => {
@@ -60,6 +68,32 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       setGameState(gameEngineRef.current.getState());
     }
   }, [visible]);
+
+  const loadHighScore = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('nopogod_high_score');
+      if (stored) {
+        setHighScore(parseInt(stored, 10));
+      }
+    } catch (error) {
+      console.error('Error loading high score:', error);
+    }
+  };
+
+  const checkAndSaveHighScore = async (score: number) => {
+    if (score > highScore) {
+      setIsNewHighScore(true);
+      setHighScore(score);
+      try {
+        await AsyncStorage.setItem('nopogod_high_score', score.toString());
+        console.log('🏆 NEW HIGH SCORE!', score);
+      } catch (error) {
+        console.error('Error saving high score:', error);
+      }
+    } else {
+      setIsNewHighScore(false);
+    }
+  };
 
   // Handle game state updates
   const updateGameState = useCallback(() => {
@@ -221,11 +255,14 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     };
   }, [gameState?.phase, handleGameUpdate]);
 
-  // Award XP when game ends
+  // Award XP and check high score when game ends
   useEffect(() => {
     const awardXP = async () => {
       if (gameState?.phase === 'GAME_OVER' && !xpAwarded && userProfile && gameState.score > 0) {
         setXpAwarded(true);
+
+        // Check for high score
+        await checkAndSaveHighScore(gameState.score);
 
         // Calculate XP based on score (1 XP per 10 points scored)
         const xpToAward = Math.floor(gameState.score / 10);
@@ -241,10 +278,10 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
               // Update local user profile
               updateUserProfile({ xp_points: newXP });
               console.log(`✅ Awarded ${xpToAward} XP for No Pogodi game!`);
-              
+
               // Update leaderboard entries (weekly and all-time)
               const leaderboardSuccess = await userService.updateLeaderboardPoints(userProfile.id, xpToAward);
-              
+
               if (leaderboardSuccess) {
                 console.log(`✅ Updated leaderboard with ${xpToAward} points!`);
               } else {
@@ -368,10 +405,24 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     return (
       <View style={styles.gameOverContainer}>
         <Text style={styles.gameOverTitle}>Game Over</Text>
+
+        {isNewHighScore && (
+          <View style={styles.highScoreBanner}>
+            <Text style={styles.highScoreText}>🏆 NEW HIGH SCORE! 🏆</Text>
+            <Text style={styles.highScoreCongrats}>Congratulations!</Text>
+          </View>
+        )}
+
         <Text style={styles.finalScore}>Final Score: {gameState.score}</Text>
+
+        {highScore > 0 && !isNewHighScore && (
+          <Text style={styles.highScoreDisplay}>High Score: {highScore}</Text>
+        )}
+
         {xpEarned > 0 && (
           <Text style={styles.xpEarned}>+{xpEarned} XP Earned! ⭐</Text>
         )}
+
         <View style={styles.gameOverButtons}>
           <TouchableOpacity style={styles.startButton} onPress={restartGame} activeOpacity={0.8}>
             <Text style={styles.buttonText}>TRY AGAIN</Text>
@@ -462,6 +513,9 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 4,
+    paddingHorizontal: 16, // Extra padding for italic font
+    includeFontPadding: false, // Android: prevent extra padding
+    textAlignVertical: 'center', // Android: center text vertically
   },
   gameSubtitle: {
     fontSize: 18,
@@ -502,6 +556,9 @@ const styles = StyleSheet.create({
     color: Colors.dark.background,
     textAlign: 'center',
     fontWeight: 'bold',
+    paddingHorizontal: 8, // Extra padding for italic font
+    includeFontPadding: false, // Android: prevent extra padding
+    textAlignVertical: 'center', // Android: center text vertically
   },
   gameUI: {
     position: 'absolute',
@@ -598,6 +655,9 @@ const styles = StyleSheet.create({
     color: Colors.dark.tint,
     marginBottom: 40,
     textAlign: 'center',
+    paddingHorizontal: 12, // Extra padding for italic font
+    includeFontPadding: false, // Android: prevent extra padding
+    textAlignVertical: 'center', // Android: center text vertically
   },
   pausedButtons: {
     gap: 20,
@@ -621,6 +681,9 @@ const styles = StyleSheet.create({
     color: '#FF6B6B',
     marginBottom: 20,
     textAlign: 'center',
+    paddingHorizontal: 12, // Extra padding for italic font
+    includeFontPadding: false, // Android: prevent extra padding
+    textAlignVertical: 'center', // Android: center text vertically
   },
   finalScore: {
     fontSize: 24,
@@ -642,5 +705,40 @@ const styles = StyleSheet.create({
   },
   gameOverButtons: {
     gap: 20,
+  },
+  highScoreBanner: {
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  highScoreText: {
+    fontSize: 24,
+    fontFamily: 'hamaki-eng',
+    color: '#FFD700',
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(255, 215, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+    paddingHorizontal: 8,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  highScoreCongrats: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    color: '#FFD700',
+    marginTop: 4,
+  },
+  highScoreDisplay: {
+    fontSize: 18,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    marginTop: 8,
+    opacity: 0.7,
   },
 });

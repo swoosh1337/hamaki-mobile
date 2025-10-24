@@ -6,13 +6,17 @@
 
 import {
   Canvas,
+  Circle,
   Image,
+  Line,
   Rect,
-  useImage
+  useImage,
+  vec
 } from '@shopify/react-native-skia';
 import React, { useMemo } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-native';
 
+import { Colors } from '@/constants/Colors';
 import { NoPogodGameState } from '@/utils/noPogodGameEngine';
 import { ResponsiveScalingManager } from '@/utils/noPogodResponsiveScaling';
 import { NoPogodSpriteRenderer } from '@/utils/noPogodSpriteRenderer';
@@ -64,6 +68,22 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   const pepperImage = useImage(require('@/assets/images/game/items/წიწაკა.png'));
   const electricShockImage = useImage(require('@/assets/images/game/items/ელექტროშოკი.png'));
   const bombImage = useImage(require('@/assets/images/game/items/ბომბი.png'));
+
+  // Check if all critical images are loaded
+  const allImagesLoaded = !!(
+    backgroundImage &&
+    miroIdleImage &&
+    miroStep1Image &&
+    miroStep2Image &&
+    miroAngle90Image &&
+    shonzikaIdleImage &&
+    shonzikaWalk1Image &&
+    shonzikaWalk2Image &&
+    shonzikaHandProfileImage &&
+    eggImage &&
+    tomatoImage &&
+    pepperImage
+  );
 
   // Get current Miro sprite based on state and animation
   const getCurrentMiroImage = () => {
@@ -138,16 +158,8 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   // Render background with responsive scaling
   const renderBackground = () => {
     if (!backgroundImage) {
-      // Fallback to colored background
-      return (
-        <Rect
-          x={0}
-          y={0}
-          width={scalingConfig.screenWidth}
-          height={scalingConfig.screenHeight}
-          color="#87CEEB"
-        />
-      );
+      console.log('🎨 ⚠️ BACKGROUND IMAGE NOT LOADED');
+      return null; // Don't render if image not loaded
     }
 
     return (
@@ -194,26 +206,20 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     // Determine which sprite to use based on player state
     let miroImage;
     if (gameState.player.isMoving) {
-      // Alternate between step sprites for walking animation
+      // Alternate between step sprites for smooth left-right stepping
+      // 0.0 - 0.5: step1 (left leg forward)
+      // 0.5 - 1.0: step2 (right leg forward)
       miroImage = gameState.player.animationProgress < 0.5 ? miroStep1Image : miroStep2Image;
-      console.log('🎨 Using walking sprite:', gameState.player.animationProgress < 0.5 ? 'step1' : 'step2', 'Image loaded?', miroImage ? 'YES' : 'NO');
+      console.log('🎨 Miro walking - progress:', gameState.player.animationProgress.toFixed(2), 'sprite:', gameState.player.animationProgress < 0.5 ? 'step1' : 'step2');
     } else {
       // Use idle sprite (90 degree angle sprite) - this is the correct idle pose
       miroImage = miroAngle90Image;
-      console.log('🎨 Using idle sprite (angle90). Image loaded?', miroImage ? 'YES' : 'NO');
+      console.log('🎨 Miro idle sprite. Image loaded?', miroImage ? 'YES' : 'NO');
     }
 
     if (!miroImage) {
-      console.log('🎨 ⚠️ MIRO IMAGE NOT LOADED - showing green rectangle fallback');
-      return (
-        <Rect
-          x={miroSprite.x}
-          y={miroSprite.y}
-          width={miroSprite.width}
-          height={miroSprite.height}
-          color="#00FF00"
-        />
-      );
+      console.log('🎨 ⚠️ MIRO IMAGE NOT LOADED');
+      return null; // Don't render anything if image not loaded
     }
 
     // Determine if we need to flip horizontally (for left movement)
@@ -243,6 +249,68 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     );
   };
 
+  // Render horizontal tightrope for Shonzika
+  const renderRope = () => {
+    const shonzikaSprite = renderData.shonzika;
+
+    // Horizontal tightrope at Shonzika's feet level
+    const ropeY = shonzikaSprite.y + shonzikaSprite.height; // At bottom of character (feet level)
+    const ropeStartX = 0; // Starts at left edge
+    const ropeEndX = scalingConfig.screenWidth; // Ends at right edge
+
+    // Support posts on left and right sides
+    const postWidth = 6;
+    const postHeight = 40;
+    const postTopY = ropeY - postHeight;
+
+    // Left post
+    const leftPostX = 20;
+
+    // Right post
+    const rightPostX = scalingConfig.screenWidth - 20 - postWidth;
+
+    return (
+      <>
+        {/* Left support post */}
+        <Rect
+          x={leftPostX}
+          y={postTopY}
+          width={postWidth}
+          height={postHeight}
+          color="#654321"
+        />
+
+        {/* Right support post */}
+        <Rect
+          x={rightPostX}
+          y={postTopY}
+          width={postWidth}
+          height={postHeight}
+          color="#654321"
+        />
+
+        {/* Horizontal tightrope */}
+        <Line
+          p1={vec(leftPostX + postWidth / 2, ropeY)}
+          p2={vec(rightPostX + postWidth / 2, ropeY)}
+          color="#8B4513"
+          style="stroke"
+          strokeWidth={4}
+        />
+
+        {/* Small rope highlights for 3D effect */}
+        <Line
+          p1={vec(leftPostX + postWidth / 2, ropeY + 1)}
+          p2={vec(rightPostX + postWidth / 2, ropeY + 1)}
+          color="#A0826D"
+          style="stroke"
+          strokeWidth={1}
+          opacity={0.5}
+        />
+      </>
+    );
+  };
+
   // Render Shonzika character
   const renderShonzika = () => {
     const shonzikaSprite = renderData.shonzika;
@@ -266,23 +334,20 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
       bodyImage = shonzikaIdleImage;  // Use idle body
       showHand = true;  // Overlay hand sprite
     } else if (gameState.shonzika.sprite === 'WALKING' || gameState.shonzika.isMoving) {
-      // When walking, alternate between walking sprites based on animation progress
-      bodyImage = gameState.shonzika.animationProgress % 0.5 < 0.25 ? shonzikaWalk1Image : shonzikaWalk2Image;
+      // When walking, alternate between walking sprites for smooth left-right stepping
+      // Use animation progress (0.0 to 1.0) to create smooth stepping cycle
+      // 0.0 - 0.5: step1 (left leg forward)
+      // 0.5 - 1.0: step2 (right leg forward)
+      bodyImage = gameState.shonzika.animationProgress < 0.5 ? shonzikaWalk1Image : shonzikaWalk2Image;
+      console.log('🎨 Shonzika walking - progress:', gameState.shonzika.animationProgress.toFixed(2), 'sprite:', gameState.shonzika.animationProgress < 0.5 ? 'walk1' : 'walk2');
     } else {
       // When idle, use the profile idle sprite
       bodyImage = shonzikaIdleImage;
     }
 
     if (!bodyImage) {
-      return (
-        <Rect
-          x={shonzikaSprite.x}
-          y={shonzikaSprite.y}
-          width={shonzikaSprite.width}
-          height={shonzikaSprite.height}
-          color="#FF0000"
-        />
-      );
+      console.log('🎨 ⚠️ SHONZIKA IMAGE NOT LOADED');
+      return null; // Don't render anything if image not loaded
     }
 
     // Determine if we need to flip horizontally
@@ -338,18 +403,9 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
       const itemImage = getItemImage(item.type);
 
       if (!itemImage) {
-        // Fallback to colored rectangle
-        const itemColor = getItemFallbackColor(item.type);
-        return (
-          <Rect
-            key={item.id}
-            x={itemSprite.x}
-            y={itemSprite.y}
-            width={itemSprite.width}
-            height={itemSprite.height}
-            color={itemColor}
-          />
-        );
+        // Don't render if image not loaded
+        console.log('🎨 ⚠️ ITEM IMAGE NOT LOADED:', item.type);
+        return null;
       }
 
       return (
@@ -379,7 +435,17 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     }
   };
 
-
+  // Show loading screen while images are loading
+  if (!allImagesLoaded) {
+    console.log('🎨 ⚠️ Loading game assets...');
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.dark.tint} />
+        <Text style={styles.loadingText}>Loading Game...</Text>
+        <Text style={styles.loadingSubtext}>Preparing assets</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -391,10 +457,13 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
 
 
 
+        {/* Rope/pulley system for Shonzika */}
+        {renderRope()}
+
         {/* Characters - render directly, not in Group */}
-        {renderMiro()}
         {renderShonzika()}
-        
+        {renderMiro()}
+
         {/* Falling items */}
         {renderItems()}
       </Canvas>
@@ -410,6 +479,26 @@ const styles = StyleSheet.create({
   },
   canvas: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.dark.background,
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 24,
+    fontFamily: 'hamaki-eng',
+    color: Colors.dark.tint,
+    marginTop: 16,
+    paddingHorizontal: 12,
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    opacity: 0.7,
   },
 });
 

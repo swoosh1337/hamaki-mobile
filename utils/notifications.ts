@@ -30,34 +30,39 @@ Notifications.setNotificationHandler({
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   let token = null;
 
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('hamaki-videos', {
-      name: 'New Videos',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#C4FF00',
-      sound: 'default',
-    });
-  }
+  try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('hamaki-videos', {
+        name: 'New Videos',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#C4FF00',
+        sound: 'default',
+      });
+    }
 
-  if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    if (Device.isDevice) {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') {
+        console.log('Failed to get push token for push notifications!');
+        return null;
+      }
+
+      token = (await Notifications.getExpoPushTokenAsync()).data;
+      console.log('Push notification token:', token);
+    } else {
+      console.log('Must use physical device for Push Notifications');
     }
-    
-    if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notifications!');
-      return null;
-    }
-    
-    token = (await Notifications.getExpoPushTokenAsync()).data;
-    console.log('Push notification token:', token);
-  } else {
-    console.log('Must use physical device for Push Notifications');
+  } catch (error) {
+    // Silently handle permission errors (e.g., missing aps-environment entitlement in development)
+    console.log('Push notifications not available:', error instanceof Error ? error.message : 'Unknown error');
   }
 
   return token;
@@ -171,17 +176,25 @@ export async function shouldCheckForVideos(): Promise<boolean> {
 
 /**
  * Initialize notification system
+ * Note: Push notifications require proper Apple Developer setup for iOS
+ * Will gracefully fail in development/Expo Go builds
  */
 export async function initializeNotifications(): Promise<void> {
   try {
-    // Register for push notifications
-    await registerForPushNotificationsAsync();
-    
+    // Register for push notifications (may fail in development without proper entitlements)
+    const token = await registerForPushNotificationsAsync();
+
+    if (token) {
+      console.log('✅ Notification system initialized with token');
+    } else {
+      console.log('ℹ️ Notification system initialized without push token (development mode or permissions denied)');
+    }
+
     // Set up notification received listener
     Notifications.addNotificationReceivedListener(notification => {
       console.log('Notification received:', notification);
     });
-    
+
     // Set up notification response listener (when user taps notification)
     Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
@@ -191,10 +204,9 @@ export async function initializeNotifications(): Promise<void> {
         // You can navigate to the video or home screen here
       }
     });
-    
-    console.log('Notification system initialized');
   } catch (error) {
-    console.error('Error initializing notifications:', error);
+    // Non-critical error - app can continue without push notifications
+    console.log('ℹ️ Push notifications not available:', error instanceof Error ? error.message : 'Unknown error');
   }
 }
 

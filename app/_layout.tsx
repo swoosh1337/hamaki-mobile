@@ -4,13 +4,14 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ContentProvider } from '@/contexts/ContentContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { preloadAllGameAssets, setNoPogodAssetsLoaded } from '@/utils/gameAssetPreloader';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -27,16 +28,34 @@ function RootLayout() {
     HamakiGeo: require('../assets/fonts/HamakiGEO.otf'),
   });
 
+  const [gameAssetsLoaded, setGameAssetsLoaded] = useState(false);
+
+  // Pre-load game assets on app start
   useEffect(() => {
-    if (loaded) {
-      // Hide the splash screen after the fonts have loaded and the
-      // UI is ready to be displayed
+    console.log('🎮 Starting game asset pre-load on app start...');
+    preloadAllGameAssets()
+      .then((result) => {
+        console.log('✅ Game assets pre-loaded on app start:', result);
+        setNoPogodAssetsLoaded(true);
+        setGameAssetsLoaded(true);
+      })
+      .catch((error) => {
+        console.error('❌ Failed to pre-load game assets on app start:', error);
+        // Allow app to continue even if game assets fail
+        setGameAssetsLoaded(true);
+      });
+  }, []);
+
+  // Hide splash screen only when both fonts AND game assets are loaded
+  useEffect(() => {
+    if (loaded && gameAssetsLoaded) {
+      console.log('✅ All resources loaded - hiding splash screen');
       SplashScreen.hideAsync();
     }
-  }, [loaded]);
+  }, [loaded, gameAssetsLoaded]);
 
-  if (!loaded) {
-    // Async font loading only occurs in development.
+  if (!loaded || !gameAssetsLoaded) {
+    // Keep splash screen visible while loading
     return null;
   }
 

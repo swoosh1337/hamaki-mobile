@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { AvatarPicker } from '@/components/profile/AvatarPicker';
@@ -72,6 +73,18 @@ export default function ProfileScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile?.google_id]);
+
+  // Refresh XP stats when profile tab comes into focus
+  // This ensures XP updates from games are reflected when user returns to profile
+  useFocusEffect(
+    useCallback(() => {
+      if (userProfile?.google_id) {
+        console.log('📊 Profile tab focused - refreshing XP stats');
+        loadXPStats();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userProfile?.google_id, isDemoMode])
+  );
 
   const initializeProfileData = async () => {
     if (!userProfile?.google_id) return;

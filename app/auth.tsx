@@ -238,6 +238,9 @@ const styles = StyleSheet.create({
     fontFamily: 'hamaki-eng',
     fontSize: 64,
     color: Colors.dark.tint, // Neon green
+    paddingHorizontal: 20, // Extra padding for italic font
+    includeFontPadding: false, // Android: prevent extra padding
+    textAlignVertical: 'center', // Android: center text vertically
     textAlign: 'center',
     marginBottom: 20,
   },

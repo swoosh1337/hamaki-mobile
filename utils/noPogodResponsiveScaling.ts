@@ -109,10 +109,10 @@ export class ResponsiveScalingManager {
   // Calculate responsive positions based on screen size
   private calculateResponsivePositions(): ResponsivePositions {
     const { screenWidth, screenHeight, isLandscape } = this.config;
-    
+
     // Adjust ground level based on screen aspect ratio
     const groundYRatio = isLandscape ? 0.75 : 0.8;
-    const shonzikaYRatio = isLandscape ? 0.3 : 0.35;  // Moved down to 35% to ensure visibility
+    const shonzikaYRatio = isLandscape ? 0.20 : 0.22;  // Moved up to 22% for better visual with rope
     
     return {
       miroGroundY: screenHeight * groundYRatio,

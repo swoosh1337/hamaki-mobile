@@ -45,7 +45,8 @@ export interface FallingItem {
   type: ItemType;
   x: number;
   y: number;
-  velocityY: number;
+  velocityX: number;  // Horizontal velocity for parabolic trajectory
+  velocityY: number;  // Vertical velocity (affected by gravity)
   sprite: any;
   points: number;
   isBad: boolean;
@@ -84,8 +85,8 @@ export const NO_POGOD_CONFIG = {
   INITIAL_LIVES: 3,
   
   // Physics
-  ITEM_FALL_SPEED: 2.5,
-  ITEM_FALL_ACCELERATION: 0.05,
+  ITEM_FALL_SPEED: 5.0, // Increased from 2.5 for faster falling
+  ITEM_FALL_ACCELERATION: 0, // No acceleration - constant speed for straight trajectory
   
   // Positions
   PLAYER_POSITIONS: {
@@ -234,7 +235,7 @@ export class NoPogodGameEngine {
         throwCooldown: 0,
         animationProgress: 1.0,
         movementStartTime: 0,
-        nextMoveTime: this.getRandomMoveTime(),
+        nextMoveTime: 1000, // Start moving after 1 second
       },
       screenWidth,
       screenHeight,
@@ -310,7 +311,7 @@ export class NoPogodGameEngine {
     this.gameState.shonzika.throwCooldown = 0;
     this.gameState.shonzika.animationProgress = 1.0;
     this.gameState.shonzika.movementStartTime = 0;
-    this.gameState.shonzika.nextMoveTime = this.getRandomMoveTime();
+    this.gameState.shonzika.nextMoveTime = 1000; // Start moving after 1 second
   }
 
   /**
@@ -488,8 +489,8 @@ export class NoPogodGameEngine {
         }
       }
 
-      // Update animation progress for walking cycle
-      player.animationProgress = (player.animationProgress + 0.05) % 1.0;
+      // Update animation progress for walking cycle - continuous left-right stepping
+      player.animationProgress = (player.animationProgress + 0.06) % 1.0;
 
       if (oldX !== player.x) {
         console.log('🎮 ENGINE: Player moved', player.position, 'from', oldX, '→', player.x, '(delta:', player.x - oldX, ')');
@@ -515,9 +516,27 @@ export class NoPogodGameEngine {
   private updateItems(deltaTime: number): void {
     // Update existing items
     this.gameState.items = this.gameState.items.filter(item => {
-      // Update item position
-      item.y += item.velocityY;
-      item.velocityY += NO_POGOD_CONFIG.ITEM_FALL_ACCELERATION;
+      // Store old position for debugging
+      const oldX = item.x;
+      const oldY = item.y;
+      
+      // Update item position - items should fall PERFECTLY straight down
+      // velocityX should be 0 for straight vertical drop
+      item.x += item.velocityX; // Should be 0 - no horizontal movement
+      item.y += item.velocityY; // Vertical fall (constant velocity)
+      
+      // Debug logging to track horizontal movement
+      if (Math.abs(item.velocityX) > 0.001) {
+        console.log('⚠️ ITEM HAS HORIZONTAL VELOCITY!', {
+          id: item.id,
+          type: item.type,
+          velocityX: item.velocityX,
+          velocityY: item.velocityY,
+          oldX: oldX,
+          newX: item.x,
+          deltaX: item.x - oldX,
+        });
+      }
 
       // Check if item has fallen past the catch zone (missed)
       const catchY = this.gameState.player.y;
@@ -565,87 +584,100 @@ export class NoPogodGameEngine {
       }
     }
     
-    // Handle movement animation
+    // Start moving after initial delay
+    if (!shonzika.isMoving && this.gameTimer >= shonzika.nextMoveTime) {
+      // Start moving after delay
+      this.startShonzikaMovement();
+    }
+    
     if (shonzika.isMoving) {
-      // Calculate animation progress based on time elapsed
-      const elapsedTime = this.gameTimer - shonzika.movementStartTime;
-      const progress = Math.min(elapsedTime / NO_POGOD_CONFIG.SHONZIKA_MOVE_DURATION, 1.0);
-      
-      // Update animation progress
-      shonzika.animationProgress = progress;
-      
-      // Smooth interpolation between start and target position
-      const easedProgress = this.easeInOutQuad(progress);
-      shonzika.x = shonzika.startX + (shonzika.targetX - shonzika.startX) * easedProgress;
-      
-      // Check if movement is complete
-      if (progress >= 1.0) {
-        shonzika.x = shonzika.targetX;
-        shonzika.isMoving = false;
-        shonzika.animationProgress = 1.0;
+      // Constant speed movement (like Miro) - no easing, no interpolation
+      const moveSpeed = 1; // Slower than Miro for visual variety
+      const oldX = shonzika.x;
 
-        console.log('🎯 Shonzika COMPLETED movement to position:', shonzika.position, 'at x:', shonzika.x);
-
-        // Schedule next movement
-        shonzika.nextMoveTime = this.gameTimer + this.getRandomMoveTime();
-
-        // Only set to idle if not throwing
-        if (shonzika.throwCooldown <= 0) {
-          shonzika.sprite = 'IDLE';
-
-          // Switch back to idle animation
-          if (this.gameAnimations) {
-            this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.idle);
+      // Move in the current direction
+      if (shonzika.position === 'LEFT') {
+        shonzika.x -= moveSpeed;
+        
+        // Check if hit left boundary
+        const characterHalfWidth = 75;
+        const leftEdge = characterHalfWidth + 10;
+        
+        if (shonzika.x < leftEdge) {
+          shonzika.x = leftEdge;
+          // Random: either bounce back or change direction randomly
+          if (Math.random() < 0.3) {
+            // 30% chance to go to CENTER instead of RIGHT
+            shonzika.position = 'CENTER';
+            console.log('🎯 Shonzika hit LEFT edge → random turn to CENTER');
+          } else {
+            shonzika.position = 'RIGHT';
+            console.log('🎯 Shonzika hit LEFT edge → bouncing to RIGHT');
           }
+        }
+      } else if (shonzika.position === 'RIGHT') {
+        shonzika.x += moveSpeed;
+        
+        // Check if hit right boundary
+        const characterHalfWidth = 75;
+        const rightEdge = this.gameState.screenWidth - characterHalfWidth - 10;
+        
+        if (shonzika.x > rightEdge) {
+          shonzika.x = rightEdge;
+          // Random: either bounce back or change direction randomly
+          if (Math.random() < 0.3) {
+            // 30% chance to go to CENTER instead of LEFT
+            shonzika.position = 'CENTER';
+            console.log('🎯 Shonzika hit RIGHT edge → random turn to CENTER');
+          } else {
+            shonzika.position = 'LEFT';
+            console.log('🎯 Shonzika hit RIGHT edge → bouncing to LEFT');
+          }
+        }
+      } else if (shonzika.position === 'CENTER') {
+        // At center, randomly pick a direction
+        if (Math.random() < 0.5) {
+          shonzika.position = 'LEFT';
+          console.log('🎯 Shonzika at CENTER → randomly going LEFT');
+        } else {
+          shonzika.position = 'RIGHT';
+          console.log('🎯 Shonzika at CENTER → randomly going RIGHT');
         }
       }
-    } else if (shonzika.throwCooldown <= 0) {
-      // Only check for new movement if not throwing
-      // Check if it's time to start a new movement
-      if (this.gameTimer >= shonzika.nextMoveTime) {
-        // New movement pattern: bounce between LEFT and RIGHT edges continuously
-        let newPosition: 'LEFT' | 'CENTER' | 'RIGHT';
 
-        console.log('🎯 Shonzika deciding movement - current position:', shonzika.position, 'x:', shonzika.x, 'targetX:', shonzika.targetX, 'startX:', shonzika.startX);
+      // Random direction change (10% chance per frame when not at edges)
+      if (Math.random() < 0.01) {
+        const currentPos = shonzika.position;
+        const newPos = currentPos === 'LEFT' ? 'RIGHT' : 'LEFT';
+        shonzika.position = newPos;
+        console.log('🎯 Shonzika RANDOM direction change:', currentPos, '→', newPos);
+      }
 
-        // Simple bounce: if at LEFT, go RIGHT; if at RIGHT, go LEFT
-        if (shonzika.position === 'LEFT') {
-          newPosition = 'RIGHT';
-          console.log('🎯 At LEFT → moving RIGHT');
-        } else if (shonzika.position === 'RIGHT') {
-          newPosition = 'LEFT';
-          console.log('🎯 At RIGHT → moving LEFT');
-        } else {
-          // At CENTER - determine direction based on LAST completed movement
-          // Check which direction we just came from
-          if (shonzika.x > this.gameState.screenWidth * 0.5) {
-            // We're on the right side of center, go LEFT
-            newPosition = 'LEFT';
-            console.log('🎯 At CENTER (right side) → moving LEFT');
-          } else {
-            // We're on the left side of center, go RIGHT
-            newPosition = 'RIGHT';
-            console.log('🎯 At CENTER (left side) → moving RIGHT');
-          }
-        }
+      // Update walking animation progress continuously
+      shonzika.animationProgress = (shonzika.animationProgress + 0.06) % 1.0;
 
-        // Start movement
-        shonzika.startX = shonzika.x;
-        shonzika.position = newPosition;
-        shonzika.targetX = this.gameState.screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS[newPosition];
-        shonzika.isMoving = true;
-        shonzika.sprite = 'WALKING';
-        shonzika.animationProgress = 0.0;
-        shonzika.movementStartTime = this.gameTimer;
-
-        console.log('🎯 Shonzika STARTING movement to:', newPosition, 'targetX:', shonzika.targetX, 'startX:', shonzika.startX);
-
-        // Start walking animation
-        if (this.gameAnimations) {
-          this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.walking);
-        }
+      if (oldX !== shonzika.x) {
+        console.log('🎯 Shonzika moved', shonzika.position, 'from', oldX.toFixed(1), '→', shonzika.x.toFixed(1));
       }
     }
+  }
+
+  // Helper to start Shonzika's continuous movement
+  private startShonzikaMovement(): void {
+    const shonzika = this.gameState.shonzika;
+    
+    // Pick random starting direction
+    shonzika.position = Math.random() < 0.5 ? 'LEFT' : 'RIGHT';
+    shonzika.isMoving = true;
+    shonzika.sprite = 'WALKING';
+    shonzika.animationProgress = 0.0;
+    
+    // Start walking animation
+    if (this.gameAnimations) {
+      this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.walking);
+    }
+    
+    console.log('🎯 Shonzika started continuous movement, direction:', shonzika.position);
   }
 
   private spawnItem(): void {
@@ -674,15 +706,22 @@ export class NoPogodGameEngine {
       }
     }
     
-    // Calculate hand position based on Shonzika's current state
-    const handPosition = this.calculateShonzikaHandPosition();
-    
+    // Items spawn directly from Shonzika's CENTER position (not hand)
+    // This ensures perfectly straight vertical drop
+    const spawnX = this.gameState.shonzika.x; // Use Shonzika's center X
+    const spawnY = this.gameState.shonzika.y + 50; // Slightly below Shonzika
+
+    // Items fall perfectly straight down with ZERO horizontal movement
+    const velocityX = 0; // CRITICAL: Must be exactly 0 for straight drop
+    const velocityY = NO_POGOD_CONFIG.ITEM_FALL_SPEED;
+
     const item: FallingItem = {
       id: `item_${Date.now()}_${Math.random()}`,
       type: itemType,
-      x: handPosition.x,
-      y: handPosition.y,
-      velocityY: NO_POGOD_CONFIG.ITEM_FALL_SPEED,
+      x: spawnX, // Spawn at Shonzika's center X
+      y: spawnY, // Spawn below Shonzika
+      velocityX: velocityX, // ZERO horizontal velocity
+      velocityY: velocityY, // Constant vertical velocity
       sprite: itemSprite,
       points: itemDef.points,
       isBad: itemDef.isBad,
@@ -690,6 +729,21 @@ export class NoPogodGameEngine {
       mustCatch: itemDef.mustCatch,
       shouldAvoid: itemDef.shouldAvoid,
     };
+
+    console.log('🎯 Spawned item - STRAIGHT DOWN from Shonzika center:', {
+      type: itemType,
+      spawnX: spawnX,
+      spawnY: spawnY,
+      shonzikaX: this.gameState.shonzika.x,
+      velocityX: velocityX,
+      velocityY: velocityY,
+      trajectory: velocityX === 0 ? '⬇️ STRAIGHT DOWN ✓' : '↘️ DIAGONAL ✗',
+    });
+    
+    // Verify velocityX is exactly 0
+    if (Math.abs(velocityX) > 0.0001) {
+      console.error('❌ CRITICAL ERROR: Item has horizontal velocity!', velocityX);
+    }
 
     this.gameState.items.push(item);
     
@@ -768,8 +822,16 @@ export class NoPogodGameEngine {
   }
 
   private generateNextSpawnTime(): void {
-    const variance = Math.random() * NO_POGOD_CONFIG.ITEM_SPAWN_VARIANCE;
-    this.nextItemSpawnTime = NO_POGOD_CONFIG.ITEM_SPAWN_INTERVAL + variance;
+    // 20% chance for rapid-fire (2 items almost together)
+    if (Math.random() < 0.35) {
+      // Very short delay for rapid-fire
+      this.nextItemSpawnTime = 200; // 200ms = almost instant second throw
+      console.log('🔥 RAPID FIRE! Next item in 200ms');
+    } else {
+      // Normal spawn timing
+      const variance = Math.random() * NO_POGOD_CONFIG.ITEM_SPAWN_VARIANCE;
+      this.nextItemSpawnTime = NO_POGOD_CONFIG.ITEM_SPAWN_INTERVAL + variance;
+    }
   }
 
   private checkCollisions(): void {

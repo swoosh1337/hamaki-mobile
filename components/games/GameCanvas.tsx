@@ -1,15 +1,15 @@
-import React, { useMemo, useEffect, useRef } from 'react';
-import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Canvas,
+  Group,
   Image,
   useImage,
-  Group,
 } from '@shopify/react-native-skia';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView, TapGestureHandler } from 'react-native-gesture-handler';
 
-import { GameState, GameAssets, GAME_CONFIG } from '@/utils/gameEngine';
 import { Colors } from '@/constants/Colors';
+import { GAME_CONFIG, GameAssets, GameState } from '@/utils/gameEngine';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -283,6 +283,9 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 4,
+    paddingHorizontal: 16, // Extra padding for italic font
+    includeFontPadding: false, // Android: prevent extra padding
+    textAlignVertical: 'center', // Android: center text vertically
   },
   menuButtons: {
     gap: 20,
@@ -309,6 +312,9 @@ const styles = StyleSheet.create({
     color: Colors.dark.background,
     textAlign: 'center',
     fontWeight: 'bold',
+    paddingHorizontal: 8, // Extra padding for italic font
+    includeFontPadding: false, // Android: prevent extra padding
+    textAlignVertical: 'center', // Android: center text vertically
   },
   gameUI: {
     position: 'absolute',
@@ -371,6 +377,9 @@ const styles = StyleSheet.create({
     color: Colors.dark.tint,
     marginBottom: 40,
     textAlign: 'center',
+    paddingHorizontal: 12, // Extra padding for italic font
+    includeFontPadding: false, // Android: prevent extra padding
+    textAlignVertical: 'center', // Android: center text vertically
   },
   pausedButtons: {
     gap: 20,
@@ -394,6 +403,9 @@ const styles = StyleSheet.create({
     color: '#FF6B6B',
     marginBottom: 20,
     textAlign: 'center',
+    paddingHorizontal: 12, // Extra padding for italic font
+    includeFontPadding: false, // Android: prevent extra padding
+    textAlignVertical: 'center', // Android: center text vertically
   },
   finalScore: {
     fontSize: 24,

@@ -2,13 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
 import {
-  Alert,
-  Modal,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Alert,
+    Modal,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
@@ -140,6 +140,7 @@ const styles = StyleSheet.create({
     fontFamily: 'hamaki-eng',
     color: Colors.dark.tint,
     fontWeight: 'bold',
+    paddingHorizontal: 3, // Prevent italic font cropping
   },
   closeButton: {
     width: 24,

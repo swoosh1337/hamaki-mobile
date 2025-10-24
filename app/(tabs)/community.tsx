@@ -1,15 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    RefreshControl,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 import { CreatePostModal } from '@/components/ideas/CreatePostModal';
@@ -596,6 +596,7 @@ const styles = StyleSheet.create({
     fontFamily: 'hamaki-eng',
     color: Colors.dark.tint,
     marginBottom: 8,
+    paddingHorizontal: 4, // Prevent italic font cropping
   },
   subtitle: {
     fontSize: 16,

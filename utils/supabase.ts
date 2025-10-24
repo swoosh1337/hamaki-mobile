@@ -326,23 +326,22 @@ export const userService = {
       weekEnd.setDate(weekStart.getDate() + 6);
       weekEnd.setHours(23, 59, 59, 999);
 
-      // Get weekly XP from XP transactions (would need xp_transactions table)
-      // For now, we'll use a simplified approach and calculate based on user activity this week
-      // This would be replaced with actual XP transaction queries in a real implementation
-      let weeklyXP = 0;
+      // Get weekly XP from leaderboard_entries table
+      const weekStartDate = this.getWeekStartDate();
+      
+      const { data: weeklyEntry, error: weeklyError } = await supabase
+        .from('leaderboard_entries')
+        .select('points')
+        .eq('user_id', userProfile.id)
+        .eq('period_type', 'weekly')
+        .eq('week_start_date', weekStartDate)
+        .single();
 
-      // In a real implementation, you would query an xp_transactions table like:
-      // const { data: weeklyTransactions } = await supabase
-      //   .from('xp_transactions')
-      //   .select('xp_amount')
-      //   .eq('user_id', userProfile.id)
-      //   .gte('created_at', weekStart.toISOString())
-      //   .lt('created_at', weekEnd.toISOString());
-      // weeklyXP = weeklyTransactions?.reduce((sum, t) => sum + t.xp_amount, 0) || 0;
+      if (weeklyError && weeklyError.code !== 'PGRST116') {
+        console.error('Error fetching weekly XP:', weeklyError);
+      }
 
-      // For now, return mock data based on user's total XP
-      // This would be replaced with actual database queries
-      weeklyXP = Math.floor(userProfile.xp_points * 0.1); // Mock: 10% of total as this week's XP
+      const weeklyXP = weeklyEntry?.points || 0;
 
       return {
         totalXP: userProfile.xp_points,
