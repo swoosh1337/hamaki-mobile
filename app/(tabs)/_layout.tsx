@@ -1,11 +1,29 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { Image } from 'react-native';
 
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 // Use flat background instead of custom component for now
 import { Colors } from '@/constants/Colors';
 import { trackTabTap } from '@/utils/analytics';
+
+// Custom icon components for image-based icons
+const GamesIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
+  <Image
+    source={require('@/assets/images/mini_games.png')}
+    style={{ width: size, height: size, tintColor: color }}
+    resizeMode="contain"
+  />
+);
+
+const CommunityIcon = ({ color, size = 24 }: { color: string; size?: number }) => (
+  <Image
+    source={require('@/assets/images/community.png')}
+    style={{ width: size, height: size, tintColor: color }}
+    resizeMode="contain"
+  />
+);
 
 export default function TabLayout() {
 
@@ -40,7 +58,7 @@ export default function TabLayout() {
         name="games"
         options={{
           title: 'Games',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="gamecontroller.fill" color={color} />,
+          tabBarIcon: ({ color }) => <GamesIcon color={color} size={24} />,
         }}
         listeners={{
           tabPress: () => trackTabTap('Games'),
@@ -60,7 +78,7 @@ export default function TabLayout() {
         name="community"
         options={{
           title: 'Community',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.3.fill" color={color} />,
+          tabBarIcon: ({ color }) => <CommunityIcon color={color} size={24} />,
         }}
         listeners={{
           tabPress: () => trackTabTap('Community'),

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { HammockJumpGame } from '@/components/games/HammockJumpGame';
 import { NoPogodGame } from '@/components/games/NoPogodGame';
@@ -91,7 +91,14 @@ export default function GamesScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>🎮 Mini Games</Text>
+          <View style={styles.titleContainer}>
+            <Image
+              source={require('@/assets/images/mini_games.png')}
+              style={styles.titleIcon}
+              resizeMode="contain"
+            />
+            <Text style={styles.title}>Mini Games</Text>
+          </View>
           <Text style={styles.subtitle}>Play games to earn XP and climb the leaderboard!</Text>
         </View>
 
@@ -128,22 +135,32 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.background,
+    paddingTop: 60,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 20,
-    paddingTop: 60,
   },
   header: {
     marginBottom: 30,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  titleIcon: {
+    width: 32,
+    height: 32,
+    tintColor: Colors.dark.tint,
+    marginRight: 12,
   },
   title: {
     fontSize: 32,
     fontFamily: 'hamaki-eng',
     color: Colors.dark.tint,
-    marginBottom: 8,
     paddingHorizontal: 12, // Extra padding for italic font
     includeFontPadding: false, // Android: prevent extra padding
     textAlignVertical: 'center', // Android: center text vertically
@@ -231,44 +248,5 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
     lineHeight: 20,
-  },
-  loadingBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(196, 255, 0, 0.15)',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(196, 255, 0, 0.4)',
-  },
-  loadingInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.tint,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  loadingSubtext: {
-    fontSize: 12,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.text,
-    opacity: 0.7,
-  },
-  loadingBadge: {
-    fontSize: 12,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.tint,
-    backgroundColor: 'rgba(196, 255, 0, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    fontWeight: 'bold',
   },
 });

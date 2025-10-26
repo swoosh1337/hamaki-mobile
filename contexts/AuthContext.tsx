@@ -244,15 +244,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (supabaseUser) {
-        setUserProfile(supabaseUser);
+        // Process multi-channel subscriptions and award XP if available
+        let updatedUser = supabaseUser;
+        if (pendingAuthResult.allChannelSubscriptions) {
+          try {
+            const { updateChannelSubscriptionsAndAwardXP } = await import('../utils/channelSubscriptions');
+            const result = await updateChannelSubscriptionsAndAwardXP(
+              supabaseUser.google_id,
+              pendingAuthResult.allChannelSubscriptions
+            );
+
+            if (result.totalXPAwarded > 0) {
+              console.log(`🎉 Awarded ${result.totalXPAwarded} XP for channel subscriptions on sign-in!`);
+              updatedUser = result.updatedUser;
+            }
+          } catch (error) {
+            console.error('Failed to process channel subscriptions:', error);
+            // Continue with normal flow even if XP awarding fails
+          }
+        }
+
+        setUserProfile(updatedUser);
         setIsAuthenticated(true);
         setIsSubscribed(pendingAuthResult.isSubscribed || false);
         setIsTemporarySession(!rememberMe);
-        console.log('User saved to Supabase:', supabaseUser);
+        console.log('User saved to Supabase:', updatedUser);
 
         // Set analytics user id
-        analytics.setUserId(supabaseUser.google_id);
-        
+        analytics.setUserId(updatedUser.google_id);
+
         // Store session based on user choice
         if (pendingAuthResult.tokenData) {
           await storeUserSessionWithTokens(
@@ -270,7 +290,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             rememberMe
           );
         }
-        
+
         // Initialize notifications for newly authenticated users
         await initializeNotifications();
       } else {

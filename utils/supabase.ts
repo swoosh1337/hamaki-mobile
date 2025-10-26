@@ -25,6 +25,16 @@ export interface UserProfile {
   avatar_url?: string;
   google_id: string;
   youtube_subscribed: boolean;
+  miro_channel_subscribed?: boolean;
+  bastos_channel_subscribed?: boolean;
+  koro_channel_subscribed?: boolean;
+  subscriptions_verified_at?: string;
+  subscription_xp_awarded?: {
+    hamaki: boolean;
+    miro: boolean;
+    bastos: boolean;
+    koro: boolean;
+  };
   xp_points: number;
   created_at: string;
   updated_at: string;

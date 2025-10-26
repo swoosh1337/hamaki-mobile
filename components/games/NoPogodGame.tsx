@@ -462,10 +462,10 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
             {renderSwipeFeedback()}
 
             {/* Overlay UI */}
-            {gameState.phase === 'MENU' && renderMenuState()}
-            {gameState.phase === 'PLAYING' && renderGameUI()}
-            {gameState.phase === 'PAUSED' && renderPausedState()}
-            {gameState.phase === 'GAME_OVER' && renderGameOverState()}
+            {gameState?.phase === 'MENU' && renderMenuState()}
+            {gameState?.phase === 'PLAYING' && renderGameUI()}
+            {gameState?.phase === 'PAUSED' && renderPausedState()}
+            {gameState?.phase === 'GAME_OVER' && renderGameOverState()}
           </View>
         </GestureHandlerRootView>
       </SafeAreaView>

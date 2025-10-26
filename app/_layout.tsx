@@ -4,14 +4,13 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ContentProvider } from '@/contexts/ContentContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { preloadAllGameAssets, setNoPogodAssetsLoaded } from '@/utils/gameAssetPreloader';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -28,34 +27,16 @@ function RootLayout() {
     HamakiGeo: require('../assets/fonts/HamakiGEO.otf'),
   });
 
-  const [gameAssetsLoaded, setGameAssetsLoaded] = useState(false);
-
-  // Pre-load game assets on app start
+  // Hide splash screen when fonts are loaded
   useEffect(() => {
-    console.log('🎮 Starting game asset pre-load on app start...');
-    preloadAllGameAssets()
-      .then((result) => {
-        console.log('✅ Game assets pre-loaded on app start:', result);
-        setNoPogodAssetsLoaded(true);
-        setGameAssetsLoaded(true);
-      })
-      .catch((error) => {
-        console.error('❌ Failed to pre-load game assets on app start:', error);
-        // Allow app to continue even if game assets fail
-        setGameAssetsLoaded(true);
-      });
-  }, []);
-
-  // Hide splash screen only when both fonts AND game assets are loaded
-  useEffect(() => {
-    if (loaded && gameAssetsLoaded) {
-      console.log('✅ All resources loaded - hiding splash screen');
+    if (loaded) {
+      console.log('✅ Fonts loaded - hiding splash screen');
       SplashScreen.hideAsync();
     }
-  }, [loaded, gameAssetsLoaded]);
+  }, [loaded]);
 
-  if (!loaded || !gameAssetsLoaded) {
-    // Keep splash screen visible while loading
+  if (!loaded) {
+    // Keep splash screen visible while loading fonts
     return null;
   }
 

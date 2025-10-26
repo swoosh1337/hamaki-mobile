@@ -5,10 +5,10 @@ import { Alert, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, To
 
 import { AvatarPicker } from '@/components/profile/AvatarPicker';
 import { SettingsModal } from '@/components/ui/SettingsModal';
+import { ProfilePostSkeleton, XPStatsSkeleton } from '@/components/ui/SkeletonLoader';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserPost, userService, XPStats } from '@/utils/supabase';
-import { XPStatsSkeleton, ProfilePostSkeleton } from '@/components/ui/SkeletonLoader';
 
 export default function ProfileScreen() {
   const { userProfile, updateUserProfile, isDemoMode } = useAuth();
@@ -392,9 +392,9 @@ export default function ProfileScreen() {
           ) : userPosts.length === 0 ? (
             <View style={styles.emptyPostsContainer}>
               <Text style={styles.emptyPostsText}>No approved posts yet.</Text>
-              <Text style={styles.emptyPostsSubtext}>
+              {/* <Text style={styles.emptyPostsSubtext}>
                 Submit ideas in the Community tab. Once approved by admins, they&apos;ll appear here!
-              </Text>
+              </Text> */}
             </View>
           ) : (
             <ScrollView style={styles.postsScrollView} nestedScrollEnabled>

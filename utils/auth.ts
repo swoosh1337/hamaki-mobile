@@ -48,6 +48,7 @@ export interface AuthResult {
   userData?: any;
   fromCache?: boolean; // Indicates if loaded from persistent storage
   tokenData?: TokenData; // Include full token data for new auth flows
+  allChannelSubscriptions?: Record<string, boolean> | null; // Multi-channel subscription status
 }
 
 /**
@@ -158,7 +159,19 @@ export async function authenticateWithGoogle(): Promise<AuthResult> {
         console.log("No refresh token - user may need to re-authenticate sooner");
       }
 
+      // Check main HamaKi channel subscription (for backward compatibility)
       const isSubscribed = await checkYouTubeSubscription(tokenData.accessToken);
+
+      // Check all channel subscriptions for multi-channel XP system
+      let allChannelSubscriptions = null;
+      try {
+        const { checkAllChannelSubscriptions } = await import('./channelSubscriptions');
+        allChannelSubscriptions = await checkAllChannelSubscriptions(tokenData.accessToken);
+        console.log('✅ All channel subscriptions checked:', allChannelSubscriptions);
+      } catch (error) {
+        console.error('⚠️ Failed to check all channel subscriptions:', error);
+        // Continue with just main channel subscription
+      }
 
       // Don't store session here - let AuthContext handle it after Remember Me choice
       // Return token data for AuthContext to use
@@ -168,6 +181,7 @@ export async function authenticateWithGoogle(): Promise<AuthResult> {
         token: tokenData.accessToken,
         userData,
         tokenData, // Include full token data
+        allChannelSubscriptions, // Include all channel subscriptions
       };
     } else if (result.type === "cancel") {
       console.log("🔍 OAuth was cancelled - checking if this might be a successful auth");

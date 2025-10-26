@@ -1,16 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import {
-    Alert,
-    Modal,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
+import { ChannelSubscriptionManager } from '@/components/subscriptions/ChannelSubscriptionManager';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -24,6 +25,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
 }) => {
   const { signOut, userProfile, isDemoMode } = useAuth();
+  const [showSubscriptions, setShowSubscriptions] = useState(false);
 
   const handleSignOut = async () => {
     const title = isDemoMode ? 'Exit Demo' : 'Sign Out';
@@ -95,12 +97,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </View>
           </View>
 
+          {/* Subscriptions Section */}
+          {!isDemoMode && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Earn More XP</Text>
+              <TouchableOpacity
+                style={styles.subscriptionsCard}
+                onPress={() => setShowSubscriptions(true)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.subscriptionsCardContent}>
+                  <View style={styles.subscriptionsIcon}>
+                    <Ionicons name="logo-youtube" size={24} color="#FF0000" />
+                  </View>
+                  <View style={styles.subscriptionsText}>
+                    <Text style={styles.subscriptionsTitle}>Channel Subscriptions</Text>
+                    <Text style={styles.subscriptionsDescription}>
+                      Get up to 3,100 XP by subscribing to 4 channels
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={24} color={Colors.dark.tint} />
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* About Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>About</Text>
             <Text style={styles.description}>
               Hamaki v1.0.0{'\n'}
-              {isDemoMode 
+              {isDemoMode
                 ? 'Demo Mode - For Apple Review' + '\n\n' + 'This is a demonstration version showing all app features without requiring YouTube subscription.'
                 : 'Exclusive app for HamaKi Studio subscribers' + '\n\n' + 'Stay connected with the latest content and exclusive features!'
               }
@@ -114,6 +141,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+
+      {/* Channel Subscriptions Modal */}
+      <Modal
+        visible={showSubscriptions}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowSubscriptions(false)}
+      >
+        <SafeAreaView style={styles.subscriptionsModal}>
+          {/* Subscriptions Header */}
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => setShowSubscriptions(false)}
+            >
+              <Ionicons name="arrow-back" size={24} color={Colors.dark.text} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Channel Subscriptions</Text>
+            <View style={styles.headerLeft} />
+          </View>
+
+          {/* Subscriptions Content */}
+          <View style={styles.subscriptionsContent}>
+            <ChannelSubscriptionManager />
+          </View>
+        </SafeAreaView>
+      </Modal>
     </Modal>
   );
 };
@@ -161,6 +215,7 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
     marginBottom: 15,
     fontWeight: 'bold',
+    paddingHorizontal: 6, // Prevent italic font cropping
   },
   accountInfo: {
     backgroundColor: 'rgba(245, 245, 245, 0.05)',
@@ -226,5 +281,55 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     color: '#FFFFFF',
     fontWeight: 'bold',
+  },
+  subscriptionsCard: {
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(196, 255, 0, 0.2)',
+  },
+  subscriptionsCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  subscriptionsIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subscriptionsText: {
+    flex: 1,
+  },
+  subscriptionsTitle: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  subscriptionsDescription: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    opacity: 0.7,
+  },
+  subscriptionsModal: {
+    flex: 1,
+    backgroundColor: Colors.dark.background,
+  },
+  backButton: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subscriptionsContent: {
+    flex: 1,
+    padding: 20,
   },
 });

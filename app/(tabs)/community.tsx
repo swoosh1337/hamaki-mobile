@@ -1,20 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    RefreshControl,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 import { CreatePostModal } from '@/components/ideas/CreatePostModal';
 import { PostListItem } from '@/components/ideas/PostListItem';
 import { NetworkError } from '@/components/ui/NetworkError';
+import { ProfilePostSkeleton } from '@/components/ui/SkeletonLoader';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
@@ -310,20 +312,78 @@ export default function IdeasScreen() {
 
 
 
-  // Render content based on state
-  const renderContent = () => {
-    // Loading state
-    if (isLoading && posts.length === 0 && !error) {
+  // Render posts content (skeleton, empty, or actual posts)
+  const renderPostsContent = () => {
+    // Loading state - show skeletons
+    if (isLoading && posts.length === 0) {
       return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.dark.tint} />
-          <Text style={styles.loadingText}>Loading Posts...</Text>
+        <>
+          {[...Array(5)].map((_, index) => (
+            <ProfilePostSkeleton key={`community-post-skeleton-${index}`} />
+          ))}
+        </>
+      );
+    }
+
+    // Empty state
+    if (!isLoading && posts.length === 0 && !error) {
+      return (
+        <View style={styles.emptyPostsContainer}>
+          <Ionicons name="people-outline" size={64} color={Colors.dark.tabIconDefault} />
+          <Text style={styles.emptyTitle}>No Community Posts Yet</Text>
+          <Text style={styles.emptyDescription}>
+            Be the first to share a video idea! Your suggestions help shape future content.
+          </Text>
         </View>
       );
     }
 
-    // Error state
-    if (error && posts.length === 0) {
+    // Posts list
+    return (
+      <>
+        {posts.map((post) => (
+          <PostListItem
+            key={post.id}
+            post={post}
+            onUpvote={handlePostUpvote}
+            isUpvoting={upvotingPosts.has(post.id)}
+          />
+        ))}
+        
+        {/* Load More Button */}
+        {hasMorePosts && (
+          <TouchableOpacity
+            style={styles.loadMoreButton}
+            onPress={handleLoadMore}
+            disabled={isLoadingMore}
+          >
+            {isLoadingMore ? (
+              <ActivityIndicator size="small" color={Colors.dark.tint} />
+            ) : (
+              <Text style={styles.loadMoreText}>Load More</Text>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* Connection Status */}
+        {retryCount > 0 && !isLoading && !error && (
+          <View style={styles.connectionStatus}>
+            <Text style={styles.connectionStatusText}>
+              {isNetworkError 
+                ? '📡 Connection restored' 
+                : '✅ Connected'
+              }
+            </Text>
+          </View>
+        )}
+      </>
+    );
+  };
+
+  // Render content based on state
+  const renderContent = () => {
+    // Full error state (only when no posts loaded yet)
+    if (error && posts.length === 0 && !isLoading) {
       const shouldShowOfflineMessage = isNetworkError && retryCount > 1;
       return (
         <NetworkError 
@@ -339,30 +399,7 @@ export default function IdeasScreen() {
       );
     }
 
-    // Empty state
-    if (!isLoading && posts.length === 0 && !error) {
-      return (
-        <ScrollView
-          contentContainerStyle={styles.emptyContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              colors={[Colors.dark.tint]}
-              tintColor={Colors.dark.tint}
-            />
-          }
-        >
-          <Ionicons name="people-outline" size={64} color={Colors.dark.tabIconDefault} />
-          <Text style={styles.emptyTitle}>No Community Posts Yet</Text>
-          <Text style={styles.emptyDescription}>
-            Be the first to share a video idea! Your suggestions help shape future content.
-          </Text>
-        </ScrollView>
-      );
-    }
-
-    // Normal state with posts
+    // Normal state - always show header, posts section handles its own loading
     return (
       <ScrollView
         style={styles.scrollView}
@@ -386,9 +423,16 @@ export default function IdeasScreen() {
         }}
         scrollEventThrottle={400}
       >
-        {/* Header */}
+        {/* Header - Always visible */}
         <View style={styles.header}>
-          <Text style={styles.title}>🌟 Community</Text>
+          <View style={styles.titleContainer}>
+            <Image
+              source={require('@/assets/images/community.png')}
+              style={styles.titleIcon}
+              resizeMode="contain"
+            />
+            <Text style={styles.title}>Community</Text>
+          </View>
           <Text style={styles.subtitle}>Share video ideas and vote on suggestions</Text>
           
           {isDemoMode && (
@@ -408,53 +452,43 @@ export default function IdeasScreen() {
             </View>
           )}
           
-          <TouchableOpacity
-            style={styles.sortToggle}
-            onPress={() => setSortBy(sortBy === 'latest' ? 'upvotes' : 'latest')}
-          >
-            <Text style={styles.sortToggleText}>
-              {sortBy === 'latest' ? 'Latest' : 'Popular'}
-            </Text>
-          </TouchableOpacity>
+          {/* Sort Toggle Buttons */}
+          <View style={styles.sortToggleContainer}>
+            <TouchableOpacity
+              style={[
+                styles.sortButton,
+                sortBy === 'upvotes' && styles.sortButtonActive
+              ]}
+              onPress={() => setSortBy('upvotes')}
+            >
+              <Text style={[
+                styles.sortButtonText,
+                sortBy === 'upvotes' && styles.sortButtonTextActive
+              ]}>
+                Popular
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.sortButton,
+                sortBy === 'latest' && styles.sortButtonActive
+              ]}
+              onPress={() => setSortBy('latest')}
+            >
+              <Text style={[
+                styles.sortButtonText,
+                sortBy === 'latest' && styles.sortButtonTextActive
+              ]}>
+                Latest
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Posts List */}
+        {/* Posts List - Shows skeleton, empty, or posts */}
         <View style={styles.postsContainer}>
-          {posts.map((post) => (
-            <PostListItem
-              key={post.id}
-              post={post}
-              onUpvote={handlePostUpvote}
-              isUpvoting={upvotingPosts.has(post.id)}
-            />
-          ))}
-          
-          {/* Load More Button */}
-          {hasMorePosts && (
-            <TouchableOpacity
-              style={styles.loadMoreButton}
-              onPress={handleLoadMore}
-              disabled={isLoadingMore}
-            >
-              {isLoadingMore ? (
-                <ActivityIndicator size="small" color={Colors.dark.tint} />
-              ) : (
-                <Text style={styles.loadMoreText}>Load More</Text>
-              )}
-            </TouchableOpacity>
-          )}
-
-          {/* Connection Status */}
-          {retryCount > 0 && !isLoading && !error && (
-            <View style={styles.connectionStatus}>
-              <Text style={styles.connectionStatusText}>
-                {isNetworkError 
-                  ? '📡 Connection restored' 
-                  : '✅ Connected'
-                }
-              </Text>
-            </View>
-          )}
+          {renderPostsContent()}
         </View>
       </ScrollView>
     );
@@ -488,24 +522,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.background,
+    paddingTop: 60,
   },
-  loadingContainer: {
-    flex: 1,
+  emptyPostsContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
-  },
-  loadingText: {
-    color: Colors.dark.text,
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    marginTop: 16,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
+    minHeight: 300,
   },
   emptyTitle: {
     fontSize: 24,
@@ -575,28 +598,49 @@ const styles = StyleSheet.create({
     color: Colors.dark.tint,
     opacity: 0.7,
   },
-  sortToggle: {
+  sortToggleContainer: {
+    flexDirection: 'row',
     marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(196, 255, 0, 0.1)',
-    borderRadius: 16,
+    gap: 8,
+  },
+  sortButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(196, 255, 0, 0.3)',
-    alignSelf: 'flex-start',
+    backgroundColor: 'transparent',
   },
-  sortToggleText: {
+  sortButtonActive: {
+    backgroundColor: Colors.dark.tint,
+    borderColor: Colors.dark.tint,
+  },
+  sortButtonText: {
     fontSize: 14,
     fontFamily: 'SpaceMono',
-    color: Colors.dark.tint,
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  sortButtonTextActive: {
+    color: Colors.dark.background,
     fontWeight: '600',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  titleIcon: {
+    width: 32,
+    height: 32,
+    tintColor: Colors.dark.tint,
+    marginRight: 12,
   },
   title: {
     fontSize: 32,
     fontFamily: 'hamaki-eng',
     color: Colors.dark.tint,
-    marginBottom: 8,
-    paddingHorizontal: 4, // Prevent italic font cropping
+    paddingHorizontal: 8, // Prevent italic font cropping
   },
   subtitle: {
     fontSize: 16,

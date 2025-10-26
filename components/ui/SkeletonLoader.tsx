@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   skeleton: {
     backgroundColor: 'rgba(245, 245, 245, 0.1)',
   },
-  
+
   // Video Skeleton Styles
   videoSkeleton: {
     width: 220,
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   videoSkeletonInfo: {
     padding: 10,
   },
-  
+
   // Post Skeleton Styles
   postSkeleton: {
     flexDirection: 'row',
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  
+
   // Profile Post Skeleton Styles
   profilePostSkeleton: {
     backgroundColor: 'rgba(245, 245, 245, 0.05)',
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
-  
+
   // XP Stats Skeleton Styles
   xpStatsSkeleton: {
     marginBottom: 40,
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(196, 255, 0, 0.2)',
   },
-  
+
   // Carousel Skeleton Styles
   carouselSkeleton: {
     width: 180,
