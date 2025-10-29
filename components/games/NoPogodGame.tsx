@@ -1,15 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  Dimensions,
-  Modal,
-  PanResponder,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    Dimensions,
+    Modal,
+    PanResponder,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -35,7 +35,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   visible,
   onClose,
 }) => {
-  const { userProfile, updateUserProfile } = useAuth();
+  const { userProfile, updateUserProfile, isDemoMode } = useAuth();
   const gameEngineRef = useRef<NoPogodGameEngine | null>(null);
   const spriteRendererRef = useRef<NoPogodSpriteRenderer | null>(null);
   const responsiveScalingRef = useRef<ResponsiveScalingManager | null>(null);
@@ -44,6 +44,9 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const [xpAwarded, setXpAwarded] = useState(false);
   const [highScore, setHighScore] = useState<number>(0);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
+  const [roundsPlayed, setRoundsPlayed] = useState(0);
+  const [showCooldownScreen, setShowCooldownScreen] = useState(false);
+  const MAX_ROUNDS = 3; // Maximum rounds before cooldown
 
   // Touch feedback state
   const [activeTouchZone, setActiveTouchZone] = useState<'LEFT' | 'RIGHT' | null>(null);
@@ -279,14 +282,29 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
               updateUserProfile({ xp_points: newXP });
               console.log(`✅ Awarded ${xpToAward} XP for No Pogodi game!`);
 
-              // Update leaderboard entries (weekly and all-time)
-              const leaderboardSuccess = await userService.updateLeaderboardPoints(userProfile.id, xpToAward);
-
-              if (leaderboardSuccess) {
-                console.log(`✅ Updated leaderboard with ${xpToAward} points!`);
-              } else {
-                console.error('❌ Failed to update leaderboard entries');
+              // Invalidate XP stats cache so profile refreshes
+              try {
+                const { invalidateXPStatsCache } = await import('@/utils/xpStatsCache');
+                await invalidateXPStatsCache(userProfile.id);
+                console.log('📊 XP stats cache invalidated after game');
+              } catch (error) {
+                console.error('Error invalidating XP cache:', error);
               }
+
+              // Update leaderboard entries (weekly and all-time) - non-blocking
+              // Run in background, don't wait for completion
+              userService.updateLeaderboardPoints(userProfile.id, xpToAward)
+                .then((success) => {
+                  if (success) {
+                    console.log(`✅ Updated leaderboard with ${xpToAward} points!`);
+                  } else {
+                    console.warn('⚠️ Leaderboard update failed, but XP was saved');
+                  }
+                })
+                .catch((error) => {
+                  console.error('❌ Leaderboard update error (non-critical):', error);
+                  // Don't throw - leaderboard update is not critical
+                });
             } else {
               // Silently update local profile even if server update fails
               updateUserProfile({ xp_points: newXP });
@@ -298,6 +316,29 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
             updateUserProfile({ xp_points: newXP });
           }
         }
+
+        // Increment rounds played
+        const newRoundsPlayed = roundsPlayed + 1;
+        setRoundsPlayed(newRoundsPlayed);
+
+        // Check if user has reached max rounds (only for non-demo users)
+        if (!isDemoMode && newRoundsPlayed >= MAX_ROUNDS) {
+          console.log(`🎮 Max rounds reached (${MAX_ROUNDS}). Starting cooldown...`);
+          
+          // Update game cooldown (start 2-hour cooldown)
+          try {
+            const { updateGameLastPlayed } = await import('@/utils/gameCooldowns');
+            await updateGameLastPlayed(userProfile.id, 'nopogod', isDemoMode);
+            console.log('✅ Game cooldown started');
+            
+            // Show cooldown screen after a short delay
+            setTimeout(() => {
+              setShowCooldownScreen(true);
+            }, 2000); // 2 second delay to let user see final score
+          } catch (error) {
+            console.error('❌ Error updating game cooldown:', error);
+          }
+        }
       }
     };
 
@@ -305,7 +346,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     awardXP().catch((error) => {
       console.error('❌ Critical error in awardXP:', error);
     });
-  }, [gameState?.phase, gameState?.score, xpAwarded, userProfile, updateUserProfile]);
+  }, [gameState?.phase, gameState?.score, xpAwarded, userProfile, updateUserProfile, isDemoMode, roundsPlayed]);
 
   // Cleanup on close
   useEffect(() => {
@@ -423,12 +464,59 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
           <Text style={styles.xpEarned}>+{xpEarned} XP Earned! ⭐</Text>
         )}
 
+        {/* Show rounds info for non-demo users */}
+        {!isDemoMode && (
+          <Text style={styles.roundsInfo}>
+            Round {roundsPlayed}/{MAX_ROUNDS}
+          </Text>
+        )}
+
         <View style={styles.gameOverButtons}>
-          <TouchableOpacity style={styles.startButton} onPress={restartGame} activeOpacity={0.8}>
-            <Text style={styles.buttonText}>TRY AGAIN</Text>
-          </TouchableOpacity>
+          {/* Only show Try Again if under max rounds or in demo mode */}
+          {(isDemoMode || roundsPlayed < MAX_ROUNDS) && (
+            <TouchableOpacity style={styles.startButton} onPress={restartGame} activeOpacity={0.8}>
+              <Text style={styles.buttonText}>TRY AGAIN</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.exitButton} onPress={exitGame} activeOpacity={0.8}>
             <Text style={styles.buttonText}>EXIT</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  // Render cooldown screen
+  const renderCooldownScreen = () => {
+    return (
+      <View style={styles.cooldownScreenContainer}>
+        <View style={styles.cooldownContent}>
+          <Text style={styles.cooldownIcon}>⏰</Text>
+          <Text style={styles.cooldownTitle}>Cooldown Active</Text>
+          <Text style={styles.cooldownMessage}>
+            You've played {MAX_ROUNDS} rounds!
+          </Text>
+          <Text style={styles.cooldownSubtext}>
+            Come back in 2 hours to play again.{'\n'}
+            You'll get a notification when it's ready!
+          </Text>
+          
+          <View style={styles.cooldownStats}>
+            <Text style={styles.cooldownStatsText}>
+              Rounds Played: {roundsPlayed}/{MAX_ROUNDS}
+            </Text>
+          </View>
+
+          <TouchableOpacity 
+            style={styles.cooldownButton} 
+            onPress={() => {
+              setShowCooldownScreen(false);
+              setRoundsPlayed(0);
+              onClose();
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.cooldownButtonText}>BACK TO GAMES</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -447,27 +535,31 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       onRequestClose={exitGame}
     >
       <SafeAreaView style={styles.container}>
-        <GestureHandlerRootView style={styles.gameContainer}>
-          <View style={styles.canvasContainer} {...panResponder.panHandlers}>
-            {/* Skia Canvas with proper sprite rendering and responsive scaling */}
-            <NoPogodGameCanvas
-              gameState={gameState}
-              spriteRenderer={spriteRendererRef.current!}
-              responsiveScaling={responsiveScalingRef.current!}
-              miroSprite={gameEngineRef.current?.getCurrentMiroSprite()}
-              shonzikaSprite={gameEngineRef.current?.getCurrentShonzikaSprite()}
-            />
+        {showCooldownScreen ? (
+          renderCooldownScreen()
+        ) : (
+          <GestureHandlerRootView style={styles.gameContainer}>
+            <View style={styles.canvasContainer} {...panResponder.panHandlers}>
+              {/* Skia Canvas with proper sprite rendering and responsive scaling */}
+              <NoPogodGameCanvas
+                gameState={gameState}
+                spriteRenderer={spriteRendererRef.current!}
+                responsiveScaling={responsiveScalingRef.current!}
+                miroSprite={gameEngineRef.current?.getCurrentMiroSprite()}
+                shonzikaSprite={gameEngineRef.current?.getCurrentShonzikaSprite()}
+              />
 
-            {/* Swipe feedback (only during gameplay) */}
-            {renderSwipeFeedback()}
+              {/* Swipe feedback (only during gameplay) */}
+              {renderSwipeFeedback()}
 
-            {/* Overlay UI */}
-            {gameState?.phase === 'MENU' && renderMenuState()}
-            {gameState?.phase === 'PLAYING' && renderGameUI()}
-            {gameState?.phase === 'PAUSED' && renderPausedState()}
-            {gameState?.phase === 'GAME_OVER' && renderGameOverState()}
-          </View>
-        </GestureHandlerRootView>
+              {/* Overlay UI */}
+              {gameState?.phase === 'MENU' && renderMenuState()}
+              {gameState?.phase === 'PLAYING' && renderGameUI()}
+              {gameState?.phase === 'PAUSED' && renderPausedState()}
+              {gameState?.phase === 'GAME_OVER' && renderGameOverState()}
+            </View>
+          </GestureHandlerRootView>
+        )}
       </SafeAreaView>
     </Modal>
   );
@@ -740,5 +832,88 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
     marginTop: 8,
     opacity: 0.7,
+  },
+  roundsInfo: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    color: '#FFA500',
+    marginTop: 12,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  // Cooldown Screen Styles
+  cooldownScreenContainer: {
+    flex: 1,
+    backgroundColor: Colors.dark.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  cooldownContent: {
+    backgroundColor: 'rgba(245, 245, 245, 0.05)',
+    borderRadius: 20,
+    padding: 40,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 165, 0, 0.3)',
+    maxWidth: 400,
+    width: '100%',
+  },
+  cooldownIcon: {
+    fontSize: 80,
+    marginBottom: 20,
+  },
+  cooldownTitle: {
+    fontSize: 32,
+    fontFamily: 'HamakiENG',
+    color: '#FFA500',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  cooldownMessage: {
+    fontSize: 20,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    textAlign: 'center',
+    marginBottom: 12,
+    fontWeight: '600',
+  },
+  cooldownSubtext: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    textAlign: 'center',
+    opacity: 0.7,
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  cooldownStats: {
+    backgroundColor: 'rgba(255, 165, 0, 0.1)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 165, 0, 0.3)',
+  },
+  cooldownStatsText: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    color: '#FFA500',
+    fontWeight: '600',
+  },
+  cooldownButton: {
+    backgroundColor: Colors.dark.tint,
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    borderRadius: 12,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  cooldownButtonText: {
+    fontSize: 18,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.background,
+    fontWeight: 'bold',
   },
 });

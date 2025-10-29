@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Image, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { AvatarPicker } from '@/components/profile/AvatarPicker';
 import { SettingsModal } from '@/components/ui/SettingsModal';
@@ -32,11 +31,10 @@ export default function ProfileScreen() {
 
   // Demo data for demo mode
   const demoXPStats: XPStats = {
-    total_xp: 1250,
-    current_level: 8,
-    xp_to_next_level: 150,
-    rank: 12,
-    total_users: 347,
+    totalXP: 1250,
+    weeklyXP: 350,
+    weeklyStartDate: new Date().toISOString(),
+    weeklyEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   };
 
   const demoPosts: (UserPost & { isUpvoted?: boolean })[] = [
@@ -74,17 +72,19 @@ export default function ProfileScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile?.google_id]);
 
-  // Refresh XP stats when profile tab comes into focus
-  // This ensures XP updates from games are reflected when user returns to profile
-  useFocusEffect(
-    useCallback(() => {
-      if (userProfile?.google_id) {
-        console.log('📊 Profile tab focused - refreshing XP stats');
-        loadXPStats();
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userProfile?.google_id, isDemoMode])
-  );
+  // Only load XP stats on initial mount, not on every focus
+  // This allows caching to work properly
+  // User can pull-to-refresh to force update
+
+  // Pull-to-refresh handler
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  const handlePullToRefresh = async () => {
+    console.log('🔄 Pull-to-refresh triggered');
+    setIsRefreshing(true);
+    await loadXPStats(true); // Force refresh, bypass cache
+    setIsRefreshing(false);
+  };
 
   const initializeProfileData = async () => {
     if (!userProfile?.google_id) return;
@@ -101,8 +101,8 @@ export default function ProfileScreen() {
     await loadUserPosts(0, true);
   };
 
-  const loadXPStats = async () => {
-    if (!userProfile?.google_id) return;
+  const loadXPStats = async (forceRefresh: boolean = false) => {
+    if (!userProfile?.google_id || !userProfile?.id) return;
 
     try {
       setIsXpLoading(true);
@@ -115,9 +115,30 @@ export default function ProfileScreen() {
         }, 500); // Simulate loading delay
         return;
       }
+
+      // Try to get from cache first (unless force refresh)
+      if (!forceRefresh) {
+        const { getCachedXPStats } = await import('@/utils/xpStatsCache');
+        const cachedStats = await getCachedXPStats(userProfile.id);
+        
+        if (cachedStats) {
+          console.log('📊 Using cached XP stats');
+          setXpStats(cachedStats);
+          setIsXpLoading(false);
+          return;
+        }
+      }
       
+      // Fetch fresh data from database
+      console.log('📊 Fetching fresh XP stats from database');
       const stats = await userService.getUserXPStats(userProfile.google_id);
       setXpStats(stats);
+
+      // Cache the fresh data (only if not null)
+      if (stats) {
+        const { setCachedXPStats } = await import('@/utils/xpStatsCache');
+        await setCachedXPStats(userProfile.id, stats);
+      }
     } catch (error) {
       console.error('Error loading XP stats:', error);
     } finally {
@@ -281,6 +302,14 @@ export default function ProfileScreen() {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handlePullToRefresh}
+            colors={[Colors.dark.tint]}
+            tintColor={Colors.dark.tint}
+          />
+        }
       >
         {/* Profile Header Section */}
         <View style={styles.profileSection}>

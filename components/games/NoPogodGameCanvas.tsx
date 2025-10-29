@@ -77,6 +77,7 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     miroStep2Image &&
     miroAngle90Image &&
     shonzikaIdleImage &&
+    shonzikaIdle90Image &&
     shonzikaWalk1Image &&
     shonzikaWalk2Image &&
     shonzikaHandProfileImage &&
@@ -108,8 +109,8 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
       console.log('Shonzika throwing sprite:', shonzikaHandProfileImage ? 'loaded' : 'null');
       return shonzikaHandProfileImage;
     }
-    console.log('Shonzika idle sprite:', shonzikaIdleImage ? 'loaded' : 'null');
-    return shonzikaIdleImage;
+    console.log('Shonzika idle sprite (90°):', shonzikaIdle90Image ? 'loaded' : 'null');
+    return shonzikaIdle90Image;
   };
 
   // Get item image based on type
@@ -330,19 +331,16 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     let showHand = false;
 
     if (gameState.shonzika.sprite === 'THROWING') {
-      // When throwing, show BOTH body AND extended hand
-      bodyImage = shonzikaIdleImage;  // Use idle body
-      showHand = true;  // Overlay hand sprite
+      // Show 90-degree stance while preparing/doing the throw
+      bodyImage = shonzikaIdle90Image;
+      showHand = false; // no hand overlay for this test look
     } else if (gameState.shonzika.sprite === 'WALKING' || gameState.shonzika.isMoving) {
-      // When walking, alternate between walking sprites for smooth left-right stepping
-      // Use animation progress (0.0 to 1.0) to create smooth stepping cycle
-      // 0.0 - 0.5: step1 (left leg forward)
-      // 0.5 - 1.0: step2 (right leg forward)
+      // Walking cycle: step1 ↔ step2 only (no profile idle)
       bodyImage = gameState.shonzika.animationProgress < 0.5 ? shonzikaWalk1Image : shonzikaWalk2Image;
-      console.log('🎨 Shonzika walking - progress:', gameState.shonzika.animationProgress.toFixed(2), 'sprite:', gameState.shonzika.animationProgress < 0.5 ? 'walk1' : 'walk2');
+      console.log('🎨 Shonzika walking (step-step) - progress:', gameState.shonzika.animationProgress.toFixed(2));
     } else {
-      // When idle, use the profile idle sprite
-      bodyImage = shonzikaIdleImage;
+      // When idle, use the 90-degree idle sprite
+      bodyImage = shonzikaIdle90Image;
     }
 
     if (!bodyImage) {
@@ -351,8 +349,8 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     }
 
     // Determine if we need to flip horizontally
-    // Flip when moving LEFT (so character faces left)
-    const shouldFlip = gameState.shonzika.isMoving && gameState.shonzika.targetX < gameState.shonzika.x;
+    // Match Miro logic: face left when moving/position is LEFT
+    const shouldFlip = gameState.shonzika.position === 'LEFT';
 
     console.log('🎨 Shonzika flip:', shouldFlip, 'targetX:', gameState.shonzika.targetX, 'currentX:', gameState.shonzika.x);
 

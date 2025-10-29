@@ -2,16 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  Modal,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Alert,
+    Modal,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 import { ChannelSubscriptionManager } from '@/components/subscriptions/ChannelSubscriptionManager';
+import { VideoLikesManager } from '@/components/subscriptions/VideoLikesManager';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -26,6 +27,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const { signOut, userProfile, isDemoMode } = useAuth();
   const [showSubscriptions, setShowSubscriptions] = useState(false);
+  const [showVideoLikes, setShowVideoLikes] = useState(false);
 
   const handleSignOut = async () => {
     const title = isDemoMode ? 'Exit Demo' : 'Sign Out';
@@ -97,10 +99,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </View>
           </View>
 
-          {/* Subscriptions Section */}
+          {/* Earn XP Section */}
           {!isDemoMode && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Earn More XP</Text>
+              
+              {/* Channel Subscriptions */}
               <TouchableOpacity
                 style={styles.subscriptionsCard}
                 onPress={() => setShowSubscriptions(true)}
@@ -114,6 +118,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <Text style={styles.subscriptionsTitle}>Channel Subscriptions</Text>
                     <Text style={styles.subscriptionsDescription}>
                       Get up to 3,100 XP by subscribing to 4 channels
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={24} color={Colors.dark.tint} />
+                </View>
+              </TouchableOpacity>
+
+              {/* Video Likes */}
+              <TouchableOpacity
+                style={[styles.subscriptionsCard, { marginTop: 12 }]}
+                onPress={() => setShowVideoLikes(true)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.subscriptionsCardContent}>
+                  <View style={styles.subscriptionsIcon}>
+                    <Ionicons name="thumbs-up" size={24} color={Colors.dark.tint} />
+                  </View>
+                  <View style={styles.subscriptionsText}>
+                    <Text style={styles.subscriptionsTitle}>Like Latest Videos</Text>
+                    <Text style={styles.subscriptionsDescription}>
+                      Get up to 500 XP by liking latest videos
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={24} color={Colors.dark.tint} />
@@ -165,6 +189,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Subscriptions Content */}
           <View style={styles.subscriptionsContent}>
             <ChannelSubscriptionManager />
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Video Likes Modal */}
+      <Modal
+        visible={showVideoLikes}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowVideoLikes(false)}
+      >
+        <SafeAreaView style={styles.subscriptionsModal}>
+          {/* Video Likes Header */}
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => setShowVideoLikes(false)}
+            >
+              <Ionicons name="arrow-back" size={24} color={Colors.dark.text} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Like Latest Videos</Text>
+            <View style={styles.headerLeft} />
+          </View>
+
+          {/* Video Likes Content */}
+          <View style={styles.subscriptionsContent}>
+            <VideoLikesManager />
           </View>
         </SafeAreaView>
       </Modal>

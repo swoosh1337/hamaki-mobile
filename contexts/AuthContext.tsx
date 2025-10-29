@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Listen for app state changes to perform background verification and video checking
   useEffect(() => {
     const handleAppStateChange = async (nextAppState: string) => {
-      if (nextAppState === 'active' && isAuthenticated && !isDemoMode) {
+      if (nextAppState === 'active' && isAuthenticated && !isDemoMode && userProfile?.id) {
         console.log('App became active, performing background checks...');
         
         // Check subscription status (skip for demo users)
@@ -104,6 +104,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isSubscribed) {
           await backgroundVideoCheck();
         }
+
+        // Perform background XP checks (subscriptions + video likes)
+        try {
+          const { performBackgroundXPChecks } = await import('../utils/backgroundXPChecks');
+          const xpResult = await performBackgroundXPChecks(userProfile.id);
+          
+          if (xpResult.totalXP > 0) {
+            console.log(`🎉 Background XP awarded: ${xpResult.totalXP} (Subs: ${xpResult.subscriptionXP}, Likes: ${xpResult.videoLikeXP})`);
+            
+            // Refresh user profile to get updated XP
+            const updatedProfile = await userService.getUserProfile(userProfile.google_id);
+            if (updatedProfile) {
+              setUserProfile(updatedProfile);
+            }
+          }
+        } catch (error) {
+          console.error('Error performing background XP checks:', error);
+        }
       } else if (nextAppState === 'background' && isAuthenticated && isTemporarySession && !isDemoMode) {
         console.log('App went to background with temporary session - clearing session...');
         await clearUserSession();
@@ -116,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
-  }, [isAuthenticated, isSubscribed, isTemporarySession, isDemoMode]);
+  }, [isAuthenticated, isSubscribed, isTemporarySession, isDemoMode, userProfile?.id, userProfile?.google_id]);
 
   // Sign in with Google
   const signIn = async (): Promise<AuthResult> => {
@@ -262,6 +280,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error('Failed to process channel subscriptions:', error);
             // Continue with normal flow even if XP awarding fails
           }
+        }
+
+        // Check video likes and award XP automatically on sign-in
+        try {
+          console.log('👍 Checking video likes on sign-in...');
+          const { checkAndAwardVideoLikes } = await import('../utils/videoLikes');
+          const { getValidAccessToken } = await import('../utils/auth');
+          
+          const accessToken = await getValidAccessToken();
+          if (accessToken) {
+            const likesResult = await checkAndAwardVideoLikes(accessToken, supabaseUser.id);
+            
+            if (likesResult.xpAwarded > 0) {
+              console.log(`🎉 Awarded ${likesResult.xpAwarded} XP for video likes on sign-in!`);
+              
+              // Refresh user profile to get updated XP
+              const refreshedUser = await userService.getUserProfile(supabaseUser.google_id);
+              if (refreshedUser) {
+                updatedUser = refreshedUser;
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check video likes on sign-in:', error);
+          // Continue with normal flow even if video likes check fails
         }
 
         setUserProfile(updatedUser);

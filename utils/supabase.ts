@@ -690,94 +690,125 @@ export const userService = {
   },
 
   // Update user's leaderboard points (called after game completion)
-  async updateLeaderboardPoints(userId: string, points: number): Promise<boolean> {
+  async updateLeaderboardPoints(userId: string, points: number, retryCount: number = 0): Promise<boolean> {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second
+
     try {
       const weekStartDate = this.getWeekStartDate();
 
-      // Update weekly leaderboard
-      const { data: weeklyEntry, error: weeklyCheckError } = await supabase
-        .from('leaderboard_entries')
-        .select('points')
-        .eq('user_id', userId)
-        .eq('period_type', 'weekly')
-        .eq('week_start_date', weekStartDate)
-        .single();
-
-      if (weeklyCheckError && weeklyCheckError.code !== 'PGRST116') {
-        console.error('Error checking weekly leaderboard:', weeklyCheckError);
-      }
-
-      if (weeklyEntry) {
-        // Update existing weekly entry
-        const { error: weeklyUpdateError } = await supabase
+      // Update weekly leaderboard with error handling
+      try {
+        const { data: weeklyEntry, error: weeklyCheckError } = await supabase
           .from('leaderboard_entries')
-          .update({ points: weeklyEntry.points + points })
+          .select('points')
           .eq('user_id', userId)
           .eq('period_type', 'weekly')
-          .eq('week_start_date', weekStartDate);
+          .eq('week_start_date', weekStartDate)
+          .single();
 
-        if (weeklyUpdateError) {
-          console.error('Error updating weekly leaderboard:', weeklyUpdateError);
+        if (weeklyCheckError && weeklyCheckError.code !== 'PGRST116') {
+          console.error('Error checking weekly leaderboard:', weeklyCheckError);
+          throw weeklyCheckError;
         }
-      } else {
-        // Create new weekly entry
-        const { error: weeklyInsertError } = await supabase
-          .from('leaderboard_entries')
-          .insert({
-            user_id: userId,
-            points,
-            period_type: 'weekly',
-            week_start_date: weekStartDate,
-          });
 
-        if (weeklyInsertError) {
-          console.error('Error inserting weekly leaderboard:', weeklyInsertError);
+        if (weeklyEntry) {
+          // Update existing weekly entry
+          const { error: weeklyUpdateError } = await supabase
+            .from('leaderboard_entries')
+            .update({ points: weeklyEntry.points + points })
+            .eq('user_id', userId)
+            .eq('period_type', 'weekly')
+            .eq('week_start_date', weekStartDate);
+
+          if (weeklyUpdateError) {
+            console.error('Error updating weekly leaderboard:', weeklyUpdateError);
+            throw weeklyUpdateError;
+          }
+        } else {
+          // Create new weekly entry
+          const { error: weeklyInsertError } = await supabase
+            .from('leaderboard_entries')
+            .insert({
+              user_id: userId,
+              points,
+              period_type: 'weekly',
+              week_start_date: weekStartDate,
+            });
+
+          if (weeklyInsertError) {
+            console.error('Error inserting weekly leaderboard:', weeklyInsertError);
+            throw weeklyInsertError;
+          }
         }
+      } catch (weeklyError) {
+        console.error('Weekly leaderboard update failed:', weeklyError);
+        // Continue to all-time update even if weekly fails
       }
 
-      // Update all-time leaderboard
-      const { data: allTimeEntry, error: allTimeCheckError } = await supabase
-        .from('leaderboard_entries')
-        .select('points')
-        .eq('user_id', userId)
-        .eq('period_type', 'all_time')
-        .single();
-
-      if (allTimeCheckError && allTimeCheckError.code !== 'PGRST116') {
-        console.error('Error checking all-time leaderboard:', allTimeCheckError);
-      }
-
-      if (allTimeEntry) {
-        // Update existing all-time entry
-        const { error: allTimeUpdateError } = await supabase
+      // Update all-time leaderboard with error handling
+      try {
+        const { data: allTimeEntry, error: allTimeCheckError } = await supabase
           .from('leaderboard_entries')
-          .update({ points: allTimeEntry.points + points })
+          .select('points')
           .eq('user_id', userId)
-          .eq('period_type', 'all_time');
+          .eq('period_type', 'all_time')
+          .single();
 
-        if (allTimeUpdateError) {
-          console.error('Error updating all-time leaderboard:', allTimeUpdateError);
-          return false;
+        if (allTimeCheckError && allTimeCheckError.code !== 'PGRST116') {
+          console.error('Error checking all-time leaderboard:', allTimeCheckError);
+          throw allTimeCheckError;
         }
-      } else {
-        // Create new all-time entry
-        const { error: allTimeInsertError } = await supabase
-          .from('leaderboard_entries')
-          .insert({
-            user_id: userId,
-            points,
-            period_type: 'all_time',
-          });
 
-        if (allTimeInsertError) {
-          console.error('Error inserting all-time leaderboard:', allTimeInsertError);
-          return false;
+        if (allTimeEntry) {
+          // Update existing all-time entry
+          const { error: allTimeUpdateError } = await supabase
+            .from('leaderboard_entries')
+            .update({ points: allTimeEntry.points + points })
+            .eq('user_id', userId)
+            .eq('period_type', 'all_time');
+
+          if (allTimeUpdateError) {
+            console.error('Error updating all-time leaderboard:', allTimeUpdateError);
+            throw allTimeUpdateError;
+          }
+        } else {
+          // Create new all-time entry
+          const { error: allTimeInsertError } = await supabase
+            .from('leaderboard_entries')
+            .insert({
+              user_id: userId,
+              points,
+              period_type: 'all_time',
+            });
+
+          if (allTimeInsertError) {
+            console.error('Error inserting all-time leaderboard:', allTimeInsertError);
+            throw allTimeInsertError;
+          }
         }
+      } catch (allTimeError) {
+        console.error('All-time leaderboard update failed:', allTimeError);
+        throw allTimeError; // Throw to trigger retry
       }
 
+      console.log('✅ Leaderboard updated successfully');
       return true;
     } catch (error) {
-      console.error('Error updating leaderboard points:', error);
+      console.error(`Error updating leaderboard points (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, error);
+
+      // Check if it's a network error
+      const isNetworkError = error instanceof Error && 
+        (error.message.includes('Network request failed') || 
+         error.message.includes('Failed to fetch') ||
+         error.message.includes('timeout'));
+
+      // Retry on network errors
+      if (isNetworkError && retryCount < MAX_RETRIES) {
+        console.log(`⏳ Retrying leaderboard update in ${RETRY_DELAY}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+        return this.updateLeaderboardPoints(userId, points, retryCount + 1);
+      }
       return false;
     }
   },

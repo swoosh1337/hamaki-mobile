@@ -1,12 +1,7 @@
-import {
-  Canvas,
-  Group,
-  Image,
-  useImage,
-} from '@shopify/react-native-skia';
-import React, { useEffect, useMemo, useRef } from 'react';
+import { Canvas, Group, Image, Rect, useImage } from '@shopify/react-native-skia';
+import React, { useEffect, useRef } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
-import { GestureHandlerRootView, TapGestureHandler } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Colors } from '@/constants/Colors';
 import { GAME_CONFIG, GameAssets, GameState } from '@/utils/gameEngine';
@@ -19,8 +14,9 @@ interface GameCanvasProps {
   onStartGame: () => void;
   onExitGame: () => void;
   onPauseGame: () => void;
-  onJump: () => void;
   onUpdate: (currentTime: number) => void;
+  hasAccelerometer?: boolean;
+  gameEngine?: any; // Pass game engine for fallback controls
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({
@@ -29,17 +25,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onStartGame,
   onExitGame,
   onPauseGame,
-  onJump,
   onUpdate,
+  hasAccelerometer = true,
+  gameEngine,
 }) => {
   // Load Skia images
-  const backgroundImage = useImage(assets.background);
-  const person1Image = useImage(assets.person1);
-  const person2Image = useImage(assets.person2);
-  const person3Image = useImage(assets.person3);
+  const backgroundImage = useImage(assets.background || null);
+  const playerImage = useImage(assets.player || null);
 
   // Game loop using requestAnimationFrame
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (gameState.phase === 'PLAYING') {
@@ -63,66 +58,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     };
   }, [gameState.phase, onUpdate]);
 
-  // Calculate sprite positions and sizes for mobile scaling
-  const spriteConfig = useMemo(() => {
-    // Make characters much bigger - use screen-based scaling instead of fixed design
-    const characterScale = Math.min(SCREEN_WIDTH / 300, SCREEN_HEIGHT / 400); 
-    const spriteSize = GAME_CONFIG.PLAYER_SIZE * characterScale * 3; // Much bigger characters
-    
-    // Background fills screen
-    const bgWidth = SCREEN_WIDTH;
-    const bgHeight = SCREEN_HEIGHT;
-    const bgX = 0;
-    const bgY = 0;
-    
-    return {
-      spriteSize,
-      characterScale,
-      bgWidth,
-      bgHeight,
-      bgX,
-      bgY,
-    };
-  }, []);
+  const spriteSize = GAME_CONFIG.PLAYER_SIZE;
 
-  // Calculate character positions
-  const characterPositions = useMemo(() => {
-    if (gameState.phase !== 'PLAYING' && gameState.phase !== 'PAUSED') return null;
-
-    // Position characters on screen
-    const player = gameState.player;
-    
-    // Position characters at bottom of screen
-    const floorY = SCREEN_HEIGHT * 0.8; // 80% down the screen
-    const person1X = SCREEN_WIDTH * 0.2; // 20% from left
-    const person2X = SCREEN_WIDTH * 0.8; // 80% from left  
-    const person3X = SCREEN_WIDTH * 0.5; // Center
-    
-    return {
-      person1: {
-        x: person1X - spriteConfig.spriteSize / 2,
-        y: floorY - spriteConfig.spriteSize,
-      },
-      person2: {
-        x: person2X - spriteConfig.spriteSize / 2,
-        y: floorY - spriteConfig.spriteSize,
-      },
-      person3: {
-        x: person3X - spriteConfig.spriteSize / 2,
-        y: floorY - spriteConfig.spriteSize + (player.y - player.groundY), // Add jump offset from game engine
-      },
-    };
-  }, [gameState, spriteConfig]);
-
-  const handleTap = () => {
-    if (gameState.phase === 'PLAYING') {
-      onJump();
-    }
-  };
+  // Movement is now handled by phone tilting
 
   const renderMenuState = () => (
     <View style={styles.menuContainer}>
       <Text style={styles.gameTitle}>Hammock Jump</Text>
+      
+
+      
       <View style={styles.menuButtons}>
         <Pressable style={styles.startButton} onPress={onStartGame}>
           <Text style={styles.buttonText}>START</Text>
@@ -142,11 +87,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         <View style={styles.topRightUI}>
           <Text style={styles.scoreText}>Score: {gameState.score}</Text>
           <View style={styles.livesContainer}>
-            <Text style={styles.livesText}>Lives: </Text>
-            {Array.from({ length: gameState.lives }).map((_, index) => (
-              <Text key={index} style={styles.heartIcon}>❤️</Text>
-            ))}
+            <Text style={styles.livesText}>Height: {Math.floor(Math.max(0, -gameState.cameraY / 10))}m</Text>
           </View>
+          {gameState.combo > 1 && (
+            <View style={styles.comboContainer}>
+              <Text style={styles.comboText}>Combo x{gameState.combo}!</Text>
+            </View>
+          )}
+        </View>
+        
+        {/* Tilt indicator */}
+        <View style={styles.tiltIndicator}>
+          <Text style={styles.tiltText}>
+            {hasAccelerometer ? '📱 Tilt to move' : '👆 Tap sides to move'}
+          </Text>
         </View>
         <Pressable style={styles.pauseButton} onPress={onPauseGame}>
           <Text style={styles.pauseButtonText}>⏸️</Text>
@@ -180,19 +134,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       <View style={styles.gameOverContainer}>
         <Text style={styles.gameOverTitle}>Game Over</Text>
         <Text style={styles.finalScore}>Final Score: {gameState.score}</Text>
-        <Pressable style={styles.startButton} onPress={onStartGame}>
-          <Text style={styles.buttonText}>TRY AGAIN</Text>
-        </Pressable>
-        <Pressable style={styles.exitButton} onPress={onExitGame}>
-          <Text style={styles.buttonText}>EXIT</Text>
-        </Pressable>
+        <View style={styles.gameOverButtons}>
+          <Pressable style={styles.startButton} onPress={onStartGame}>
+            <Text style={styles.buttonText}>TRY AGAIN</Text>
+          </Pressable>
+          <Pressable style={styles.exitButton} onPress={onExitGame}>
+            <Text style={styles.buttonText}>EXIT</Text>
+          </Pressable>
+        </View>
       </View>
     );
   };
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <TapGestureHandler onActivated={handleTap}>
         <View style={styles.canvasContainer}>
           <Canvas style={styles.canvas}>
             {/* Background */}
@@ -207,42 +162,53 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               />
             )}
 
-            {/* Render characters during gameplay and paused state */}
-            {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && characterPositions && (
+            {/* Platforms */}
+            {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && (
               <Group>
-                {/* Person 1 (left) */}
-                {person1Image && (
-                  <Image
-                    image={person1Image}
-                    x={characterPositions.person1.x}
-                    y={characterPositions.person1.y}
-                    width={spriteConfig.spriteSize}
-                    height={spriteConfig.spriteSize}
-                  />
-                )}
-
-                {/* Person 2 (right) */}
-                {person2Image && (
-                  <Image
-                    image={person2Image}
-                    x={characterPositions.person2.x}
-                    y={characterPositions.person2.y}
-                    width={spriteConfig.spriteSize}
-                    height={spriteConfig.spriteSize}
-                  />
-                )}
-
-                {/* Person 3 (player) */}
-                {person3Image && (
-                  <Image
-                    image={person3Image}
-                    x={characterPositions.person3.x}
-                    y={characterPositions.person3.y}
-                    width={spriteConfig.spriteSize}
-                    height={spriteConfig.spriteSize}
-                  />
-                )}
+                {gameState.platforms.map(p => {
+                  if (p.broken) return null;
+                  
+                  let color = "rgba(196,255,0,0.9)"; // normal
+                  if (p.type === 'moving') color = "rgba(255,165,0,0.9)"; // orange
+                  if (p.type === 'breakable') color = "rgba(139,69,19,0.9)"; // brown
+                  if (p.type === 'spring') color = p.springUsed ? "rgba(255,215,0,0.6)" : "rgba(255,215,0,0.9)"; // gold
+                  
+                  return (
+                    <Rect key={p.id} x={p.x} y={p.y} width={p.width} height={p.height} color={color} />
+                  );
+                })}
               </Group>
+            )}
+
+            {/* Particles */}
+            {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && (
+              <Group>
+                {gameState.particles.map(particle => {
+                  const alpha = particle.life / particle.maxLife;
+                  return (
+                    <Rect 
+                      key={particle.id} 
+                      x={particle.x - particle.size / 2} 
+                      y={particle.y - particle.size / 2} 
+                      width={particle.size} 
+                      height={particle.size} 
+                      color={`${particle.color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`}
+                    />
+                  );
+                })}
+              </Group>
+            )}
+
+            {/* Player */}
+            {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && playerImage && (
+              <Image
+                image={playerImage}
+                x={gameState.player.x + (gameState.screenShake > 0 ? (Math.random() - 0.5) * gameState.screenShake : 0)}
+                y={gameState.player.y + (gameState.screenShake > 0 ? (Math.random() - 0.5) * gameState.screenShake : 0)}
+                width={spriteSize}
+                height={spriteSize}
+                fit="contain"
+              />
             )}
           </Canvas>
 
@@ -251,8 +217,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           {gameState.phase === 'PLAYING' && renderGameUI()}
           {gameState.phase === 'PAUSED' && renderPausedState()}
           {gameState.phase === 'GAME_OVER' && renderGameOverState()}
+
+          {/* Fallback touch controls if no accelerometer */}
+          {!hasAccelerometer && gameState.phase === 'PLAYING' && (
+            <>
+              <Pressable 
+                style={styles.leftTouchArea} 
+                onPressIn={() => gameEngine?.setMoveLeft(true)}
+                onPressOut={() => gameEngine?.setMoveLeft(false)}
+              />
+              <Pressable 
+                style={styles.rightTouchArea} 
+                onPressIn={() => gameEngine?.setMoveRight(true)}
+                onPressOut={() => gameEngine?.setMoveRight(false)}
+              />
+            </>
+          )}
         </View>
-      </TapGestureHandler>
     </GestureHandlerRootView>
   );
 };
@@ -268,6 +249,7 @@ const styles = StyleSheet.create({
   canvas: {
     flex: 1,
   },
+
   menuContainer: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
@@ -288,7 +270,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center', // Android: center text vertically
   },
   menuButtons: {
-    gap: 20,
+    gap: 30, // Increased gap for better spacing
   },
   startButton: {
     backgroundColor: Colors.dark.tint,
@@ -352,6 +334,53 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 4,
   },
+  comboContainer: {
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+  },
+  comboText: {
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+    color: '#FFD700',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+
+  tiltIndicator: {
+    position: 'absolute',
+    bottom: 50,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+  },
+  tiltText: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    opacity: 0.6,
+    textAlign: 'center',
+  },
+  leftTouchArea: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '50%',
+    backgroundColor: 'rgba(255, 0, 0, 0.2)', // More visible red tint for debugging
+  },
+  rightTouchArea: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: '50%',
+    backgroundColor: 'rgba(0, 0, 255, 0.2)', // More visible blue tint for debugging
+  },
   pauseButton: {
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     width: 44,
@@ -413,5 +442,8 @@ const styles = StyleSheet.create({
     color: Colors.dark.tint,
     marginBottom: 40,
     textAlign: 'center',
+  },
+  gameOverButtons: {
+    gap: 30, // Increased gap for better spacing
   },
 });

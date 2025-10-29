@@ -64,6 +64,7 @@ export interface ShonzikaState {
   isMoving: boolean;
   sprite: 'IDLE' | 'THROWING' | 'WALKING';
   throwCooldown: number;
+  visualThrowTimer: number; // short visual window to show throwing pose
   animationProgress: number;
   movementStartTime: number;
   nextMoveTime: number;
@@ -109,6 +110,7 @@ export const NO_POGOD_CONFIG = {
   SHONZIKA_MOVE_DURATION: 2000, // milliseconds for Shonzika movement (slower, more deliberate)
   SHONZIKA_MOVE_INTERVAL_MIN: 100, // minimum time between movements (very short for continuous movement)
   SHONZIKA_MOVE_INTERVAL_MAX: 300, // maximum time between movements (very short for continuous movement)
+  SHONZIKA_THROW_VISUAL_MS: 250, // how long the THROWING pose is shown
   
   // Item probabilities
   ITEM_SPAWN_WEIGHTS: {
@@ -233,6 +235,7 @@ export class NoPogodGameEngine {
         isMoving: false,
         sprite: 'IDLE',
         throwCooldown: 0,
+        visualThrowTimer: 0,
         animationProgress: 1.0,
         movementStartTime: 0,
         nextMoveTime: 1000, // Start moving after 1 second
@@ -560,22 +563,38 @@ export class NoPogodGameEngine {
 
   private updateShonzika(deltaTime: number): void {
     const shonzika = this.gameState.shonzika;
-    
-    // Update throw cooldown
+
+    // Handle short visual throw timer separate from throw cooldown
+    if (shonzika.visualThrowTimer > 0) {
+      shonzika.visualThrowTimer -= deltaTime;
+      if (shonzika.visualThrowTimer <= 0) {
+        // Return to appropriate sprite immediately after the brief visual
+        if (shonzika.isMoving) {
+          shonzika.sprite = 'WALKING';
+          if (this.gameAnimations) {
+            this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.walking);
+          }
+        } else if (shonzika.throwCooldown > 0) {
+          // Still in cooldown but not moving → idle
+          shonzika.sprite = 'IDLE';
+          if (this.gameAnimations) {
+            this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.idle);
+          }
+        }
+      }
+    }
+
+    // Update throw cooldown and switch back to appropriate sprite
     if (shonzika.throwCooldown > 0) {
       shonzika.throwCooldown -= deltaTime;
       if (shonzika.throwCooldown <= 0) {
         shonzika.throwCooldown = 0;
-        // Only return to idle if not moving
         if (!shonzika.isMoving) {
           shonzika.sprite = 'IDLE';
-          
-          // Switch back to idle animation
           if (this.gameAnimations) {
             this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.idle);
           }
         } else {
-          // If moving, return to walking sprite
           shonzika.sprite = 'WALKING';
           if (this.gameAnimations) {
             this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.walking);
@@ -583,81 +602,49 @@ export class NoPogodGameEngine {
         }
       }
     }
-    
-    // Start moving after initial delay
+
+    // Start a new move when the timer is reached
     if (!shonzika.isMoving && this.gameTimer >= shonzika.nextMoveTime) {
-      // Start moving after delay
       this.startShonzikaMovement();
     }
-    
+
+    // Constant-speed movement like Miro (no easing), scaled by deltaTime
     if (shonzika.isMoving) {
-      // Constant speed movement (like Miro) - no easing, no interpolation
-      const moveSpeed = 1; // Slower than Miro for visual variety
+      // 4 px per 16.67ms ≈ 0.24 px/ms
+      const speedPxPerMs = 0.24;
+      const delta = speedPxPerMs * deltaTime;
       const oldX = shonzika.x;
 
-      // Move in the current direction
       if (shonzika.position === 'LEFT') {
-        shonzika.x -= moveSpeed;
-        
-        // Check if hit left boundary
-        const characterHalfWidth = 75;
-        const leftEdge = characterHalfWidth + 10;
-        
-        if (shonzika.x < leftEdge) {
-          shonzika.x = leftEdge;
-          // Random: either bounce back or change direction randomly
-          if (Math.random() < 0.3) {
-            // 30% chance to go to CENTER instead of RIGHT
-            shonzika.position = 'CENTER';
-            console.log('🎯 Shonzika hit LEFT edge → random turn to CENTER');
-          } else {
-            shonzika.position = 'RIGHT';
-            console.log('🎯 Shonzika hit LEFT edge → bouncing to RIGHT');
-          }
-        }
+        shonzika.x -= delta;
       } else if (shonzika.position === 'RIGHT') {
-        shonzika.x += moveSpeed;
-        
-        // Check if hit right boundary
-        const characterHalfWidth = 75;
-        const rightEdge = this.gameState.screenWidth - characterHalfWidth - 10;
-        
-        if (shonzika.x > rightEdge) {
-          shonzika.x = rightEdge;
-          // Random: either bounce back or change direction randomly
-          if (Math.random() < 0.3) {
-            // 30% chance to go to CENTER instead of LEFT
-            shonzika.position = 'CENTER';
-            console.log('🎯 Shonzika hit RIGHT edge → random turn to CENTER');
-          } else {
-            shonzika.position = 'LEFT';
-            console.log('🎯 Shonzika hit RIGHT edge → bouncing to LEFT');
-          }
-        }
-      } else if (shonzika.position === 'CENTER') {
-        // At center, randomly pick a direction
-        if (Math.random() < 0.5) {
-          shonzika.position = 'LEFT';
-          console.log('🎯 Shonzika at CENTER → randomly going LEFT');
-        } else {
-          shonzika.position = 'RIGHT';
-          console.log('🎯 Shonzika at CENTER → randomly going RIGHT');
-        }
+        shonzika.x += delta;
       }
 
-      // Random direction change (10% chance per frame when not at edges)
-      if (Math.random() < 0.01) {
-        const currentPos = shonzika.position;
-        const newPos = currentPos === 'LEFT' ? 'RIGHT' : 'LEFT';
-        shonzika.position = newPos;
-        console.log('🎯 Shonzika RANDOM direction change:', currentPos, '→', newPos);
+      // Clamp to edges and bounce
+      const characterHalfWidth = 75;
+      const leftEdge = characterHalfWidth + 10;
+      const rightEdge = this.gameState.screenWidth - characterHalfWidth - 10;
+      if (shonzika.x < leftEdge) {
+        shonzika.x = leftEdge;
+        shonzika.position = 'RIGHT';
+      } else if (shonzika.x > rightEdge) {
+        shonzika.x = rightEdge;
+        shonzika.position = 'LEFT';
       }
 
-      // Update walking animation progress continuously
-      shonzika.animationProgress = (shonzika.animationProgress + 0.06) % 1.0;
+      // Advance step cycle time-based for consistent cadence across frame rates
+      const cyclesPerSecond = 4.5; // slightly faster steps for snappier feel
+      shonzika.animationProgress = (shonzika.animationProgress + cyclesPerSecond * (deltaTime / 1000)) % 1.0;
 
       if (oldX !== shonzika.x) {
-        console.log('🎯 Shonzika moved', shonzika.position, 'from', oldX.toFixed(1), '→', shonzika.x.toFixed(1));
+        // Ensure we are in walking state while moving (unless throwing)
+        if (shonzika.sprite !== 'WALKING' && shonzika.throwCooldown <= 0) {
+          shonzika.sprite = 'WALKING';
+          if (this.gameAnimations) {
+            this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.walking);
+          }
+        }
       }
     }
   }
@@ -665,19 +652,36 @@ export class NoPogodGameEngine {
   // Helper to start Shonzika's continuous movement
   private startShonzikaMovement(): void {
     const shonzika = this.gameState.shonzika;
-    
-    // Pick random starting direction
-    shonzika.position = Math.random() < 0.5 ? 'LEFT' : 'RIGHT';
+
+    // Pick an initial direction and start continuous motion like Miro
+    const nextDir = Math.random() < 0.5 ? 'LEFT' : 'RIGHT';
+    shonzika.startX = shonzika.x;
+    shonzika.targetX = shonzika.x; // not used in constant-speed mode
+    shonzika.movementStartTime = this.gameTimer;
     shonzika.isMoving = true;
+    shonzika.position = nextDir;
     shonzika.sprite = 'WALKING';
     shonzika.animationProgress = 0.0;
-    
-    // Start walking animation
+
     if (this.gameAnimations) {
       this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.walking);
     }
-    
-    console.log('🎯 Shonzika started continuous movement, direction:', shonzika.position);
+  }
+
+  private getLaneX(lane: 'LEFT'|'CENTER'|'RIGHT'): number {
+    const x = this.gameState.screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS[lane];
+    return x;
+  }
+
+  private getNearestLane(x: number): 'LEFT'|'CENTER'|'RIGHT' {
+    const lanes: ('LEFT'|'CENTER'|'RIGHT')[] = ['LEFT','CENTER','RIGHT'];
+    let best: {lane: 'LEFT'|'CENTER'|'RIGHT'; dist: number} = {lane: 'LEFT', dist: Infinity};
+    for (const lane of lanes) {
+      const lx = this.getLaneX(lane);
+      const d = Math.abs(lx - x);
+      if (d < best.dist) best = {lane, dist: d};
+    }
+    return best.lane;
   }
 
   private spawnItem(): void {
@@ -747,9 +751,10 @@ export class NoPogodGameEngine {
 
     this.gameState.items.push(item);
     
-    // Set Shonzika to throwing state and start throwing animation
+    // Set Shonzika to throwing state for a brief visual window
     this.gameState.shonzika.sprite = 'THROWING';
-    this.gameState.shonzika.throwCooldown = 900; // 900ms throw animation (6 frames * 150ms)
+    this.gameState.shonzika.visualThrowTimer = NO_POGOD_CONFIG.SHONZIKA_THROW_VISUAL_MS;
+    this.gameState.shonzika.throwCooldown = 900; // gameplay cooldown remains longer
     
     if (this.gameAnimations) {
       this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.throwing);

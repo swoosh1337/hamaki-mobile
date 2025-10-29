@@ -108,6 +108,7 @@ export async function authenticateWithGoogle(): Promise<AuthResult> {
         "profile",
         "email",
         "https://www.googleapis.com/auth/youtube.readonly",
+        "https://www.googleapis.com/auth/youtube.force-ssl", // Required to check video ratings/likes
       ],
       redirectUri,
       usePKCE: true,
@@ -171,6 +172,17 @@ export async function authenticateWithGoogle(): Promise<AuthResult> {
       } catch (error) {
         console.error('⚠️ Failed to check all channel subscriptions:', error);
         // Continue with just main channel subscription
+      }
+
+      // Check video likes for automatic XP award (non-blocking)
+      // This runs in the background and doesn't block sign-in
+      try {
+        const { checkAndAwardVideoLikes } = await import('./videoLikes');
+        // We'll check video likes after user is created in database
+        // Store this for later use in AuthContext
+        console.log('ℹ️ Video likes check will be performed after user profile is created');
+      } catch (error) {
+        console.error('⚠️ Failed to import video likes module:', error);
       }
 
       // Don't store session here - let AuthContext handle it after Remember Me choice

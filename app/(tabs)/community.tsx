@@ -5,7 +5,6 @@ import {
   Alert,
   Image,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -399,103 +398,105 @@ export default function IdeasScreen() {
       );
     }
 
-    // Normal state - always show header, posts section handles its own loading
+    // Normal state - show centered title like Leaderboard, then scrollable content
     return (
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            colors={[Colors.dark.tint]}
-            tintColor={Colors.dark.tint}
+      <View style={{ flex: 1 }}>
+        <View style={styles.topTitleContainer}>
+          <Image
+            source={require('@/assets/images/community.png')}
+            style={styles.topTitleIcon}
+            resizeMode="contain"
           />
-        }
-        onScroll={({ nativeEvent }) => {
-          const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-          const paddingToBottom = 20;
-          if (layoutMeasurement.height + contentOffset.y >= 
-              contentSize.height - paddingToBottom) {
-            handleLoadMore();
-          }
-        }}
-        scrollEventThrottle={400}
-      >
-        {/* Header - Always visible */}
-        <View style={styles.header}>
-          <View style={styles.titleContainer}>
-            <Image
-              source={require('@/assets/images/community.png')}
-              style={styles.titleIcon}
-              resizeMode="contain"
+          <Text style={styles.topTitleText}>Community</Text>
+        </View>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              colors={[Colors.dark.tint]}
+              tintColor={Colors.dark.tint}
             />
-            <Text style={styles.title}>Community</Text>
-          </View>
-          <Text style={styles.subtitle}>Share video ideas and vote on suggestions</Text>
-          
-          {isDemoMode && (
-            <View style={styles.demoNotice}>
-              <Text style={styles.demoNoticeText}>
-                🎭 Demo Mode - Viewing as demouser@apple.com
-              </Text>
-            </View>
-          )}
-
-          {/* Partial Error Banner */}
-          {showPartialError && (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorBannerText}>
-                ⚠️ Connection issue. Some content may not load.
-              </Text>
-            </View>
-          )}
-          
-          {/* Sort Toggle Buttons */}
-          <View style={styles.sortToggleContainer}>
-            <TouchableOpacity
-              style={[
-                styles.sortButton,
-                sortBy === 'upvotes' && styles.sortButtonActive
-              ]}
-              onPress={() => setSortBy('upvotes')}
-            >
-              <Text style={[
-                styles.sortButtonText,
-                sortBy === 'upvotes' && styles.sortButtonTextActive
-              ]}>
-                Popular
-              </Text>
-            </TouchableOpacity>
+          }
+          onScroll={({ nativeEvent }) => {
+            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+            const paddingToBottom = 20;
+            if (layoutMeasurement.height + contentOffset.y >= 
+                contentSize.height - paddingToBottom) {
+              handleLoadMore();
+            }
+          }}
+          scrollEventThrottle={400}
+        >
+          {/* Header under centered title */}
+          <View style={styles.header}>
+            <Text style={styles.subtitle}>Share video ideas and vote on suggestions</Text>
             
-            <TouchableOpacity
-              style={[
-                styles.sortButton,
-                sortBy === 'latest' && styles.sortButtonActive
-              ]}
-              onPress={() => setSortBy('latest')}
-            >
-              <Text style={[
-                styles.sortButtonText,
-                sortBy === 'latest' && styles.sortButtonTextActive
-              ]}>
-                Latest
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+            {isDemoMode && (
+              <View style={styles.demoNotice}>
+                <Text style={styles.demoNoticeText}>
+                  🎭 Demo Mode - Viewing as demouser@apple.com
+                </Text>
+              </View>
+            )}
 
-        {/* Posts List - Shows skeleton, empty, or posts */}
-        <View style={styles.postsContainer}>
-          {renderPostsContent()}
-        </View>
-      </ScrollView>
+            {/* Partial Error Banner */}
+            {showPartialError && (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorBannerText}>
+                  ⚠️ Connection issue. Some content may not load.
+                </Text>
+              </View>
+            )}
+            
+            {/* Sort Toggle Buttons */}
+            <View style={styles.sortToggleContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.sortButton,
+                  sortBy === 'upvotes' && styles.sortButtonActive
+                ]}
+                onPress={() => setSortBy('upvotes')}
+              >
+                <Text style={[
+                  styles.sortButtonText,
+                  sortBy === 'upvotes' && styles.sortButtonTextActive
+                ]}>
+                  Popular
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.sortButton,
+                  sortBy === 'latest' && styles.sortButtonActive
+                ]}
+                onPress={() => setSortBy('latest')}
+              >
+                <Text style={[
+                  styles.sortButtonText,
+                  sortBy === 'latest' && styles.sortButtonTextActive
+                ]}>
+                  Latest
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Posts List - Shows skeleton, empty, or posts */}
+          <View style={styles.postsContainer}>
+            {renderPostsContent()}
+          </View>
+        </ScrollView>
+      </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {renderContent()}
 
       {/* Floating Action Button */}
@@ -514,7 +515,7 @@ export default function IdeasScreen() {
         isSubmitting={isSubmittingPost}
       />
 
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -552,8 +553,9 @@ const styles = StyleSheet.create({
     paddingBottom: 100, // Space for FAB
   },
   header: {
-    padding: 20,
-    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingTop: 0,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(196, 255, 0, 0.2)',
   },
@@ -600,7 +602,8 @@ const styles = StyleSheet.create({
   },
   sortToggleContainer: {
     flexDirection: 'row',
-    marginTop: 12,
+    marginTop: 16,
+    marginBottom: 6,
     gap: 8,
   },
   sortButton: {
@@ -642,11 +645,31 @@ const styles = StyleSheet.create({
     color: Colors.dark.tint,
     paddingHorizontal: 8, // Prevent italic font cropping
   },
+  topTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 0,
+    marginBottom: 12,
+    gap: 12,
+  },
+  topTitleIcon: {
+    width: 32,
+    height: 32,
+    tintColor: Colors.dark.tint,
+  },
+  topTitleText: {
+    fontSize: 32,
+    fontFamily: 'hamaki-eng',
+    color: Colors.dark.tint,
+    paddingHorizontal: 8,
+  },
   subtitle: {
     fontSize: 16,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
     opacity: 0.7,
+    marginBottom: 14,
   },
   postsContainer: {
     padding: 20,

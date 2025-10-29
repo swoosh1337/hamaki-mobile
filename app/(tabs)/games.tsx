@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { Image, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { HammockJumpGame } from '@/components/games/HammockJumpGame';
 import { NoPogodGame } from '@/components/games/NoPogodGame';
 import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/contexts/AuthContext';
+import { checkGameCooldown, formatCooldownTime, GameCooldownStatus } from '@/utils/gameCooldowns';
 
 interface GameItem {
   id: string;
@@ -30,52 +32,105 @@ const GAMES: GameItem[] = [
     description: 'Jump to avoid the hammock and score points!',
     icon: 'person',
     color: '#4ECDC4',
-    isAvailable: false,
+    isAvailable: true,
   },
 ];
 
 export default function GamesScreen() {
+  const { userProfile, isDemoMode } = useAuth();
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
+  const [cooldowns, setCooldowns] = useState<Record<string, GameCooldownStatus>>({});
 
-  const handleGamePress = (gameId: string) => {
-    // Only No Pogodi is playable
-    if (gameId === 'no-pogodi') {
-      setSelectedGame(gameId);
+  // Check cooldowns on mount and when returning to screen
+  useEffect(() => {
+    if (userProfile?.id) {
+      checkAllCooldowns();
     }
+  }, [userProfile?.id, isDemoMode]);
+
+  const checkAllCooldowns = async () => {
+    if (!userProfile?.id) return;
+
+    try {
+      const nopogodStatus = await checkGameCooldown(userProfile.id, 'nopogod', isDemoMode);
+      // Add more games here as they become available
+      
+      setCooldowns({
+        'no-pogodi': nopogodStatus,
+      });
+    } catch (error) {
+      console.error('Error checking cooldowns:', error);
+    }
+  };
+
+  const handleGamePress = async (gameId: string) => {
+    if (!userProfile?.id) {
+      Alert.alert('Error', 'Please sign in to play games');
+      return;
+    }
+
+    if (gameId === 'no-pogodi') {
+      // Enforce cooldown for No Pogodi only
+      const cooldownStatus = cooldowns[gameId];
+      if (cooldownStatus && !cooldownStatus.canPlay) {
+        Alert.alert(
+          '⏰ Cooldown Active',
+          `You can play again in ${formatCooldownTime(cooldownStatus.remainingMs)}.\n\nYou'll get a notification when it's ready!`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+    }
+
+    // Open selected game (hammock-jump has no cooldown gating yet)
+    setSelectedGame(gameId);
   };
 
   const closeGame = () => {
     setSelectedGame(null);
+    // Refresh cooldowns after closing game
+    checkAllCooldowns();
   };
 
   const renderGameCard = (game: GameItem) => {
+    const cooldownStatus = cooldowns[game.id];
+    const isOnCooldown = cooldownStatus && !cooldownStatus.canPlay;
+
     return (
       <TouchableOpacity
         key={game.id}
         style={[
           styles.gameCard,
           { borderColor: game.color },
-          !game.isAvailable && styles.gameCardDisabled
+          (!game.isAvailable || isOnCooldown) && styles.gameCardDisabled
         ]}
         onPress={() => handleGamePress(game.id)}
-        disabled={!game.isAvailable}
+        disabled={!game.isAvailable || isOnCooldown}
       >
         <View style={[styles.gameIconContainer, { backgroundColor: game.color + '20' }]}>
           <Ionicons
             name={game.icon}
             size={32}
-            color={game.isAvailable ? game.color : Colors.dark.tabIconDefault}
+            color={game.isAvailable && !isOnCooldown ? game.color : Colors.dark.tabIconDefault}
           />
         </View>
         <View style={styles.gameInfo}>
-          <Text style={[styles.gameTitle, !game.isAvailable && styles.gameDisabledText]}>
+          <Text style={[styles.gameTitle, (!game.isAvailable || isOnCooldown) && styles.gameDisabledText]}>
             {game.title}
           </Text>
-          <Text style={[styles.gameDescription, !game.isAvailable && styles.gameDisabledText]}>
+          <Text style={[styles.gameDescription, (!game.isAvailable || isOnCooldown) && styles.gameDisabledText]}>
             {game.description}
           </Text>
           {!game.isAvailable && (
             <Text style={styles.comingSoonBadge}>Coming Soon</Text>
+          )}
+          {game.isAvailable && isOnCooldown && (
+            <View style={styles.cooldownBadge}>
+              <Ionicons name="time-outline" size={14} color="#FFA500" />
+              <Text style={styles.cooldownText}>
+                {formatCooldownTime(cooldownStatus.remainingMs)}
+              </Text>
+            </View>
           )}
         </View>
       </TouchableOpacity>
@@ -83,22 +138,25 @@ export default function GamesScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      {/* Top centered title with icon (original font) */}
+      <View style={styles.topTitleContainer}>
+        <Image
+          source={require('@/assets/images/mini_games.png')}
+          style={styles.topTitleIcon}
+          resizeMode="contain"
+        />
+        <Text style={styles.topTitleText}>Mini Games</Text>
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.titleContainer}>
-            <Image
-              source={require('@/assets/images/mini_games.png')}
-              style={styles.titleIcon}
-              resizeMode="contain"
-            />
-            <Text style={styles.title}>Mini Games</Text>
-          </View>
+        {/* Subtitle */}
+        <View style={styles.header}
+        >
           <Text style={styles.subtitle}>Play games to earn XP and climb the leaderboard!</Text>
         </View>
 
@@ -127,7 +185,7 @@ export default function GamesScreen() {
         visible={selectedGame === 'no-pogodi'}
         onClose={closeGame}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -141,23 +199,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 20,
   },
   header: {
-    marginBottom: 30,
+    marginBottom: 20,
+    paddingHorizontal: 20,
   },
-  titleContainer: {
+  topTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'center',
+    marginBottom: 12,
+    gap: 12,
   },
-  titleIcon: {
+  topTitleIcon: {
     width: 32,
     height: 32,
     tintColor: Colors.dark.tint,
-    marginRight: 12,
   },
-  title: {
+  topTitleText: {
     fontSize: 32,
     fontFamily: 'hamaki-eng',
     color: Colors.dark.tint,
@@ -171,6 +231,8 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
     opacity: 0.8,
     lineHeight: 22,
+    textAlign: 'left',
+    paddingHorizontal: 0,
   },
   gamesGrid: {
     gap: 16,
@@ -230,6 +292,23 @@ const styles = StyleSheet.create({
     marginTop: 8,
     alignSelf: 'flex-start',
     fontWeight: 'bold',
+  },
+  cooldownBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 165, 0, 0.2)',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  cooldownText: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    color: '#FFA500',
+    fontWeight: '600',
   },
   xpInfoContainer: {
     flexDirection: 'row',
