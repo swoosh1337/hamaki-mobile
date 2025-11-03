@@ -110,6 +110,11 @@ export const NO_POGOD_CONFIG = {
   SHONZIKA_MOVE_DURATION: 2000, // milliseconds for Shonzika movement (slower, more deliberate)
   SHONZIKA_MOVE_INTERVAL_MIN: 100, // minimum time between movements (very short for continuous movement)
   SHONZIKA_MOVE_INTERVAL_MAX: 300, // maximum time between movements (very short for continuous movement)
+  // Shonzika continuous-walk settings
+  SHONZIKA_SPEED_PX_PER_MS: 0.24,
+  SHONZIKA_CHARACTER_HALF_WIDTH: 75,
+  SHONZIKA_EDGE_PADDING: 10,
+  SHONZIKA_WALK_CYCLES_PER_SEC: 4.5,
   SHONZIKA_THROW_VISUAL_MS: 250, // how long the THROWING pose is shown
   
   // Item probabilities
@@ -160,10 +165,10 @@ export const ITEM_DEFINITIONS: Record<ItemType, {
   },
   BOMB: { 
     points: 0, 
-    isBad: false, // Not "bad" in the sense that catching it loses a life
-    isDeadly: true, // Deadly means game over when caught
-    mustCatch: true, // Must catch or game over
-    shouldAvoid: false, // Must catch, not avoid
+    isBad: true, // Avoid bombs
+    isDeadly: true, // Game over when CAUGHT
+    mustCatch: false, // Missing bombs should NOT end the game
+    shouldAvoid: true, // Encourage avoiding
   },
 };
 
@@ -312,6 +317,7 @@ export class NoPogodGameEngine {
     this.gameState.shonzika.isMoving = false;
     this.gameState.shonzika.sprite = 'IDLE';
     this.gameState.shonzika.throwCooldown = 0;
+    this.gameState.shonzika.visualThrowTimer = 0;
     this.gameState.shonzika.animationProgress = 1.0;
     this.gameState.shonzika.movementStartTime = 0;
     this.gameState.shonzika.nextMoveTime = 1000; // Start moving after 1 second
@@ -610,9 +616,8 @@ export class NoPogodGameEngine {
 
     // Constant-speed movement like Miro (no easing), scaled by deltaTime
     if (shonzika.isMoving) {
-      // 4 px per 16.67ms ≈ 0.24 px/ms
-      const speedPxPerMs = 0.24;
-      const delta = speedPxPerMs * deltaTime;
+      // Time-based constant speed from config
+      const delta = NO_POGOD_CONFIG.SHONZIKA_SPEED_PX_PER_MS * deltaTime;
       const oldX = shonzika.x;
 
       if (shonzika.position === 'LEFT') {
@@ -622,9 +627,10 @@ export class NoPogodGameEngine {
       }
 
       // Clamp to edges and bounce
-      const characterHalfWidth = 75;
-      const leftEdge = characterHalfWidth + 10;
-      const rightEdge = this.gameState.screenWidth - characterHalfWidth - 10;
+      const characterHalfWidth = NO_POGOD_CONFIG.SHONZIKA_CHARACTER_HALF_WIDTH;
+      const edgePad = NO_POGOD_CONFIG.SHONZIKA_EDGE_PADDING;
+      const leftEdge = characterHalfWidth + edgePad;
+      const rightEdge = this.gameState.screenWidth - characterHalfWidth - edgePad;
       if (shonzika.x < leftEdge) {
         shonzika.x = leftEdge;
         shonzika.position = 'RIGHT';
@@ -634,12 +640,12 @@ export class NoPogodGameEngine {
       }
 
       // Advance step cycle time-based for consistent cadence across frame rates
-      const cyclesPerSecond = 4.5; // slightly faster steps for snappier feel
+      const cyclesPerSecond = NO_POGOD_CONFIG.SHONZIKA_WALK_CYCLES_PER_SEC; // slightly faster steps for snappier feel
       shonzika.animationProgress = (shonzika.animationProgress + cyclesPerSecond * (deltaTime / 1000)) % 1.0;
 
       if (oldX !== shonzika.x) {
         // Ensure we are in walking state while moving (unless throwing)
-        if (shonzika.sprite !== 'WALKING' && shonzika.throwCooldown <= 0) {
+        if (shonzika.sprite !== 'WALKING' && shonzika.throwCooldown <= 0 && shonzika.visualThrowTimer <= 0) {
           shonzika.sprite = 'WALKING';
           if (this.gameAnimations) {
             this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.walking);
@@ -906,8 +912,8 @@ export class NoPogodGameEngine {
   private handleItemMiss(item: FallingItem): void {
     switch (item.type) {
       case 'BOMB':
-        // BOMB miss: Immediate game over if bomb is not caught
-        this.gameState.phase = 'GAME_OVER';
+        // BOMB miss: Safe to miss — no penalty
+        // Do nothing
         break;
         
       case 'ELECTRIC_SHOCK':

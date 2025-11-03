@@ -42,15 +42,11 @@ export async function performBackgroundXPChecks(userId: string): Promise<Backgro
     try {
       console.log('📺 Checking channel subscriptions...');
       
-      // First, get the user's google_id from their user_id
-      const { data: userData, error: userError } = await userService.supabase
-        .from('users')
-        .select('google_id')
-        .eq('id', userId)
-        .single();
+      // Fetch google_id via service helper (testable/mocked)
+      const userData = await userService.getGoogleIdByUserId(userId);
 
-      if (userError || !userData) {
-        console.error('❌ Failed to get user google_id:', userError);
+      if (!userData) {
+        console.error('❌ Failed to get user google_id via service for userId:', userId);
         result.errors.push('Failed to get user data');
       } else {
         const subscriptions = await checkAllChannelSubscriptions(accessToken);
@@ -95,9 +91,11 @@ export async function performBackgroundXPChecks(userId: string): Promise<Backgro
     }
 
     return result;
-  } catch (error) {
-    console.error('❌ Error in performBackgroundXPChecks:', error);
-    result.errors.push('Background XP check failed');
+  } catch (error: any) {
+    const msg = error?.message || String(error);
+    const stack = error?.stack ? `\nStack: ${error.stack}` : '';
+    console.error(`❌ Error in performBackgroundXPChecks: ${msg}${stack}`);
+    result.errors.push(`performBackgroundXPChecks failed: ${msg}`);
     return result;
   }
 }
@@ -112,22 +110,17 @@ export async function performBackgroundXPChecksWithNotification(
 ): Promise<BackgroundXPResult> {
   const result = await performBackgroundXPChecks(userId);
 
-  // Show notification if XP was awarded
+  // Show notification if XP was awarded (do not let errors bubble)
   if (result.totalXP > 0) {
     const messages: string[] = [];
-    
-    if (result.subscriptionXP > 0) {
-      messages.push(`${result.subscriptionXP} XP from subscriptions`);
-    }
-    
-    if (result.videoLikeXP > 0) {
-      messages.push(`${result.videoLikeXP} XP from video likes`);
-    }
+    if (result.subscriptionXP > 0) messages.push(`${result.subscriptionXP} XP from subscriptions`);
+    if (result.videoLikeXP > 0) messages.push(`${result.videoLikeXP} XP from video likes`);
 
-    showNotification(
-      '🎉 XP Earned!',
-      `You earned ${result.totalXP} XP!\n${messages.join('\n')}`
-    );
+    try {
+      showNotification('🎉 XP Earned!', `You earned ${result.totalXP} XP!\n${messages.join('\n')}`);
+    } catch (err) {
+      console.error('Failed to show XP notification:', err);
+    }
   }
 
   return result;

@@ -13,7 +13,7 @@ import {
   useImage,
   vec
 } from '@shopify/react-native-skia';
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';

@@ -220,13 +220,15 @@ export async function getAllGameCooldowns(
   isDemoMode: boolean = false
 ): Promise<Record<GameType, GameCooldownStatus>> {
   const games: GameType[] = ['nopogod', 'flappybird'];
-  const statuses: Record<string, GameCooldownStatus> = {};
+  const checks = games.map((game) => checkGameCooldown(userId, game, isDemoMode));
+  const results = await Promise.all(checks);
 
-  for (const game of games) {
-    statuses[game] = await checkGameCooldown(userId, game, isDemoMode);
-  }
+  const statuses = results.reduce<Record<GameType, GameCooldownStatus>>((acc, status, idx) => {
+    acc[games[idx]] = status;
+    return acc;
+  }, {} as Record<GameType, GameCooldownStatus>);
 
-  return statuses as Record<GameType, GameCooldownStatus>;
+  return statuses;
 }
 
 /**

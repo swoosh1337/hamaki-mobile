@@ -111,13 +111,35 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const refreshContent = async () => {
     setIsLoading(true);
     await fetchContent();
-    setHasNewContent(false);
+    // hasNewContent is now calculated automatically based on post age
   };
 
   // Get featured posts (sorted by featured_order)
   const featuredPosts = posts
     .filter(post => post.isFeatured)
     .sort((a, b) => a.featuredOrder - b.featuredOrder);
+
+  // Check if any featured post is newer than 24 hours
+  useEffect(() => {
+    const checkNewContent = () => {
+      const now = new Date();
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      const hasRecentFeaturedPost = featuredPosts.some(post => {
+        const publishedDate = new Date(post.publishedAt);
+        return publishedDate > twentyFourHoursAgo;
+      });
+
+      setHasNewContent(hasRecentFeaturedPost);
+    };
+
+    checkNewContent();
+
+    // Check every minute to update the NEW label
+    const interval = setInterval(checkNewContent, 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [featuredPosts]);
 
   // Set up realtime subscription
   useEffect(() => {
@@ -147,20 +169,20 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (newRecord.is_published) {
               const newPost = transformDatabasePost(newRecord);
               setPosts(current => [newPost, ...current]);
-              setHasNewContent(true);
+              // hasNewContent is calculated automatically based on post age
             }
-            
+
           } else if (eventType === 'UPDATE' && newRecord) {
             // Post updated
             const updatedPost = transformDatabasePost(newRecord);
-            
+
             if (updatedPost.isPublished) {
               // Post is published - add or update it
               setPosts(current => {
                 const existingIndex = current.findIndex(post => post.id === updatedPost.id);
                 if (existingIndex >= 0) {
                   // Update existing post
-                  return current.map(post => 
+                  return current.map(post =>
                     post.id === updatedPost.id ? updatedPost : post
                   );
                 } else {
@@ -170,12 +192,12 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
               });
             } else {
               // Post was unpublished - remove it from the list
-              setPosts(current => 
+              setPosts(current =>
                 current.filter(post => post.id !== updatedPost.id)
               );
             }
-            setHasNewContent(true);
-            
+            // hasNewContent is calculated automatically based on post age
+
           } else if (eventType === 'DELETE' && oldRecord) {
             // Post deleted - always remove it regardless of publish status
             console.log('Deleting post with ID:', oldRecord.id);
@@ -184,7 +206,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
               console.log('Posts after deletion:', filtered.length, 'remaining');
               return filtered;
             });
-            setHasNewContent(true);
+            // hasNewContent is calculated automatically based on post age
           }
         }
       )

@@ -2,7 +2,7 @@ export default {
   expo: {
     name: "hamaki",
     slug: "hamaki",
-    version: "1.0.1",
+    version: "1.0.3",
     orientation: "portrait",
     icon: "./assets/images/hamaki-logo.png",
     scheme: "com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3",
@@ -48,10 +48,12 @@ export default {
         "expo-splash-screen",
         {
           backgroundColor: "#0B0C1A",
-          image: "./assets/images/hamaki-logo.png",
+          image: "./assets/images/logo-transparent.png",
+          imageWidth: 250,
           dark: {
             backgroundColor: "#0B0C1A",
-            image: "./assets/images/hamaki-logo.png"
+            image: "./assets/images/logo-transparent.png",
+            imageWidth: 250
           }
         }
       ],

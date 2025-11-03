@@ -94,13 +94,23 @@ export const ChannelSubscriptionManager: React.FC = () => {
       // Update local state
       await loadSubscriptionStatus();
 
-      // Update user profile in context
+      // Update user profile in context safely
+      if (!result || !result.updatedUser) {
+        throw new Error('Missing updated user payload from verifyAndSyncSubscriptions');
+      }
+
+      const safeXp = typeof result.updatedUser.xp_points === 'number' ? result.updatedUser.xp_points : (userProfile?.xp_points ?? 0);
+      const safeYouTube = typeof result.updatedUser.youtube_subscribed === 'boolean' ? result.updatedUser.youtube_subscribed : (userProfile?.youtube_subscribed ?? false);
+      const safeMiro = typeof result.updatedUser.miro_channel_subscribed === 'boolean' ? result.updatedUser.miro_channel_subscribed : (userProfile?.miro_channel_subscribed ?? false);
+      const safeBastos = typeof result.updatedUser.bastos_channel_subscribed === 'boolean' ? result.updatedUser.bastos_channel_subscribed : (userProfile?.bastos_channel_subscribed ?? false);
+      const safeKoro = typeof result.updatedUser.koro_channel_subscribed === 'boolean' ? result.updatedUser.koro_channel_subscribed : (userProfile?.koro_channel_subscribed ?? false);
+
       updateUserProfile({
-        xp_points: result.updatedUser.xp_points,
-        youtube_subscribed: result.updatedUser.youtube_subscribed,
-        miro_channel_subscribed: result.updatedUser.miro_channel_subscribed,
-        bastos_channel_subscribed: result.updatedUser.bastos_channel_subscribed,
-        koro_channel_subscribed: result.updatedUser.koro_channel_subscribed,
+        xp_points: safeXp,
+        youtube_subscribed: safeYouTube,
+        miro_channel_subscribed: safeMiro,
+        bastos_channel_subscribed: safeBastos,
+        koro_channel_subscribed: safeKoro,
       });
 
       // Show success message
@@ -190,13 +200,14 @@ export const ChannelSubscriptionManager: React.FC = () => {
     .filter((s) => s.isSubscribed && s.xpAwarded)
     .reduce((sum, s) => sum + s.xpReward, 0);
   const subscribedCount = subscriptions.filter((s) => s.isSubscribed).length;
+  const totalChannels = subscriptions.length;
 
   return (
     <View style={styles.container}>
       {/* Header Stats */}
       <View style={styles.statsCard}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{subscribedCount}/4</Text>
+          <Text style={styles.statValue}>{subscribedCount}/{totalChannels}</Text>
           <Text style={styles.statLabel}>Channels</Text>
         </View>
         <View style={styles.statDivider} />

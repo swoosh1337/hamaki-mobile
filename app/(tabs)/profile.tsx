@@ -7,6 +7,7 @@ import { SettingsModal } from '@/components/ui/SettingsModal';
 import { ProfilePostSkeleton, XPStatsSkeleton } from '@/components/ui/SkeletonLoader';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { getAvatarSource } from '@/utils/avatars';
 import { UserPost, userService, XPStats } from '@/utils/supabase';
 
 export default function ProfileScreen() {
@@ -314,13 +315,13 @@ export default function ProfileScreen() {
         {/* Profile Header Section */}
         <View style={styles.profileSection}>
           {/* Avatar - Google Profile Photo */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.avatarContainer}
             onPress={() => setShowAvatarPicker(!showAvatarPicker)}
             disabled={isAvatarLoading}
           >
             {userProfile.avatar_url ? (
-              <Image source={{ uri: userProfile.avatar_url }} style={styles.avatar} />
+              <Image source={getAvatarSource(userProfile.avatar_url)} style={styles.avatar} />
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Ionicons name="person-circle" size={80} color={Colors.dark.tint} />

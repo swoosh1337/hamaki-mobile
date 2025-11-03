@@ -182,9 +182,9 @@ function AuthScreen() {
         )}
         
         {/* Footer Text */}
-        <Text style={styles.footerText}>
+        {/* <Text style={styles.footerText}>
           მხოლოდ გამომწერებისათვის
-        </Text>
+        </Text> */}
       </View>
     </SafeAreaView>
   );
@@ -235,12 +235,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   brandText: {
-    fontFamily: 'hamaki-eng',
+    fontFamily: 'HamakiGeo',
     fontSize: 64,
     color: Colors.dark.tint, // Neon green
-    paddingHorizontal: 20, // Extra padding for italic font
-    includeFontPadding: false, // Android: prevent extra padding
-    textAlignVertical: 'center', // Android: center text vertically
     textAlign: 'center',
     marginBottom: 20,
   },

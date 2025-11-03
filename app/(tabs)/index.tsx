@@ -4,6 +4,7 @@ import { Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } 
 import { Colors } from '@/constants/Colors';
 // import { useAuth } from '@/contexts/AuthContext';
 import { CarouselCard } from '@/components/ui/CarouselCard';
+import { InlineError } from '@/components/ui/InlineError';
 import { CarouselSkeleton, PostSkeleton } from '@/components/ui/SkeletonLoader';
 import { useContent } from '@/contexts/ContentContext';
 import { trackPostClose, trackPostOpen } from '@/utils/analytics';
@@ -181,9 +182,37 @@ export default function HomeScreen() {
 
 // Post Card Component for the posts list
 function PostCard({ post, isExpanded, onToggleExpand }: { post: Post; isExpanded: boolean; onToggleExpand: () => void }) {
+  const handleWatchVideo = async (e: any) => {
+    e.stopPropagation(); // Prevent card expansion when button is pressed
+    if (post.type === 'video' && post.metadata.videoId) {
+      const appUrl = `youtube://watch?v=${post.metadata.videoId}`;
+      const webUrl = `https://www.youtube.com/watch?v=${post.metadata.videoId}`;
+      try {
+        const canOpen = await Linking.canOpenURL(appUrl);
+        await Linking.openURL(canOpen ? appUrl : webUrl);
+      } catch {
+        await Linking.openURL(webUrl);
+      }
+    }
+  };
+
+  const handleApply = async (e: any) => {
+    e.stopPropagation(); // Prevent card expansion when button is pressed
+    if (post.type === 'hiring' && post.metadata.applicationUrl) {
+      try {
+        const canOpen = await Linking.canOpenURL(post.metadata.applicationUrl);
+        if (canOpen) {
+          await Linking.openURL(post.metadata.applicationUrl);
+        }
+      } catch (error) {
+        console.error('Error opening application URL:', error);
+      }
+    }
+  };
+
   return (
-    <TouchableOpacity 
-      style={[styles.postCard, isExpanded && styles.postCardExpanded]} 
+    <TouchableOpacity
+      style={[styles.postCard, isExpanded && styles.postCardExpanded]}
       onPress={onToggleExpand}
       activeOpacity={0.85}
     >
@@ -197,6 +226,30 @@ function PostCard({ post, isExpanded, onToggleExpand }: { post: Post; isExpanded
             </View>
           )}
         </View>
+        {/* Company name for hiring posts */}
+        {post.type === 'hiring' && post.metadata.company && (
+          <Text style={styles.postCompany}>{post.metadata.company}</Text>
+        )}
+        {/* Watch button for video posts */}
+        {post.type === 'video' && post.metadata.videoId && (
+          <TouchableOpacity
+            style={styles.postWatchButton}
+            onPress={handleWatchVideo}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.postWatchText}>Watch</Text>
+          </TouchableOpacity>
+        )}
+        {/* Apply button for hiring posts */}
+        {post.type === 'hiring' && post.metadata.applicationUrl && (
+          <TouchableOpacity
+            style={styles.postApplyButton}
+            onPress={handleApply}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.postApplyText}>Apply</Text>
+          </TouchableOpacity>
+        )}
         <Text style={styles.postExcerpt} numberOfLines={isExpanded ? undefined : 2}>
           {post.excerpt}
         </Text>
@@ -208,11 +261,7 @@ function PostCard({ post, isExpanded, onToggleExpand }: { post: Post; isExpanded
           {post.metadata.readTimeMinutes && (
             <Text style={styles.postMetaText}>• {post.metadata.readTimeMinutes} min read</Text>
           )}
-          {post.type === 'hiring' && post.metadata.position && (
-            <Text style={styles.postMetaText}>• {post.metadata.position}</Text>
-          )}
         </View>
-        {/* Removed explicit "Tap to collapse" hint for cleaner UI */}
       </View>
     </TouchableOpacity>
   );
@@ -532,6 +581,44 @@ const styles = StyleSheet.create({
   expandedActions: {
     marginTop: 12,
     alignItems: 'center',
+  },
+  postWatchButton: {
+    backgroundColor: Colors.dark.tint,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  postWatchText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 13,
+    color: Colors.dark.background,
+    fontWeight: 'bold',
+  },
+  postCompany: {
+    fontSize: 13,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    opacity: 0.8,
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  postApplyButton: {
+    backgroundColor: Colors.dark.tint,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  postApplyText: {
+    fontFamily: 'SpaceMono',
+    fontSize: 13,
+    color: Colors.dark.background,
+    fontWeight: 'bold',
   },
   // tapToCollapseText style removed
 });

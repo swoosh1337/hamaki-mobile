@@ -15,6 +15,7 @@ interface GameCanvasProps {
   onExitGame: () => void;
   onPauseGame: () => void;
   onUpdate: (currentTime: number) => void;
+  onDoubleTap?: () => void;
   hasAccelerometer?: boolean;
   gameEngine?: any; // Pass game engine for fallback controls
 }
@@ -26,6 +27,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onExitGame,
   onPauseGame,
   onUpdate,
+  onDoubleTap,
   hasAccelerometer = true,
   gameEngine,
 }) => {
@@ -65,9 +67,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const renderMenuState = () => (
     <View style={styles.menuContainer}>
       <Text style={styles.gameTitle}>Hammock Jump</Text>
-      
 
-      
+
+
       <View style={styles.menuButtons}>
         <Pressable style={styles.startButton} onPress={onStartGame}>
           <Text style={styles.buttonText}>START</Text>
@@ -87,26 +89,43 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         <View style={styles.topRightUI}>
           <Text style={styles.scoreText}>Score: {gameState.score}</Text>
           <View style={styles.livesContainer}>
-            <Text style={styles.livesText}>Height: {Math.floor(Math.max(0, -gameState.cameraY / 10))}m</Text>
+            {(() => {
+              // Derive height from number of platforms (each ~= 1m)
+              const platformsClimbed = Math.floor(gameState.score / GAME_CONFIG.SCORE_PER_PLATFORM);
+              return <Text style={styles.livesText}>Height: {platformsClimbed}m</Text>;
+            })()}
           </View>
           {gameState.combo > 1 && (
             <View style={styles.comboContainer}>
               <Text style={styles.comboText}>Combo x{gameState.combo}!</Text>
             </View>
           )}
+          {/* Double jump indicator */}
+          {gameState.player.canDoubleJump && !gameState.player.isGrounded && (
+            <View style={styles.doubleJumpIndicator}>
+              <Text style={styles.doubleJumpText}>⚡ Double Tap!</Text>
+            </View>
+          )}
         </View>
-        
+
         {/* Tilt indicator */}
         <View style={styles.tiltIndicator}>
-          <Text style={styles.tiltText}>
+          {/* <Text style={styles.tiltText}>
             {hasAccelerometer ? '📱 Tilt to move' : '👆 Tap sides to move'}
-          </Text>
+          </Text> */}
         </View>
         <Pressable style={styles.pauseButton} onPress={onPauseGame}>
           <Text style={styles.pauseButtonText}>⏸️</Text>
         </Pressable>
       </View>
     );
+  };
+
+  const handleResumeGame = () => {
+    if (gameEngine) {
+      gameEngine.resumeGame();
+      onUpdate(performance.now()); // Trigger state update
+    }
   };
 
   const renderPausedState = () => {
@@ -116,7 +135,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       <View style={styles.pausedContainer}>
         <Text style={styles.pausedTitle}>Game Paused</Text>
         <View style={styles.pausedButtons}>
-          <Pressable style={styles.resumeButton} onPress={onStartGame}>
+          <Pressable style={styles.resumeButton} onPress={handleResumeGame}>
             <Text style={styles.buttonText}>RESUME</Text>
           </Pressable>
           <Pressable style={styles.exitButton} onPress={onExitGame}>
@@ -148,92 +167,103 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   return (
     <GestureHandlerRootView style={styles.container}>
-        <View style={styles.canvasContainer}>
-          <Canvas style={styles.canvas}>
-            {/* Background */}
-            {backgroundImage && (
-              <Image
-                image={backgroundImage}
-                x={0}
-                y={0}
-                width={SCREEN_WIDTH}
-                height={SCREEN_HEIGHT}
-                fit="cover"
-              />
-            )}
-
-            {/* Platforms */}
-            {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && (
-              <Group>
-                {gameState.platforms.map(p => {
-                  if (p.broken) return null;
-                  
-                  let color = "rgba(196,255,0,0.9)"; // normal
-                  if (p.type === 'moving') color = "rgba(255,165,0,0.9)"; // orange
-                  if (p.type === 'breakable') color = "rgba(139,69,19,0.9)"; // brown
-                  if (p.type === 'spring') color = p.springUsed ? "rgba(255,215,0,0.6)" : "rgba(255,215,0,0.9)"; // gold
-                  
-                  return (
-                    <Rect key={p.id} x={p.x} y={p.y} width={p.width} height={p.height} color={color} />
-                  );
-                })}
-              </Group>
-            )}
-
-            {/* Particles */}
-            {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && (
-              <Group>
-                {gameState.particles.map(particle => {
-                  const alpha = particle.life / particle.maxLife;
-                  return (
-                    <Rect 
-                      key={particle.id} 
-                      x={particle.x - particle.size / 2} 
-                      y={particle.y - particle.size / 2} 
-                      width={particle.size} 
-                      height={particle.size} 
-                      color={`${particle.color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`}
-                    />
-                  );
-                })}
-              </Group>
-            )}
-
-            {/* Player */}
-            {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && playerImage && (
-              <Image
-                image={playerImage}
-                x={gameState.player.x + (gameState.screenShake > 0 ? (Math.random() - 0.5) * gameState.screenShake : 0)}
-                y={gameState.player.y + (gameState.screenShake > 0 ? (Math.random() - 0.5) * gameState.screenShake : 0)}
-                width={spriteSize}
-                height={spriteSize}
-                fit="contain"
-              />
-            )}
-          </Canvas>
-
-          {/* Overlay UI */}
-          {gameState.phase === 'MENU' && renderMenuState()}
-          {gameState.phase === 'PLAYING' && renderGameUI()}
-          {gameState.phase === 'PAUSED' && renderPausedState()}
-          {gameState.phase === 'GAME_OVER' && renderGameOverState()}
-
-          {/* Fallback touch controls if no accelerometer */}
-          {!hasAccelerometer && gameState.phase === 'PLAYING' && (
-            <>
-              <Pressable 
-                style={styles.leftTouchArea} 
-                onPressIn={() => gameEngine?.setMoveLeft(true)}
-                onPressOut={() => gameEngine?.setMoveLeft(false)}
-              />
-              <Pressable 
-                style={styles.rightTouchArea} 
-                onPressIn={() => gameEngine?.setMoveRight(true)}
-                onPressOut={() => gameEngine?.setMoveRight(false)}
-              />
-            </>
+      <View style={styles.canvasContainer}>
+        <Canvas style={styles.canvas}>
+          {/* Background */}
+          {backgroundImage && (
+            <Image
+              image={backgroundImage}
+              x={0}
+              y={0}
+              width={SCREEN_WIDTH}
+              height={SCREEN_HEIGHT}
+              fit="cover"
+            />
           )}
-        </View>
+
+          {/* Platforms */}
+          {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && (
+            <Group>
+              {gameState.platforms.map(p => {
+                if (p.broken) {
+                  console.log(`🚫 NOT RENDERING BROKEN PLATFORM: id=${p.id}, type=${p.type}, x=${p.x.toFixed(0)}, y=${p.y.toFixed(0)}`);
+                  return null;
+                }
+
+                let color = "rgba(120,120,120,0.9)"; // normal - gray
+                if (p.type === 'moving') color = "rgba(80,80,180,0.9)"; // moving - blue-gray
+                if (p.type === 'breakable') color = "rgba(139,69,19,0.9)"; // breakable - brown
+                if (p.type === 'spring') color = p.springUsed ? "rgba(100,100,100,0.6)" : "rgba(255,215,0,0.95)"; // spring - gold (unused) / gray (used)
+
+                return (
+                  <Rect key={p.id} x={p.x} y={p.y} width={p.width} height={p.height} color={color} />
+                );
+              })}
+            </Group>
+          )}
+
+          {/* Particles */}
+          {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && (
+            <Group>
+              {gameState.particles.map(particle => {
+                const alpha = particle.life / particle.maxLife;
+                return (
+                  <Rect
+                    key={particle.id}
+                    x={particle.x - particle.size / 2}
+                    y={particle.y - particle.size / 2}
+                    width={particle.size}
+                    height={particle.size}
+                    color={`${particle.color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`}
+                  />
+                );
+              })}
+            </Group>
+          )}
+
+          {/* Player */}
+          {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && playerImage && (
+            <Image
+              image={playerImage}
+              x={gameState.player.x + (gameState.screenShake > 0 ? (Math.random() - 0.5) * gameState.screenShake : 0)}
+              y={gameState.player.y + (gameState.screenShake > 0 ? (Math.random() - 0.5) * gameState.screenShake : 0)}
+              width={spriteSize}
+              height={spriteSize}
+              fit="contain"
+            />
+          )}
+        </Canvas>
+
+        {/* Overlay UI */}
+        {gameState.phase === 'MENU' && renderMenuState()}
+        {gameState.phase === 'PLAYING' && renderGameUI()}
+        {gameState.phase === 'PAUSED' && renderPausedState()}
+        {gameState.phase === 'GAME_OVER' && renderGameOverState()}
+
+        {/* Double tap area for double jump */}
+        {gameState.phase === 'PLAYING' && onDoubleTap && (
+          <Pressable
+            style={styles.doubleTapArea}
+            onPress={onDoubleTap}
+          />
+        )}
+
+        {/* Fallback touch controls if no accelerometer */}
+        {!hasAccelerometer && gameState.phase === 'PLAYING' && (
+          <>
+            <Pressable
+              style={styles.leftTouchArea}
+              onPressIn={() => gameEngine?.setMoveLeft(true)}
+              onPressOut={() => gameEngine?.setMoveLeft(false)}
+            />
+            <Pressable
+              style={styles.rightTouchArea}
+              onPressIn={() => gameEngine?.setMoveRight(true)}
+              onPressOut={() => gameEngine?.setMoveRight(false)}
+            />
+          </>
+        )}
+      </View>
     </GestureHandlerRootView>
   );
 };
@@ -306,6 +336,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    zIndex: 5,
   },
   topRightUI: {
     alignItems: 'flex-end',
@@ -313,9 +344,9 @@ const styles = StyleSheet.create({
   scoreText: {
     fontSize: 18,
     fontFamily: 'SpaceMono',
-    color: Colors.dark.tint,
+    color: '#000000',
     fontWeight: 'bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowColor: 'rgba(255, 255, 255, 0.8)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
@@ -327,7 +358,7 @@ const styles = StyleSheet.create({
   livesText: {
     fontSize: 16,
     fontFamily: 'SpaceMono',
-    color: Colors.dark.tint,
+    color: '#000000',
     fontWeight: 'bold',
   },
   heartIcon: {
@@ -335,7 +366,23 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   comboContainer: {
-    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  comboText: {
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+    color: '#000000',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  doubleJumpIndicator: {
+    backgroundColor: 'rgba(255, 215, 0, 0.3)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -343,8 +390,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FFD700',
   },
-  comboText: {
-    fontSize: 14,
+  doubleJumpText: {
+    fontSize: 12,
     fontFamily: 'SpaceMono',
     color: '#FFD700',
     fontWeight: 'bold',
@@ -371,7 +418,8 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: '50%',
-    backgroundColor: 'rgba(255, 0, 0, 0.2)', // More visible red tint for debugging
+    backgroundColor: __DEV__ ? 'rgba(255, 0, 0, 0.2)' : 'rgba(255, 0, 0, 0.02)',
+    zIndex: 1,
   },
   rightTouchArea: {
     position: 'absolute',
@@ -379,7 +427,8 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: '50%',
-    backgroundColor: 'rgba(0, 0, 255, 0.2)', // More visible blue tint for debugging
+    backgroundColor: __DEV__ ? 'rgba(0, 0, 255, 0.2)' : 'rgba(0, 0, 255, 0.02)',
+    zIndex: 1,
   },
   pauseButton: {
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -390,6 +439,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.dark.tint,
+    zIndex: 10,
   },
   pauseButtonText: {
     fontSize: 20,
@@ -445,5 +495,29 @@ const styles = StyleSheet.create({
   },
   gameOverButtons: {
     gap: 30, // Increased gap for better spacing
+  },
+  leftTouchArea: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '50%',
+    backgroundColor: 'rgba(255, 0, 0, 0.2)', // More visible red tint for debugging
+  },
+  rightTouchArea: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: '50%',
+    backgroundColor: 'rgba(0, 0, 255, 0.2)', // More visible blue tint for debugging
+  },
+  doubleTapArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
   },
 });

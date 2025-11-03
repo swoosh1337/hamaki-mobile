@@ -6,7 +6,11 @@
 import { ChannelKey, YOUTUBE_CHANNELS } from './channelSubscriptions';
 import { supabase } from './supabase';
 
-const YOUTUBE_API_KEY = process.env.EXPO_PUBLIC_YOUTUBE_API_KEY!;
+const YOUTUBE_API_KEY_ENV = process.env.EXPO_PUBLIC_YOUTUBE_API_KEY;
+if (!YOUTUBE_API_KEY_ENV || YOUTUBE_API_KEY_ENV.trim() === '') {
+  throw new Error('Missing required env EXPO_PUBLIC_YOUTUBE_API_KEY');
+}
+const YOUTUBE_API_KEY = YOUTUBE_API_KEY_ENV;
 
 // XP rewards for liking latest videos
 const VIDEO_LIKE_XP = {

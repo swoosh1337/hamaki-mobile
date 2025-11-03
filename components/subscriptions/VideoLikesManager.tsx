@@ -73,6 +73,8 @@ export const VideoLikesManager: React.FC = () => {
   const earnedXP = videoStatuses
     .filter(s => s.xpAwarded)
     .reduce((sum, status) => sum + status.xpReward, 0);
+  const rawPercent = totalPossibleXP > 0 ? (earnedXP / totalPossibleXP) * 100 : 0;
+  const percent = Math.max(0, Math.min(100, rawPercent));
 
   if (isLoading) {
     return (
@@ -101,7 +103,7 @@ export const VideoLikesManager: React.FC = () => {
             <View 
               style={[
                 styles.progressFill, 
-                { width: `${(earnedXP / totalPossibleXP) * 100}%` }
+                { width: `${percent}%` }
               ]} 
             />
           </View>

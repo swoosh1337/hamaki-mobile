@@ -1,6 +1,7 @@
+import GamesIcon from '@/components/GamesIcon';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { HammockJumpGame } from '@/components/games/HammockJumpGame';
 import { NoPogodGame } from '@/components/games/NoPogodGame';
@@ -53,10 +54,11 @@ export default function GamesScreen() {
 
     try {
       const nopogodStatus = await checkGameCooldown(userProfile.id, 'nopogod', isDemoMode);
-      // Add more games here as they become available
-      
+      const hammockJumpStatus = await checkGameCooldown(userProfile.id, 'hammock-jump', isDemoMode);
+
       setCooldowns({
         'no-pogodi': nopogodStatus,
+        'hammock-jump': hammockJumpStatus,
       });
     } catch (error) {
       console.error('Error checking cooldowns:', error);
@@ -69,20 +71,18 @@ export default function GamesScreen() {
       return;
     }
 
-    if (gameId === 'no-pogodi') {
-      // Enforce cooldown for No Pogodi only
-      const cooldownStatus = cooldowns[gameId];
-      if (cooldownStatus && !cooldownStatus.canPlay) {
-        Alert.alert(
-          '⏰ Cooldown Active',
-          `You can play again in ${formatCooldownTime(cooldownStatus.remainingMs)}.\n\nYou'll get a notification when it's ready!`,
-          [{ text: 'OK' }]
-        );
-        return;
-      }
+    // Enforce cooldown for both games
+    const cooldownStatus = cooldowns[gameId];
+    if (cooldownStatus && !cooldownStatus.canPlay) {
+      Alert.alert(
+        '⏰ Cooldown Active',
+        `You can play again in ${formatCooldownTime(cooldownStatus.remainingMs)}.\n\nYou'll get a notification when it's ready!`,
+        [{ text: 'OK' }]
+      );
+      return;
     }
 
-    // Open selected game (hammock-jump has no cooldown gating yet)
+    // Open selected game
     setSelectedGame(gameId);
   };
 
@@ -108,11 +108,15 @@ export default function GamesScreen() {
         disabled={!game.isAvailable || isOnCooldown}
       >
         <View style={[styles.gameIconContainer, { backgroundColor: game.color + '20' }]}>
-          <Ionicons
-            name={game.icon}
-            size={32}
-            color={game.isAvailable && !isOnCooldown ? game.color : Colors.dark.tabIconDefault}
-          />
+          {game.id === 'no-pogodi' ? (
+            <Ionicons
+              name={game.icon}
+              size={32}
+              color={game.isAvailable && !isOnCooldown ? game.color : Colors.dark.tabIconDefault}
+            />
+          ) : (
+            <GamesIcon size={32} />
+          )}
         </View>
         <View style={styles.gameInfo}>
           <Text style={[styles.gameTitle, (!game.isAvailable || isOnCooldown) && styles.gameDisabledText]}>
@@ -141,12 +145,8 @@ export default function GamesScreen() {
     <View style={styles.container}>
       {/* Top centered title with icon (original font) */}
       <View style={styles.topTitleContainer}>
-        <Image
-          source={require('@/assets/images/mini_games.png')}
-          style={styles.topTitleIcon}
-          resizeMode="contain"
-        />
-        <Text style={styles.topTitleText}>Mini Games</Text>
+        <GamesIcon size={32} style={styles.topTitleIcon} />
+        <Text style={styles.topTitleText}>MINI GAMES</Text>
       </View>
 
       <ScrollView
@@ -157,7 +157,7 @@ export default function GamesScreen() {
         {/* Subtitle */}
         <View style={styles.header}
         >
-          <Text style={styles.subtitle}>Play games to earn XP and climb the leaderboard!</Text>
+          <Text style={styles.subtitle}>ითამაშე თამაშები რომ დააგროვო ქულები</Text>
         </View>
 
         {/* Games Grid */}
@@ -169,7 +169,7 @@ export default function GamesScreen() {
         <View style={styles.xpInfoContainer}>
           <Ionicons name="star" size={24} color={Colors.dark.tint} />
           <Text style={styles.xpInfoText}>
-            Each game completion earns you XP points for the leaderboard!
+            თითოეული თამაში გაძლევს საშუალებას გამოიმუაშვო XP და დაწინაურდე ლიდერბორდში
           </Text>
         </View>
       </ScrollView>
@@ -219,11 +219,9 @@ const styles = StyleSheet.create({
   },
   topTitleText: {
     fontSize: 32,
-    fontFamily: 'hamaki-eng',
+    fontFamily: 'HamakiEng',
     color: Colors.dark.tint,
-    paddingHorizontal: 12, // Extra padding for italic font
-    includeFontPadding: false, // Android: prevent extra padding
-    textAlignVertical: 'center', // Android: center text vertically
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
@@ -231,7 +229,7 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
     opacity: 0.8,
     lineHeight: 22,
-    textAlign: 'left',
+    textAlign: 'center',
     paddingHorizontal: 0,
   },
   gamesGrid: {

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { isNetworkError } from './errorHandling';
 
 // Get Supabase credentials from environment variables
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
@@ -209,6 +210,25 @@ export const userService = {
     }
   },
 
+  // Helper: get google_id by internal user id
+  async getGoogleIdByUserId(userId: string): Promise<{ google_id: string } | null> {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('google_id')
+        .eq('id', userId)
+        .single();
+      if (error || !data) {
+        console.error('Error fetching google_id by user id:', error);
+        return null;
+      }
+      return { google_id: data.google_id };
+    } catch (err) {
+      console.error('Exception fetching google_id by user id:', err);
+      return null;
+    }
+  },
+
   // Get leaderboard (top users by XP)
   async getLeaderboard(limit: number = 10): Promise<UserProfile[]> {
     try {
@@ -232,28 +252,26 @@ export const userService = {
 
   // Profile Management Methods
 
-  // Update user avatar — now allows full URL or predefined id
+  // Update user avatar — accepts avatar ID or URL
   async updateUserAvatar(googleId: string, avatar: string): Promise<UserProfile | null> {
     try {
-      // Accept either a full URL or legacy id; normalize to URL for storage
-      let avatarUrl = avatar;
-      const idToUrl: Record<string, string> = {
-        'avatar-1': 'https://hspaxdszcnrznqehblky.supabase.co/storage/v1/object/sign/avatars/avatar-1.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zMWE0YzgyOC1kNmZmLTRlZTAtYWQ2MC1hZjg1YTY1YzU2ZDEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJhdmF0YXJzL2F2YXRhci0xLnBuZyIsImlhdCI6MTc1NDc4NDY4OSwiZXhwIjoxNzg2MzIwNjg5fQ.SKfVTG5KuGqpDnU3vCvzSUoBShVeCzpKhteFy_Zeh9I',
-        'avatar-2': 'https://hspaxdszcnrznqehblky.supabase.co/storage/v1/object/sign/avatars/avatar-2.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zMWE0YzgyOC1kNmZmLTRlZTAtYWQ2MC1hZjg1YTY1YzU2ZDEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJhdmF0YXJzL2F2YXRhci0yLnBuZyIsImlhdCI6MTc1NDc4NDY5NywiZXhwIjoxNzg2MzIwNjk3fQ.hwjcOi7o3-9XRZ0uYYYTYFlcK8IWt2r-CJyo-38j2C8',
-        'avatar-3': 'https://hspaxdszcnrznqehblky.supabase.co/storage/v1/object/sign/avatars/avatar-3.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zMWE0YzgyOC1kNmZmLTRlZTAtYWQ2MC1hZjg1YTY1YzU2ZDEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJhdmF0YXJzL2F2YXRhci0zLnBuZyIsImlhdCI6MTc1NDc4NDcwOCwiZXhwIjoxNzg2MzIwNzA4fQ.QRFOWSPKG-lxwYKJKPd4wi-fPcUIKCUDLYGjasuIjdU',
-      };
-      if (!/^https?:\/\//i.test(avatar)) {
-        if (idToUrl[avatar]) {
-          avatarUrl = idToUrl[avatar];
-        } else {
-          throw new Error('Invalid avatar selection');
-        }
+      // List of valid avatar IDs
+      const validAvatarIds = [
+        'avatar-1', 'avatar-2', 'avatar-3', 'avatar-4', 'avatar-5', 'avatar-6',
+        'avatar-7', 'avatar-8', 'avatar-9', 'avatar-10', 'avatar-11', 'avatar-12',
+        'avatar-13', 'avatar-14', 'avatar-15', 'avatar-16', 'avatar-17', 'avatar-18'
+      ];
+
+      // Check if it's a valid avatar ID or a full URL
+      if (!/^https?:\/\//i.test(avatar) && !validAvatarIds.includes(avatar)) {
+        throw new Error('Invalid avatar selection');
       }
 
-      const { data, error } = await supabase
+      // Store avatar ID or URL directly in database
+      const { data, error} = await supabase
         .from('users')
         .update({
-          avatar_url: avatarUrl,
+          avatar_url: avatar,
           updated_at: new Date().toISOString(),
         })
         .eq('google_id', googleId)
@@ -692,12 +710,15 @@ export const userService = {
   // Update user's leaderboard points (called after game completion)
   async updateLeaderboardPoints(userId: string, points: number, retryCount: number = 0): Promise<boolean> {
     const MAX_RETRIES = 3;
-    const RETRY_DELAY = 1000; // 1 second
+    const RETRY_DELAY = 1000; // base delay in ms
+    const MAX_DELAY = 5000; // cap exponential backoff to 5s between attempts
 
     try {
       const weekStartDate = this.getWeekStartDate();
 
       // Update weekly leaderboard with error handling
+      let weeklySuccess = false;
+      let allTimeSuccess = false;
       try {
         const { data: weeklyEntry, error: weeklyCheckError } = await supabase
           .from('leaderboard_entries')
@@ -725,6 +746,7 @@ export const userService = {
             console.error('Error updating weekly leaderboard:', weeklyUpdateError);
             throw weeklyUpdateError;
           }
+          weeklySuccess = true;
         } else {
           // Create new weekly entry
           const { error: weeklyInsertError } = await supabase
@@ -740,6 +762,7 @@ export const userService = {
             console.error('Error inserting weekly leaderboard:', weeklyInsertError);
             throw weeklyInsertError;
           }
+          weeklySuccess = true;
         }
       } catch (weeklyError) {
         console.error('Weekly leaderboard update failed:', weeklyError);
@@ -772,6 +795,7 @@ export const userService = {
             console.error('Error updating all-time leaderboard:', allTimeUpdateError);
             throw allTimeUpdateError;
           }
+          allTimeSuccess = true;
         } else {
           // Create new all-time entry
           const { error: allTimeInsertError } = await supabase
@@ -786,27 +810,27 @@ export const userService = {
             console.error('Error inserting all-time leaderboard:', allTimeInsertError);
             throw allTimeInsertError;
           }
+          allTimeSuccess = true;
         }
       } catch (allTimeError) {
         console.error('All-time leaderboard update failed:', allTimeError);
         throw allTimeError; // Throw to trigger retry
       }
 
-      console.log('✅ Leaderboard updated successfully');
-      return true;
+      if (weeklySuccess && allTimeSuccess) {
+        console.log('✅ Leaderboard updated successfully (both weekly and all-time)');
+      } else if (allTimeSuccess) {
+        console.log('⚠️ Leaderboard partially updated (all-time succeeded, weekly failed)');
+      }
+      return allTimeSuccess; // Return true if at least all-time succeeded
     } catch (error) {
       console.error(`Error updating leaderboard points (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, error);
 
-      // Check if it's a network error
-      const isNetworkError = error instanceof Error && 
-        (error.message.includes('Network request failed') || 
-         error.message.includes('Failed to fetch') ||
-         error.message.includes('timeout'));
-
       // Retry on network errors
-      if (isNetworkError && retryCount < MAX_RETRIES) {
-        console.log(`⏳ Retrying leaderboard update in ${RETRY_DELAY}ms...`);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+      if (isNetworkError(error) && retryCount < MAX_RETRIES) {
+        const delay = Math.min(MAX_DELAY, RETRY_DELAY * (retryCount + 1));
+        console.log(`⏳ Retrying leaderboard update in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
         return this.updateLeaderboardPoints(userId, points, retryCount + 1);
       }
       return false;

@@ -21,16 +21,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 import { supabase, UserPost, userService } from '@/utils/supabase';
 
-type PostWithUserData = UserPost & { 
-  isUpvoted?: boolean; 
-  user?: { full_name: string; avatar_url?: string } 
+type PostWithUserData = UserPost & {
+  isUpvoted?: boolean;
+  user?: { full_name: string; avatar_url?: string }
 };
 
 type SortOption = 'upvotes' | 'latest';
 
 export default function IdeasScreen() {
   const { userProfile, isDemoMode } = useAuth();
-  
+
   // State management
   const [posts, setPosts] = useState<PostWithUserData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,7 +87,7 @@ export default function IdeasScreen() {
       const isNetwork = checkNetworkError(err);
       setIsNetworkError(isNetwork);
       const errorMessage = getUserFriendlyErrorMessage(err);
-      
+
       if (reset) {
         // For full reloads, show the main error state
         setError(errorMessage);
@@ -96,7 +96,7 @@ export default function IdeasScreen() {
         setShowPartialError(true);
         setTimeout(() => setShowPartialError(false), 5000); // Auto-hide after 5 seconds
       }
-      
+
       setRetryCount(prev => prev + 1);
     } finally {
       setIsLoading(false);
@@ -138,7 +138,7 @@ export default function IdeasScreen() {
         },
         (payload) => {
           console.log('Posts subscription triggered:', payload);
-          
+
           if (payload.eventType === 'INSERT') {
             // New post approved, refresh to show it
             loadPosts(0, true);
@@ -170,7 +170,7 @@ export default function IdeasScreen() {
         },
         (payload) => {
           console.log('Upvotes subscription triggered:', payload);
-          
+
           // Check if the upvote change affects any of our displayed posts
           const postId = (payload.new as any)?.post_id || (payload.old as any)?.post_id;
           // Use functional state update to access current posts without dependency
@@ -246,7 +246,7 @@ export default function IdeasScreen() {
             console.error('Error updating post upvote:', error);
             // Revert optimistic update on error
             loadPosts(0, true);
-            
+
             if (error instanceof Error) {
               Alert.alert('Error', error.message);
             } else {
@@ -271,7 +271,7 @@ export default function IdeasScreen() {
   // Handle create post
   const handleCreatePost = useCallback(async (title: string, content: string, category?: string) => {
     console.log('🎯 handleCreatePost called', { title, content, category, userId: userProfile?.id });
-    
+
     if (!userProfile?.id) {
       console.error('❌ No user profile ID');
       throw new Error('User not authenticated');
@@ -279,28 +279,28 @@ export default function IdeasScreen() {
 
     console.log('⏳ Setting isSubmittingPost to true');
     setIsSubmittingPost(true);
-    
+
     try {
       console.log('📤 Calling userService.createUserPost...');
       const result = await userService.createUserPost(userProfile.id, title, content, category);
       console.log('✅ Post created successfully:', result);
-      
+
       // Success - show alert after modal closes
       setTimeout(() => {
         console.log('🎉 Showing success alert');
         Alert.alert(
-          'Success', 
+          'Success',
           'Your idea has been submitted for review! You\'ll be notified when it\'s approved.',
           [{ text: 'OK' }]
         );
       }, 300);
-      
+
       console.log('✅ handleCreatePost completed successfully');
-      
+
     } catch (error) {
       console.error('❌ Error creating post:', error);
       console.error('❌ Error details:', JSON.stringify(error, null, 2));
-      
+
       // Re-throw the error so the modal can handle it
       throw error;
     } finally {
@@ -348,7 +348,7 @@ export default function IdeasScreen() {
             isUpvoting={upvotingPosts.has(post.id)}
           />
         ))}
-        
+
         {/* Load More Button */}
         {hasMorePosts && (
           <TouchableOpacity
@@ -368,8 +368,8 @@ export default function IdeasScreen() {
         {retryCount > 0 && !isLoading && !error && (
           <View style={styles.connectionStatus}>
             <Text style={styles.connectionStatusText}>
-              {isNetworkError 
-                ? '📡 Connection restored' 
+              {isNetworkError
+                ? '📡 Connection restored'
                 : '✅ Connected'
               }
             </Text>
@@ -385,11 +385,11 @@ export default function IdeasScreen() {
     if (error && posts.length === 0 && !isLoading) {
       const shouldShowOfflineMessage = isNetworkError && retryCount > 1;
       return (
-        <NetworkError 
-          message={shouldShowOfflineMessage 
-            ? 'You appear to be offline. Posts will load when connection is restored.' 
-            : isNetworkError 
-              ? 'Unable to connect. Check your internet connection.' 
+        <NetworkError
+          message={shouldShowOfflineMessage
+            ? 'You appear to be offline. Posts will load when connection is restored.'
+            : isNetworkError
+              ? 'Unable to connect. Check your internet connection.'
               : error
           }
           onRetry={() => loadPosts(0, true)}
@@ -407,7 +407,7 @@ export default function IdeasScreen() {
             style={styles.topTitleIcon}
             resizeMode="contain"
           />
-          <Text style={styles.topTitleText}>Community</Text>
+          <Text style={styles.topTitleText}>COMMUNITY</Text>
         </View>
         <ScrollView
           style={styles.scrollView}
@@ -424,8 +424,8 @@ export default function IdeasScreen() {
           onScroll={({ nativeEvent }) => {
             const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
             const paddingToBottom = 20;
-            if (layoutMeasurement.height + contentOffset.y >= 
-                contentSize.height - paddingToBottom) {
+            if (layoutMeasurement.height + contentOffset.y >=
+              contentSize.height - paddingToBottom) {
               handleLoadMore();
             }
           }}
@@ -433,8 +433,8 @@ export default function IdeasScreen() {
         >
           {/* Header under centered title */}
           <View style={styles.header}>
-            <Text style={styles.subtitle}>Share video ideas and vote on suggestions</Text>
-            
+            <Text style={styles.subtitle}>გააზიარე ვიდეოს იდეა</Text>
+
             {isDemoMode && (
               <View style={styles.demoNotice}>
                 <Text style={styles.demoNoticeText}>
@@ -451,7 +451,7 @@ export default function IdeasScreen() {
                 </Text>
               </View>
             )}
-            
+
             {/* Sort Toggle Buttons */}
             <View style={styles.sortToggleContainer}>
               <TouchableOpacity
@@ -468,7 +468,7 @@ export default function IdeasScreen() {
                   Popular
                 </Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={[
                   styles.sortButton,
@@ -660,9 +660,9 @@ const styles = StyleSheet.create({
   },
   topTitleText: {
     fontSize: 32,
-    fontFamily: 'hamaki-eng',
+    fontFamily: 'HamakiEng',
     color: Colors.dark.tint,
-    paddingHorizontal: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
@@ -670,6 +670,7 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
     opacity: 0.7,
     marginBottom: 14,
+    textAlign: 'center',
   },
   postsContainer: {
     padding: 20,
