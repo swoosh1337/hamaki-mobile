@@ -45,3 +45,14 @@ app-example
 .env
 .env.local
 .env.example
+
+# Test coverage
+coverage/
+
+# Documentation (temp)
+docs/
+.auth-plan.md
+GEMINI.md
+
+# Android build (not tracking for now)
+android/

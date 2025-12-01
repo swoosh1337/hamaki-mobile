@@ -1,5 +1,5 @@
 import { Canvas, Group, Image, Rect, useImage } from '@shopify/react-native-skia';
-import React, { useEffect, useRef } from 'react';
+import React, { memo, useEffect, useRef } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -7,6 +7,42 @@ import { Colors } from '@/constants/Colors';
 import { GAME_CONFIG, GameAssets, GameState } from '@/utils/gameEngine';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Memoized score display - ONLY updates when score changes
+const ScoreBoard = memo(({ score }: { score: number }) => {
+  const platformsClimbed = Math.floor(score / GAME_CONFIG.SCORE_PER_PLATFORM);
+
+  return (
+    <View>
+      <Text style={styles.scoreText}>Score: {score}</Text>
+      <View style={styles.livesContainer}>
+        <Text style={styles.livesText}>Height: {platformsClimbed}m</Text>
+      </View>
+    </View>
+  );
+});
+
+// Memoized indicators - updates when gameplay state changes (combo, grounded)
+const GameIndicators = memo(({ combo, canDoubleJump, isGrounded }: {
+  combo: number;
+  canDoubleJump: boolean;
+  isGrounded: boolean;
+}) => {
+  return (
+    <View style={{ alignItems: 'flex-end' }}>
+      {combo > 1 && (
+        <View style={styles.comboContainer}>
+          <Text style={styles.comboText}>Combo x{combo}!</Text>
+        </View>
+      )}
+      {canDoubleJump && !isGrounded && (
+        <View style={styles.doubleJumpIndicator}>
+          <Text style={styles.doubleJumpText}>⚡ Double Tap!</Text>
+        </View>
+      )}
+    </View>
+  );
+});
 
 interface GameCanvasProps {
   gameState: GameState;
@@ -87,33 +123,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     return (
       <View style={styles.gameUI}>
         <View style={styles.topRightUI}>
-          <Text style={styles.scoreText}>Score: {gameState.score}</Text>
-          <View style={styles.livesContainer}>
-            {(() => {
-              // Derive height from number of platforms (each ~= 1m)
-              const platformsClimbed = Math.floor(gameState.score / GAME_CONFIG.SCORE_PER_PLATFORM);
-              return <Text style={styles.livesText}>Height: {platformsClimbed}m</Text>;
-            })()}
-          </View>
-          {gameState.combo > 1 && (
-            <View style={styles.comboContainer}>
-              <Text style={styles.comboText}>Combo x{gameState.combo}!</Text>
-            </View>
-          )}
-          {/* Double jump indicator */}
-          {gameState.player.canDoubleJump && !gameState.player.isGrounded && (
-            <View style={styles.doubleJumpIndicator}>
-              <Text style={styles.doubleJumpText}>⚡ Double Tap!</Text>
-            </View>
-          )}
+          <ScoreBoard score={gameState.score} />
+          <GameIndicators
+            combo={gameState.combo}
+            canDoubleJump={gameState.player.canDoubleJump}
+            isGrounded={gameState.player.isGrounded}
+          />
         </View>
 
         {/* Tilt indicator */}
-        <View style={styles.tiltIndicator}>
-          {/* <Text style={styles.tiltText}>
-            {hasAccelerometer ? '📱 Tilt to move' : '👆 Tap sides to move'}
-          </Text> */}
-        </View>
+        <View style={styles.tiltIndicator} />
         <Pressable style={styles.pauseButton} onPress={onPauseGame}>
           <Text style={styles.pauseButtonText}>⏸️</Text>
         </Pressable>
@@ -186,7 +205,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             <Group>
               {gameState.platforms.map(p => {
                 if (p.broken) {
-                  console.log(`🚫 NOT RENDERING BROKEN PLATFORM: id=${p.id}, type=${p.type}, x=${p.x.toFixed(0)}, y=${p.y.toFixed(0)}`);
                   return null;
                 }
 
@@ -346,20 +364,32 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     color: '#000000',
     fontWeight: 'bold',
-    textShadowColor: 'rgba(255, 255, 255, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    overflow: 'hidden',
+    minWidth: 140,
+    textAlign: 'right',
   },
   livesContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
+    justifyContent: 'flex-end',
   },
   livesText: {
     fontSize: 16,
     fontFamily: 'SpaceMono',
     color: '#000000',
     fontWeight: 'bold',
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    overflow: 'hidden',
+    minWidth: 140,
+    textAlign: 'right',
   },
   heartIcon: {
     fontSize: 16,
@@ -382,16 +412,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   doubleJumpIndicator: {
-    backgroundColor: 'rgba(255, 215, 0, 0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
     marginTop: 8,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#FFD700',
   },
   doubleJumpText: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: 'SpaceMono',
     color: '#FFD700',
     fontWeight: 'bold',
@@ -418,7 +448,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: '50%',
-    backgroundColor: __DEV__ ? 'rgba(255, 0, 0, 0.2)' : 'rgba(255, 0, 0, 0.02)',
+    backgroundColor: 'transparent',
     zIndex: 1,
   },
   rightTouchArea: {
@@ -427,7 +457,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: '50%',
-    backgroundColor: __DEV__ ? 'rgba(0, 0, 255, 0.2)' : 'rgba(0, 0, 255, 0.02)',
+    backgroundColor: 'transparent',
     zIndex: 1,
   },
   pauseButton: {
@@ -495,22 +525,6 @@ const styles = StyleSheet.create({
   },
   gameOverButtons: {
     gap: 30, // Increased gap for better spacing
-  },
-  leftTouchArea: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: '50%',
-    backgroundColor: 'rgba(255, 0, 0, 0.2)', // More visible red tint for debugging
-  },
-  rightTouchArea: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: '50%',
-    backgroundColor: 'rgba(0, 0, 255, 0.2)', // More visible blue tint for debugging
   },
   doubleTapArea: {
     position: 'absolute',

@@ -16,6 +16,7 @@ export interface GameState {
     shieldTime?: number;
     canDoubleJump: boolean;
     isGrounded: boolean;
+    groundedFrames: number; // Track frames since last grounded to prevent flicker
   };
   cameraY: number; // how far the world has scrolled up
   platforms: Platform[];
@@ -125,6 +126,7 @@ export class HammockGameEngine {
         shieldTime: 0,
         canDoubleJump: false,
         isGrounded: false,
+        groundedFrames: 0,
       },
       cameraY: 0,
       platforms: [],
@@ -376,10 +378,16 @@ export class HammockGameEngine {
     // Update position
     const oldY = p.y;
     p.y += p.vy * frameMultiplier;
-    
-    // Track if player is moving upward (leaving ground)
-    if (p.vy < 0 && p.isGrounded) {
-      p.isGrounded = false;
+
+    // Track grounded frames to prevent flicker
+    if (p.isGrounded) {
+      p.groundedFrames++;
+      // Only set to not grounded after a few frames of being airborne
+      // This prevents flicker when bouncing off platforms
+      if (p.vy < 0 && p.groundedFrames > 2) {
+        p.isGrounded = false;
+        p.groundedFrames = 0;
+      }
     }
 
     // Track max height reached (for height display)
@@ -542,14 +550,13 @@ export class HammockGameEngine {
   private handlePlatformLanding(plat: Platform, player: any) {
     const s = this.gameState;
 
-    console.log(`🎯 LANDED on ${plat.type} platform at y=${plat.y.toFixed(0)}`);
-
     // Snap to platform top
     player.y = plat.y - player.height;
 
     // Reset double jump and grounded state
     player.canDoubleJump = true;
     player.isGrounded = true;
+    player.groundedFrames = 0; // Reset counter to prevent flicker
 
     // Award score ONLY if we haven't scored on this platform before
     if (!plat.scored) {
@@ -562,9 +569,10 @@ export class HammockGameEngine {
       // Award score
       const totalScore = baseScore + comboBonus;
       s.score += totalScore;
-
-      if (comboBonus > 0) {
-        console.log(`💰 SCORE: +${totalScore} (base: ${baseScore}, combo bonus: ${comboBonus})`);
+      
+      // Debug log only for significant events
+      if (s.combo > 2) {
+        console.log(`🔥 COMBO x${s.combo}! (+${totalScore} pts)`);
       }
     }
 
@@ -577,6 +585,7 @@ export class HammockGameEngine {
           this.addScreenShake(8);
           this.createParticles(plat.x + plat.width / 2, plat.y, '#FFD700', 15);
           s.combo += 2; // Bonus combo for spring
+          console.log('🚀 SPRING BOOST!');
         } else {
           player.vy = PHYSICS.JUMP_VELOCITY;
           s.combo++;
@@ -586,7 +595,6 @@ export class HammockGameEngine {
       case 'breakable':
         player.vy = PHYSICS.JUMP_VELOCITY;
         plat.broken = true; // Only break THIS platform
-        console.log(`💥 BREAKABLE PLATFORM BROKEN: id=${plat.id}, x=${plat.x.toFixed(0)}, y=${plat.y.toFixed(0)}`);
         this.addScreenShake(4);
         this.createParticles(plat.x + plat.width / 2, plat.y, '#8B4513', 10);
         s.combo++;
@@ -605,29 +613,14 @@ export class HammockGameEngine {
 
     // Remove platforms that are way below the visible screen OR broken
     const screenBottom = s.cameraY + s.screenHeight;
-    const beforeCount = s.platforms.length;
 
-    const removedPlatforms: Platform[] = [];
     s.platforms = s.platforms.filter(pl => {
       // Remove if below screen OR broken
       if (pl.y >= screenBottom + 200 || pl.broken) {
-        removedPlatforms.push(pl);
         return false;
       }
       return true;
     });
-    
-    if (removedPlatforms.length > 0) {
-      console.log(`🗑️ CLEANUP: Removed ${removedPlatforms.length} platforms (too far below screen)`);
-      console.log(`   Removed: ${removedPlatforms.map(p => `${p.type}@y${p.y.toFixed(0)}`).join(', ')}`);
-      console.log(`   Remaining: ${s.platforms.length} platforms`);
-      console.log(`   Player Y: ${s.player.y.toFixed(0)}, Camera Y: ${s.cameraY.toFixed(0)}, Screen bottom: ${screenBottom.toFixed(0)}`);
-    }
-    
-    // Track if platforms are disappearing without cleanup
-    if (s.platforms.length < beforeCount - removedPlatforms.length) {
-      console.log(`⚠️⚠️⚠️ MYSTERY: Platforms disappeared! Before=${beforeCount}, Removed=${removedPlatforms.length}, After=${s.platforms.length}`);
-    }
     
     // Spawn new platforms above existing ones
     // Difficulty rises FAST with score; clamps at 1.0
@@ -648,16 +641,10 @@ export class HammockGameEngine {
     let lastPlatformX = topPlatforms.length > 0 ? topPlatforms[0].x : s.screenWidth / 2;
     
     // Spawn platforms until we have enough (dynamic target count)
-    let spawned = 0;
     const targetCount = Math.round(
       GAME_CONFIG.TARGET_COUNT_EASY + (GAME_CONFIG.TARGET_COUNT_HARD - GAME_CONFIG.TARGET_COUNT_EASY) * difficulty
     );
-    const needsSpawn = s.platforms.length < targetCount;
     const yLimit = s.player.y - s.screenHeight * 4; // Increased range
-    
-    if (needsSpawn && removedPlatforms.length > 0) {
-      console.log(`🔄 SPAWN CHECK: Need platforms (${s.platforms.length}/${targetCount}), minY=${minY.toFixed(0)}, startY=${y.toFixed(0)}`);
-    }
     
     while (s.platforms.length < targetCount && y > yLimit) {
       // Interpolate platform width range with difficulty
@@ -706,37 +693,8 @@ export class HammockGameEngine {
         type: platformType
       });
       
-      spawned++;
       lastPlatformX = x;
       y -= gap;
-    }
-    
-    if (spawned > 0) {
-      console.log(`➕ SPAWNED ${spawned} platforms! Total now: ${s.platforms.length}`);
-    } else if (needsSpawn) {
-      console.log(`⚠️ SPAWN FAILED: Could not spawn (y=${y.toFixed(0)} not > yLimit=${yLimit.toFixed(0)})`);
-    }
-    
-    // Log platform status periodically
-    const visibleCount = s.platforms.filter(p => {
-      const screenY = p.y - s.cameraY;
-      return screenY >= -50 && screenY <= s.screenHeight + 50 && !p.broken;
-    }).length;
-    
-    const brokenCount = s.platforms.filter(p => p.broken).length;
-    
-    // Log every 50 frames (roughly every 3 seconds at 60fps)
-    if (Math.floor(s.score / 10) % 50 === 0 && s.score > 0) {
-      console.log(`📊 STATUS: Total=${s.platforms.length}, Visible=${visibleCount}, Broken=${brokenCount}, Score=${s.score}`);
-    }
-    
-    // Always log critical issues
-    if (s.platforms.length < 10) {
-      console.log(`⚠️⚠️⚠️ CRITICAL: Low platform count: ${s.platforms.length}`);
-    }
-    
-    if (visibleCount < 5) {
-      console.log(`⚠️ WARNING: Only ${visibleCount} visible platforms!`);
     }
   }
 

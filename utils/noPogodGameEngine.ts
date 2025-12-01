@@ -80,15 +80,15 @@ export const NO_POGOD_CONFIG = {
   GAME_DURATION: 60000, // 60 seconds in milliseconds
   ITEM_SPAWN_INTERVAL: 1500, // Base interval between item spawns
   ITEM_SPAWN_VARIANCE: 500, // Random variance in spawn timing
-  
+
   // Scoring
   GOOD_ITEM_POINTS: 10,
   INITIAL_LIVES: 3,
-  
+
   // Physics
   ITEM_FALL_SPEED: 5.0, // Increased from 2.5 for faster falling
   ITEM_FALL_ACCELERATION: 0, // No acceleration - constant speed for straight trajectory
-  
+
   // Positions
   PLAYER_POSITIONS: {
     LEFT: 0.25,
@@ -97,11 +97,11 @@ export const NO_POGOD_CONFIG = {
   },
   SHONZIKA_POSITION: { x: 0.5, y: 0.35 },  // 35% from top to ensure visibility below safe area
   MIRO_GROUND_Y: 0.75,  // 75% from top - good position for catching
-  
+
   // Sprites
   CHARACTER_SIZE: 80,
   ITEM_SIZE: 40,
-  
+
   // Animation
   PLAYER_MOVE_DURATION: 200, // milliseconds for smooth movement
   PLAYER_MOVE_SPEED: 0.8, // movement interpolation speed
@@ -116,7 +116,7 @@ export const NO_POGOD_CONFIG = {
   SHONZIKA_EDGE_PADDING: 10,
   SHONZIKA_WALK_CYCLES_PER_SEC: 4.5,
   SHONZIKA_THROW_VISUAL_MS: 250, // how long the THROWING pose is shown
-  
+
   // Item probabilities
   ITEM_SPAWN_WEIGHTS: {
     EGG: 30,
@@ -128,43 +128,43 @@ export const NO_POGOD_CONFIG = {
 } as const;
 
 // Item type definitions with specific behaviors
-export const ITEM_DEFINITIONS: Record<ItemType, { 
-  points: number; 
-  isBad: boolean; 
+export const ITEM_DEFINITIONS: Record<ItemType, {
+  points: number;
+  isBad: boolean;
   isDeadly: boolean;
   mustCatch: boolean; // If true, missing this item causes game over
   shouldAvoid: boolean; // If true, catching this item is bad
 }> = {
-  EGG: { 
-    points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS, 
-    isBad: false, 
+  EGG: {
+    points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS,
+    isBad: false,
     isDeadly: false,
     mustCatch: false,
     shouldAvoid: false,
   },
-  TOMATO: { 
-    points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS, 
-    isBad: false, 
+  TOMATO: {
+    points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS,
+    isBad: false,
     isDeadly: false,
     mustCatch: false,
     shouldAvoid: false,
   },
-  PEPPER: { 
-    points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS, 
-    isBad: false, 
+  PEPPER: {
+    points: NO_POGOD_CONFIG.GOOD_ITEM_POINTS,
+    isBad: false,
     isDeadly: false,
     mustCatch: false,
     shouldAvoid: false,
   },
-  ELECTRIC_SHOCK: { 
-    points: 0, 
-    isBad: true, 
+  ELECTRIC_SHOCK: {
+    points: 0,
+    isBad: true,
     isDeadly: false,
     mustCatch: false, // Good to miss
     shouldAvoid: true, // Should avoid catching
   },
-  BOMB: { 
-    points: 0, 
+  BOMB: {
+    points: 0,
     isBad: true, // Avoid bombs
     isDeadly: true, // Game over when CAUGHT
     mustCatch: false, // Missing bombs should NOT end the game
@@ -184,7 +184,7 @@ export class NoPogodGameEngine {
   constructor(screenWidth: number, screenHeight: number, assets?: NoPogodGameAssets) {
     this.gameState = this.createInitialState(screenWidth, screenHeight);
     this.generateNextSpawnTime();
-    
+
     if (assets) {
       this.setAssets(assets);
     }
@@ -194,7 +194,7 @@ export class NoPogodGameEngine {
   public setAssets(assets: NoPogodGameAssets): void {
     this.assets = assets;
     this.gameAnimations = createGameAnimations(assets);
-    
+
     // Initialize default animations
     if (this.gameAnimations) {
       this.gameState.animations.miro.startAnimation(this.gameAnimations.miro.idle);
@@ -211,7 +211,7 @@ export class NoPogodGameEngine {
     const miroY = screenHeight * NO_POGOD_CONFIG.MIRO_GROUND_Y;
     const shonzikaY = screenHeight * NO_POGOD_CONFIG.SHONZIKA_POSITION.y;
     const shonzikaX = screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.CENTER;
-    
+
     return {
       phase: 'MENU',
       score: 0,
@@ -308,7 +308,7 @@ export class NoPogodGameEngine {
     this.gameState.player.movementStartTime = 0;
     this.gameState.player.speedBoostActive = false;
     this.gameState.player.speedBoostEndTime = 0;
-    
+
     const shonzikaX = this.gameState.screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS.CENTER;
     this.gameState.shonzika.position = 'CENTER';
     this.gameState.shonzika.x = shonzikaX;
@@ -396,16 +396,16 @@ export class NoPogodGameEngine {
 
     // Update game timer
     this.updateTimer(deltaTime);
-    
+
     // Update sprite animations
     this.updateAnimations(currentTime);
-    
+
     // Update game components
     this.updatePlayer(deltaTime);
     this.updateItems(deltaTime);
     this.updateShonzika(deltaTime);
     this.checkCollisions();
-    
+
     // Check game end conditions
     this.checkGameEndConditions();
   }
@@ -415,7 +415,7 @@ export class NoPogodGameEngine {
     if (this.gameState.phase === 'PLAYING') {
       this.gameTimer += deltaTime;
       this.gameState.timeRemaining = Math.max(0, NO_POGOD_CONFIG.GAME_DURATION - this.gameTimer);
-      
+
       // Update speed boost timer
       this.updateSpeedBoost();
     }
@@ -528,12 +528,12 @@ export class NoPogodGameEngine {
       // Store old position for debugging
       const oldX = item.x;
       const oldY = item.y;
-      
+
       // Update item position - items should fall PERFECTLY straight down
       // velocityX should be 0 for straight vertical drop
       item.x += item.velocityX; // Should be 0 - no horizontal movement
       item.y += item.velocityY; // Vertical fall (constant velocity)
-      
+
       // Debug logging to track horizontal movement
       if (Math.abs(item.velocityX) > 0.001) {
         console.log('⚠️ ITEM HAS HORIZONTAL VELOCITY!', {
@@ -674,18 +674,18 @@ export class NoPogodGameEngine {
     }
   }
 
-  private getLaneX(lane: 'LEFT'|'CENTER'|'RIGHT'): number {
+  private getLaneX(lane: 'LEFT' | 'CENTER' | 'RIGHT'): number {
     const x = this.gameState.screenWidth * NO_POGOD_CONFIG.PLAYER_POSITIONS[lane];
     return x;
   }
 
-  private getNearestLane(x: number): 'LEFT'|'CENTER'|'RIGHT' {
-    const lanes: ('LEFT'|'CENTER'|'RIGHT')[] = ['LEFT','CENTER','RIGHT'];
-    let best: {lane: 'LEFT'|'CENTER'|'RIGHT'; dist: number} = {lane: 'LEFT', dist: Infinity};
+  private getNearestLane(x: number): 'LEFT' | 'CENTER' | 'RIGHT' {
+    const lanes: ('LEFT' | 'CENTER' | 'RIGHT')[] = ['LEFT', 'CENTER', 'RIGHT'];
+    let best: { lane: 'LEFT' | 'CENTER' | 'RIGHT'; dist: number } = { lane: 'LEFT', dist: Infinity };
     for (const lane of lanes) {
       const lx = this.getLaneX(lane);
       const d = Math.abs(lx - x);
-      if (d < best.dist) best = {lane, dist: d};
+      if (d < best.dist) best = { lane, dist: d };
     }
     return best.lane;
   }
@@ -693,7 +693,7 @@ export class NoPogodGameEngine {
   private spawnItem(): void {
     const itemType = this.getRandomItemType();
     const itemDef = ITEM_DEFINITIONS[itemType];
-    
+
     // Get the appropriate sprite for the item type
     let itemSprite = null;
     if (this.assets) {
@@ -715,7 +715,7 @@ export class NoPogodGameEngine {
           break;
       }
     }
-    
+
     // Items spawn directly from Shonzika's CENTER position (not hand)
     // This ensures perfectly straight vertical drop
     const spawnX = this.gameState.shonzika.x; // Use Shonzika's center X
@@ -749,19 +749,19 @@ export class NoPogodGameEngine {
       velocityY: velocityY,
       trajectory: velocityX === 0 ? '⬇️ STRAIGHT DOWN ✓' : '↘️ DIAGONAL ✗',
     });
-    
+
     // Verify velocityX is exactly 0
     if (Math.abs(velocityX) > 0.0001) {
       console.error('❌ CRITICAL ERROR: Item has horizontal velocity!', velocityX);
     }
 
     this.gameState.items.push(item);
-    
+
     // Set Shonzika to throwing state for a brief visual window
     this.gameState.shonzika.sprite = 'THROWING';
     this.gameState.shonzika.visualThrowTimer = NO_POGOD_CONFIG.SHONZIKA_THROW_VISUAL_MS;
     this.gameState.shonzika.throwCooldown = 900; // gameplay cooldown remains longer
-    
+
     if (this.gameAnimations) {
       this.gameState.animations.shonzika.startAnimation(this.gameAnimations.shonzika.throwing);
     }
@@ -774,12 +774,12 @@ export class NoPogodGameEngine {
   private calculateShonzikaHandPosition(): { x: number; y: number } {
     const shonzika = this.gameState.shonzika;
     const characterSize = 150; // Base character size (matches rendering)
-    
+
     // Base hand offsets for different sprites (relative to character center)
     // These values are based on the sprite artwork and may need fine-tuning
     let handOffsetX = 0;
     let handOffsetY = 0;
-    
+
     // Determine hand offset based on current sprite state
     if (shonzika.sprite === 'THROWING') {
       // When throwing, hand is extended forward
@@ -795,21 +795,21 @@ export class NoPogodGameEngine {
       handOffsetX = 25; // Hand slightly forward
       handOffsetY = 5; // Hand slightly below center
     }
-    
+
     // Adjust hand offset based on Shonzika's position (flip for left side)
     // When Shonzika is on the left, we need to flip the horizontal offset
-    const isOnLeft = shonzika.position === 'LEFT' || 
-                     (shonzika.isMoving && shonzika.targetX < shonzika.x);
-    
+    const isOnLeft = shonzika.position === 'LEFT' ||
+      (shonzika.isMoving && shonzika.targetX < shonzika.x);
+
     if (isOnLeft) {
       handOffsetX = -handOffsetX; // Flip horizontal offset for left-facing
     }
-    
+
     // Calculate final hand position
     // Start from Shonzika's center position and apply offsets
     const handX = shonzika.x + handOffsetX;
     const handY = shonzika.y + handOffsetY + (characterSize * 0.2); // Offset down from center
-    
+
     return {
       x: handX,
       y: handY,
@@ -820,7 +820,7 @@ export class NoPogodGameEngine {
     const weights = NO_POGOD_CONFIG.ITEM_SPAWN_WEIGHTS;
     const totalWeight = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
     const random = Math.random() * totalWeight;
-    
+
     let currentWeight = 0;
     for (const [itemType, weight] of Object.entries(weights)) {
       currentWeight += weight;
@@ -828,7 +828,7 @@ export class NoPogodGameEngine {
         return itemType as ItemType;
       }
     }
-    
+
     return 'EGG'; // Fallback
   }
 
@@ -854,17 +854,17 @@ export class NoPogodGameEngine {
       // Check if item is close enough to player position for catching
       const itemCenterX = item.x;
       const itemCenterY = item.y;
-      
+
       const distanceX = Math.abs(itemCenterX - playerCenterX);
       const distanceY = Math.abs(itemCenterY - catchY);
-      
+
       // Item is caught if it's close enough horizontally and at ground level
-      if (distanceX <= catchRadius && distanceY <= NO_POGOD_CONFIG.ITEM_SIZE && 
-          item.y >= catchY - NO_POGOD_CONFIG.ITEM_SIZE) {
+      if (distanceX <= catchRadius && distanceY <= NO_POGOD_CONFIG.ITEM_SIZE &&
+        item.y >= catchY - NO_POGOD_CONFIG.ITEM_SIZE) {
         this.handleItemCatch(item);
         return false; // Remove caught item
       }
-      
+
       return true; // Keep item
     });
   }
@@ -879,13 +879,13 @@ export class NoPogodGameEngine {
         this.gameState.score += item.points;
         // TODO: Award XP (will be handled by game component)
         break;
-        
+
       case 'TOMATO':
         // TOMATO: +10 points, award XP when caught
         this.gameState.score += item.points;
         // TODO: Award XP (will be handled by game component)
         break;
-        
+
       case 'PEPPER':
         // PEPPER: +10 points, award XP, activate 5-second speed boost when caught
         this.gameState.score += item.points;
@@ -893,12 +893,12 @@ export class NoPogodGameEngine {
         // Activate speed boost
         this.activateSpeedBoost();
         break;
-        
+
       case 'ELECTRIC_SHOCK':
         // ELECTRIC_SHOCK: -1 life when caught (player should avoid)
         this.gameState.lives--;
         break;
-        
+
       case 'BOMB':
         // BOMB: Catching a bomb causes immediate game over
         this.gameState.phase = 'GAME_OVER';
@@ -915,12 +915,12 @@ export class NoPogodGameEngine {
         // BOMB miss: Safe to miss — no penalty
         // Do nothing
         break;
-        
+
       case 'ELECTRIC_SHOCK':
         // ELECTRIC_SHOCK miss: No penalty (good to miss)
         // Do nothing - this is the desired outcome
         break;
-        
+
       case 'EGG':
       case 'TOMATO':
       case 'PEPPER':
@@ -936,7 +936,7 @@ export class NoPogodGameEngine {
       this.gameState.timeRemaining = 0; // Ensure it doesn't go negative
       this.gameState.phase = 'GAME_OVER';
     }
-    
+
     // Game ends if all lives are lost
     if (this.gameState.lives <= 0) {
       this.gameState.phase = 'GAME_OVER';
@@ -951,15 +951,15 @@ export class NoPogodGameEngine {
     if (this.gameState.phase !== 'GAME_OVER') {
       return 'NONE';
     }
-    
+
     if (this.gameState.timeRemaining <= 0) {
       return 'TIME_UP';
     }
-    
+
     if (this.gameState.lives <= 0) {
       return 'LIVES_LOST';
     }
-    
+
     // If game is over but time and lives are still available, it was likely a bomb
     return 'BOMB_CAUGHT';
   }
@@ -1043,7 +1043,7 @@ export class NoPogodGameEngine {
     const screenWidth = this.gameState.screenWidth;
     const leftZone = screenWidth * 0.33;
     const rightZone = screenWidth * 0.67;
-    
+
     if (touchX < leftZone) {
       return 'LEFT';
     } else if (touchX > rightZone) {
@@ -1083,7 +1083,7 @@ export class NoPogodGameEngine {
   // Get sprite for specific item type
   getItemSprite(itemType: ItemType): any {
     if (!this.assets) return null;
-    
+
     switch (itemType) {
       case 'EGG':
         return this.assets.items.egg;

@@ -1,15 +1,17 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Dimensions,
-    Modal,
-    PanResponder,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Dimensions,
+  Image,
+  Modal,
+  PanResponder,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -324,13 +326,13 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         // Check if user has reached max rounds (only for non-demo users)
         if (!isDemoMode && newRoundsPlayed >= MAX_ROUNDS) {
           console.log(`🎮 Max rounds reached (${MAX_ROUNDS}). Starting cooldown...`);
-          
+
           // Update game cooldown (start 2-hour cooldown)
           try {
             const { updateGameLastPlayed } = await import('@/utils/gameCooldowns');
             await updateGameLastPlayed(userProfile.id, 'nopogod', isDemoMode);
             console.log('✅ Game cooldown started');
-            
+
             // Show cooldown screen after a short delay
             setTimeout(() => {
               setShowCooldownScreen(true);
@@ -363,15 +365,26 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
   const renderMenuState = () => (
     <View style={styles.menuContainer}>
-      <Text style={styles.gameTitle}>No Pogodi!</Text>
-      <Text style={styles.gameSubtitle}>Help Miro catch the good items!</Text>
-      <Text style={styles.instructionText}>Swipe left or right to move</Text>
-      <View style={styles.menuButtons}>
-        <TouchableOpacity style={styles.startButton} onPress={startGame} activeOpacity={0.8}>
-          <Text style={styles.buttonText}>START</Text>
+      <Image
+        source={require('@/assets/images/game/launch_Screen.png')}
+        style={styles.menuBackgroundImage}
+        resizeMode="contain"
+      />
+
+      {/* Invisible Clickable Areas overlaying the image buttons */}
+      <View style={styles.hiddenButtonContainer}>
+        <TouchableOpacity
+          style={styles.hiddenButton}
+          onPress={startGame}
+          activeOpacity={0.3}
+        >
         </TouchableOpacity>
-        <TouchableOpacity style={styles.exitButton} onPress={exitGame} activeOpacity={0.8}>
-          <Text style={styles.buttonText}>EXIT</Text>
+
+        <TouchableOpacity
+          style={styles.hiddenButton}
+          onPress={exitGame}
+          activeOpacity={0.3}
+        >
         </TouchableOpacity>
       </View>
     </View>
@@ -500,15 +513,15 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
             Come back in 2 hours to play again.{'\n'}
             You'll get a notification when it's ready!
           </Text>
-          
+
           <View style={styles.cooldownStats}>
             <Text style={styles.cooldownStatsText}>
               Rounds Played: {roundsPlayed}/{MAX_ROUNDS}
             </Text>
           </View>
 
-          <TouchableOpacity 
-            style={styles.cooldownButton} 
+          <TouchableOpacity
+            style={styles.cooldownButton}
             onPress={() => {
               setShowCooldownScreen(false);
               setRoundsPlayed(0);
@@ -518,6 +531,29 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
           >
             <Text style={styles.cooldownButtonText}>BACK TO GAMES</Text>
           </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderTouchControls = () => {
+    if (gameState?.phase !== 'PLAYING') return null;
+
+    return (
+      <View style={styles.controlsContainer} pointerEvents="none">
+        <View style={[styles.touchZone, styles.touchZoneLeft, activeTouchZone === 'LEFT' && styles.touchZoneActive]}>
+          <Ionicons
+            name="chevron-back-circle-outline"
+            size={60}
+            color={activeTouchZone === 'LEFT' ? "rgba(196, 255, 0, 0.8)" : "rgba(255, 255, 255, 0.3)"}
+          />
+        </View>
+        <View style={[styles.touchZone, styles.touchZoneRight, activeTouchZone === 'RIGHT' && styles.touchZoneActive]}>
+          <Ionicons
+            name="chevron-forward-circle-outline"
+            size={60}
+            color={activeTouchZone === 'RIGHT' ? "rgba(196, 255, 0, 0.8)" : "rgba(255, 255, 255, 0.3)"}
+          />
         </View>
       </View>
     );
@@ -552,6 +588,9 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
               {/* Swipe feedback (only during gameplay) */}
               {renderSwipeFeedback()}
 
+              {/* Touch Controls (Visual Indicators) */}
+              {renderTouchControls()}
+
               {/* Overlay UI */}
               {gameState?.phase === 'MENU' && renderMenuState()}
               {gameState?.phase === 'PLAYING' && renderGameUI()}
@@ -581,6 +620,37 @@ const styles = StyleSheet.create({
   canvas: {
     flex: 1,
   },
+  // Touch Controls Styles
+  controlsContainer: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+    zIndex: 10,
+  },
+  touchZone: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  touchZoneLeft: {
+    alignItems: 'center',
+  },
+  touchZoneRight: {
+    alignItems: 'center',
+  },
+  touchZoneActive: {
+    backgroundColor: 'rgba(196, 255, 0, 0.2)', // Neon green tint
+    borderColor: 'rgba(196, 255, 0, 0.5)',
+    transform: [{ scale: 1.1 }],
+  },
   // Swipe feedback styles - DISABLED (transparent)
   swipeFeedback: {
     position: 'absolute',
@@ -593,39 +663,27 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)', // Semi-transparent to show game bg
     pointerEvents: 'box-none',
   },
-  gameTitle: {
-    fontSize: 48,
-    fontFamily: 'hamaki-eng',
-    color: Colors.dark.tint,
-    marginBottom: 20,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
-    paddingHorizontal: 16, // Extra padding for italic font
-    includeFontPadding: false, // Android: prevent extra padding
-    textAlignVertical: 'center', // Android: center text vertically
+  menuBackgroundImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover', // Use cover to fill screen, cropping if necessary
   },
-  gameSubtitle: {
-    fontSize: 18,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.text,
-    marginBottom: 10,
-    textAlign: 'center',
+  hiddenButtonContainer: {
+    position: 'absolute',
+    left: '10%', // Adjusted percentage
+    top: '45%', // Adjusted percentage
+    flexDirection: 'column',
+    gap: 20, // Adjusted gap
   },
-  instructionText: {
-    fontSize: 14,
-    fontFamily: 'SpaceMono',
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 40,
-    textAlign: 'center',
+  hiddenButton: {
+    width: 100, // Reduced width
+    height: 40, // Reduced height
+    backgroundColor: "transparent", // Debugging background
   },
-  menuButtons: {
-    gap: 20,
-  },
+  // Re-added styles for Pause and Game Over screens
   startButton: {
     backgroundColor: Colors.dark.tint,
     paddingHorizontal: 40,
@@ -648,9 +706,9 @@ const styles = StyleSheet.create({
     color: Colors.dark.background,
     textAlign: 'center',
     fontWeight: 'bold',
-    paddingHorizontal: 8, // Extra padding for italic font
-    includeFontPadding: false, // Android: prevent extra padding
-    textAlignVertical: 'center', // Android: center text vertically
+    paddingHorizontal: 8,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   gameUI: {
     position: 'absolute',

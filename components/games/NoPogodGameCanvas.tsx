@@ -18,6 +18,7 @@ import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-nat
 
 import { Colors } from '@/constants/Colors';
 import { NoPogodGameState } from '@/utils/noPogodGameEngine';
+import { NOPOGOD_GAME_ASSETS } from '@/utils/noPogodGameAssets';
 import { ResponsiveScalingManager } from '@/utils/noPogodResponsiveScaling';
 import { NoPogodSpriteRenderer } from '@/utils/noPogodSpriteRenderer';
 
@@ -44,30 +45,30 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   const responsiveSizes = scaling.getSizes();
   
   // Load all game images using useImage hook
-  const backgroundImage = useImage(require('@/assets/images/game/bg.png'));
+  const backgroundImage = useImage(NOPOGOD_GAME_ASSETS.background);
   
   // Miro sprites
-  const miroIdleImage = useImage(require('@/assets/images/game/miro/პროფილი დგომა.png'));
-  const miroStep1Image = useImage(require('@/assets/images/game/miro/ნაბიჯი 1.png'));
-  const miroStep2Image = useImage(require('@/assets/images/game/miro/ნაბიჯი 2.png'));
-  const miroAngle45Image = useImage(require('@/assets/images/game/miro/დგომა 45 გრადუსი.png'));
-  const miroAngle90Image = useImage(require('@/assets/images/game/miro/დგომა 90 გრადუსი.png'));
+  const miroIdleImage = useImage(NOPOGOD_GAME_ASSETS.miro.idle);
+  const miroStep1Image = useImage(NOPOGOD_GAME_ASSETS.miro.step1);
+  const miroStep2Image = useImage(NOPOGOD_GAME_ASSETS.miro.step2);
+  const miroAngle45Image = useImage(NOPOGOD_GAME_ASSETS.miro.angle45);
+  const miroAngle90Image = useImage(NOPOGOD_GAME_ASSETS.miro.angle90);
   
   // Shonzika sprites
-  const shonzikaIdleImage = useImage(require('@/assets/images/game/shonzika/დგომა პროფილი.png'));
-  const shonzikaIdle90Image = useImage(require('@/assets/images/game/shonzika/დგომა 90 გრადუსი.png'));
-  const shonzikaWalk1Image = useImage(require('@/assets/images/game/shonzika/სიარული 1.png'));
-  const shonzikaWalk2Image = useImage(require('@/assets/images/game/shonzika/სიარული 2~.png'));
-  const shonzikaHandProfileImage = useImage(require('@/assets/images/game/shonzika/ხელი პროფილი.png'));
-  const shonzikaHand45Image = useImage(require('@/assets/images/game/shonzika/ხელი 45 აგრადუსი.png'));
-  const shonzikaHand90Image = useImage(require('@/assets/images/game/shonzika/ხელი 90 გრადუსი.png'));
+  const shonzikaIdleImage = useImage(NOPOGOD_GAME_ASSETS.shonzika.idle);
+  const shonzikaIdle90Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.angle90);
+  const shonzikaWalk1Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.walking1);
+  const shonzikaWalk2Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.walking2);
+  const shonzikaHandProfileImage = useImage(NOPOGOD_GAME_ASSETS.shonzika.handProfile);
+  const shonzikaHand45Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.hand45);
+  const shonzikaHand90Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.hand90);
   
   // Item sprites
-  const eggImage = useImage(require('@/assets/images/game/items/კვერცხი.png'));
-  const tomatoImage = useImage(require('@/assets/images/game/items/პომიდორი.png'));
-  const pepperImage = useImage(require('@/assets/images/game/items/წიწაკა.png'));
-  const electricShockImage = useImage(require('@/assets/images/game/items/ელექტროშოკი.png'));
-  const bombImage = useImage(require('@/assets/images/game/items/ბომბი.png'));
+  const eggImage = useImage(NOPOGOD_GAME_ASSETS.items.egg);
+  const tomatoImage = useImage(NOPOGOD_GAME_ASSETS.items.tomato);
+  const pepperImage = useImage(NOPOGOD_GAME_ASSETS.items.pepper);
+  const electricShockImage = useImage(NOPOGOD_GAME_ASSETS.items.electricShock);
+  const bombImage = useImage(NOPOGOD_GAME_ASSETS.items.bomb);
 
   // Check if all critical images are loaded
   const allImagesLoaded = !!(
@@ -85,6 +86,24 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     tomatoImage &&
     pepperImage
   );
+  
+  if (!allImagesLoaded) {
+      console.log('Assets Loading Status:', {
+          bg: !!backgroundImage,
+          miroIdle: !!miroIdleImage,
+          miroStep1: !!miroStep1Image,
+          miroStep2: !!miroStep2Image,
+          miro90: !!miroAngle90Image,
+          shonIdle: !!shonzikaIdleImage,
+          shon90: !!shonzikaIdle90Image,
+          shonW1: !!shonzikaWalk1Image,
+          shonW2: !!shonzikaWalk2Image,
+          shonHand: !!shonzikaHandProfileImage,
+          egg: !!eggImage,
+          tomato: !!tomatoImage,
+          pepper: !!pepperImage
+      });
+  }
 
   // Get current Miro sprite based on state and animation
   const getCurrentMiroImage = () => {
@@ -508,26 +527,26 @@ export const areImagesLoaded = (...images: (any | null)[]): boolean => {
 // Export sprite mapping for external use
 export const SPRITE_MAPPING = {
   miro: {
-    idle: require('@/assets/images/game/miro/პროფილი დგომა.png'),
-    step1: require('@/assets/images/game/miro/ნაბიჯი 1.png'),
-    step2: require('@/assets/images/game/miro/ნაბიჯი 2.png'),
-    angle45: require('@/assets/images/game/miro/დგომა 45 გრადუსი.png'),
-    angle90: require('@/assets/images/game/miro/დგომა 90 გრადუსი.png'),
+    idle: NOPOGOD_GAME_ASSETS.miro.idle,
+    step1: NOPOGOD_GAME_ASSETS.miro.step1,
+    step2: NOPOGOD_GAME_ASSETS.miro.step2,
+    angle45: NOPOGOD_GAME_ASSETS.miro.angle45,
+    angle90: NOPOGOD_GAME_ASSETS.miro.angle90,
   },
   shonzika: {
-    idle: require('@/assets/images/game/shonzika/დგომა პროფილი.png'),
-    idle90: require('@/assets/images/game/shonzika/დგომა 90 გრადუსი.png'),
-    walking1: require('@/assets/images/game/shonzika/სიარული 1.png'),
-    walking2: require('@/assets/images/game/shonzika/სიარული 2~.png'),
-    handProfile: require('@/assets/images/game/shonzika/ხელი პროფილი.png'),
-    hand45: require('@/assets/images/game/shonzika/ხელი 45 აგრადუსი.png'),
-    hand90: require('@/assets/images/game/shonzika/ხელი 90 გრადუსი.png'),
+    idle: NOPOGOD_GAME_ASSETS.shonzika.idle,
+    idle90: NOPOGOD_GAME_ASSETS.shonzika.angle90,
+    walking1: NOPOGOD_GAME_ASSETS.shonzika.walking1,
+    walking2: NOPOGOD_GAME_ASSETS.shonzika.walking2,
+    handProfile: NOPOGOD_GAME_ASSETS.shonzika.handProfile,
+    hand45: NOPOGOD_GAME_ASSETS.shonzika.hand45,
+    hand90: NOPOGOD_GAME_ASSETS.shonzika.hand90,
   },
   items: {
-    egg: require('@/assets/images/game/items/კვერცხი.png'),
-    tomato: require('@/assets/images/game/items/პომიდორი.png'),
-    pepper: require('@/assets/images/game/items/წიწაკა.png'),
-    electricShock: require('@/assets/images/game/items/ელექტროშოკი.png'),
-    bomb: require('@/assets/images/game/items/ბომბი.png'),
+    egg: NOPOGOD_GAME_ASSETS.items.egg,
+    tomato: NOPOGOD_GAME_ASSETS.items.tomato,
+    pepper: NOPOGOD_GAME_ASSETS.items.pepper,
+    electricShock: NOPOGOD_GAME_ASSETS.items.electricShock,
+    bomb: NOPOGOD_GAME_ASSETS.items.bomb,
   },
 };
