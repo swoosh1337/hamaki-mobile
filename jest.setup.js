@@ -111,6 +111,29 @@ jest.mock('react-native/Libraries/Utilities/Platform', () => ({
   select: jest.fn((platforms) => platforms.ios || platforms.default),
 }));
 
+// Mock react-native for Platform access
+jest.mock('react-native', () => ({
+  Platform: {
+    OS: 'ios',
+    Version: '15.0',
+    isPad: false,
+    isTesting: true,
+    select: jest.fn((platforms) => platforms.ios || platforms.default),
+  },
+  StyleSheet: {
+    create: (styles) => styles,
+    flatten: jest.fn((style) => style),
+  },
+  View: 'View',
+  Text: 'Text',
+  TouchableOpacity: 'TouchableOpacity',
+  Image: 'Image',
+  ActivityIndicator: 'ActivityIndicator',
+  Dimensions: {
+    get: jest.fn(() => ({ width: 375, height: 812 })),
+  },
+}));
+
 // Set up environment variables for tests
 process.env.EXPO_PUBLIC_YOUTUBE_API_KEY = 'test-youtube-api-key';
 process.env.EXPO_PUBLIC_HAMAKI_CHANNEL_ID = 'test-channel-id';

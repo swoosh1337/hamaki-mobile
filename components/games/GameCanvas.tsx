@@ -5,41 +5,56 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Colors } from '@/constants/Colors';
 import { GAME_CONFIG, GameAssets, GameState } from '@/utils/gameEngine';
+import { NOPOGOD_GAME_ASSETS } from '@/utils/noPogodGameAssets';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Memoized score display - ONLY updates when score changes
-const ScoreBoard = memo(({ score }: { score: number }) => {
-  const platformsClimbed = Math.floor(score / GAME_CONFIG.SCORE_PER_PLATFORM);
-
-  return (
-    <View>
-      <Text style={styles.scoreText}>Score: {score}</Text>
-      <View style={styles.livesContainer}>
-        <Text style={styles.livesText}>Height: {platformsClimbed}m</Text>
-      </View>
-    </View>
-  );
-});
-
-// Memoized indicators - updates when gameplay state changes (combo, grounded)
-const GameIndicators = memo(({ combo, canDoubleJump, isGrounded }: {
+// Memoized Game UI Overlay - Updates only when specific gameplay values change
+const GameUI = memo(({
+  score,
+  combo,
+  canDoubleJump,
+  isGrounded,
+  onPause
+}: {
+  score: number;
   combo: number;
   canDoubleJump: boolean;
   isGrounded: boolean;
+  onPause: () => void;
 }) => {
+  const platformsClimbed = Math.floor(score / GAME_CONFIG.SCORE_PER_PLATFORM);
+
   return (
-    <View style={{ alignItems: 'flex-end' }}>
-      {combo > 1 && (
-        <View style={styles.comboContainer}>
-          <Text style={styles.comboText}>Combo x{combo}!</Text>
+    <View style={styles.gameUI} pointerEvents="box-none">
+      <View style={styles.topRightUI}>
+        <View>
+          <Text style={styles.scoreText}>Score: {score}</Text>
+          <View style={styles.livesContainer}>
+            <Text style={styles.livesText}>Height: {platformsClimbed}m</Text>
+          </View>
         </View>
-      )}
-      {canDoubleJump && !isGrounded && (
-        <View style={styles.doubleJumpIndicator}>
-          <Text style={styles.doubleJumpText}>⚡ Double Tap!</Text>
+
+        <View style={{ alignItems: 'flex-end' }}>
+          {combo > 1 && (
+            <View style={styles.comboContainer}>
+              <Text style={styles.comboText}>Combo x{combo}!</Text>
+            </View>
+          )}
+          {canDoubleJump && !isGrounded && (
+            <View style={styles.doubleJumpIndicator}>
+              <Text style={styles.doubleJumpText}>⚡ Double Tap!</Text>
+            </View>
+          )}
         </View>
-      )}
+      </View>
+
+      {/* Tilt indicator */}
+      <View style={styles.tiltIndicator} />
+
+      <Pressable style={styles.pauseButton} onPress={onPause}>
+        <Text style={styles.pauseButtonText}>⏸️</Text>
+      </Pressable>
     </View>
   );
 });
@@ -54,9 +69,11 @@ interface GameCanvasProps {
   onDoubleTap?: () => void;
   hasAccelerometer?: boolean;
   gameEngine?: any; // Pass game engine for fallback controls
+  highScore?: number;
+  isNewHighScore?: boolean;
 }
 
-export const GameCanvas: React.FC<GameCanvasProps> = ({
+export const GameCanvas = React.memo(({
   gameState,
   assets,
   onStartGame,
@@ -66,10 +83,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onDoubleTap,
   hasAccelerometer = true,
   gameEngine,
-}) => {
+  highScore = 0,
+  isNewHighScore = false,
+}: GameCanvasProps) => {
   // Load Skia images
   const backgroundImage = useImage(assets.background || null);
   const playerImage = useImage(assets.player || null);
+  
+  // Load item images
+  const eggImage = useImage(NOPOGOD_GAME_ASSETS.items.egg);
+  const tomatoImage = useImage(NOPOGOD_GAME_ASSETS.items.tomato);
+  const pepperImage = useImage(NOPOGOD_GAME_ASSETS.items.pepper);
 
   // Game loop using requestAnimationFrame
   const animationFrameRef = useRef<number | undefined>(undefined);
@@ -117,29 +141,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     </View>
   );
 
-  const renderGameUI = () => {
-    if (gameState.phase !== 'PLAYING') return null;
-
-    return (
-      <View style={styles.gameUI}>
-        <View style={styles.topRightUI}>
-          <ScoreBoard score={gameState.score} />
-          <GameIndicators
-            combo={gameState.combo}
-            canDoubleJump={gameState.player.canDoubleJump}
-            isGrounded={gameState.player.isGrounded}
-          />
-        </View>
-
-        {/* Tilt indicator */}
-        <View style={styles.tiltIndicator} />
-        <Pressable style={styles.pauseButton} onPress={onPauseGame}>
-          <Text style={styles.pauseButtonText}>⏸️</Text>
-        </Pressable>
-      </View>
-    );
-  };
-
   const handleResumeGame = () => {
     if (gameEngine) {
       gameEngine.resumeGame();
@@ -171,7 +172,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     return (
       <View style={styles.gameOverContainer}>
         <Text style={styles.gameOverTitle}>Game Over</Text>
+        
+        {isNewHighScore && (
+          <View style={styles.highScoreBanner}>
+            <Text style={styles.highScoreText}>🏆 NEW HIGH SCORE! 🏆</Text>
+            <Text style={styles.highScoreCongrats}>Congratulations!</Text>
+          </View>
+        )}
+
         <Text style={styles.finalScore}>Final Score: {gameState.score}</Text>
+
+        {highScore > 0 && !isNewHighScore && (
+          <Text style={styles.highScoreDisplay}>High Score: {highScore}</Text>
+        )}
+
         <View style={styles.gameOverButtons}>
           <Pressable style={styles.startButton} onPress={onStartGame}>
             <Text style={styles.buttonText}>TRY AGAIN</Text>
@@ -220,6 +234,33 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             </Group>
           )}
 
+          {/* Items */}
+          {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && (
+            <Group>
+              {gameState.items.map(item => {
+                if (item.collected) return null;
+                
+                let img = eggImage;
+                if (item.type === 'tomato') img = tomatoImage;
+                if (item.type === 'pepper') img = pepperImage;
+                
+                if (!img) return null;
+                
+                return (
+                  <Image
+                    key={item.id}
+                    image={img}
+                    x={item.x}
+                    y={item.y}
+                    width={item.width}
+                    height={item.height}
+                    fit="contain"
+                  />
+                );
+              })}
+            </Group>
+          )}
+
           {/* Particles */}
           {(gameState.phase === 'PLAYING' || gameState.phase === 'PAUSED') && (
             <Group>
@@ -254,7 +295,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
         {/* Overlay UI */}
         {gameState.phase === 'MENU' && renderMenuState()}
-        {gameState.phase === 'PLAYING' && renderGameUI()}
+        {gameState.phase === 'PLAYING' && (
+          <GameUI
+            score={gameState.score}
+            combo={gameState.combo}
+            canDoubleJump={gameState.player.canDoubleJump}
+            isGrounded={gameState.player.isGrounded}
+            onPause={onPauseGame}
+          />
+        )}
         {gameState.phase === 'PAUSED' && renderPausedState()}
         {gameState.phase === 'GAME_OVER' && renderGameOverState()}
 
@@ -284,7 +333,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       </View>
     </GestureHandlerRootView>
   );
-};
+
+});
+
+GameUI.displayName = 'GameUI';
+GameCanvas.displayName = 'GameCanvas';
 
 const styles = StyleSheet.create({
   container: {
@@ -362,34 +415,36 @@ const styles = StyleSheet.create({
   scoreText: {
     fontSize: 18,
     fontFamily: 'SpaceMono',
-    color: '#000000',
+    color: '#FFFFFF', // White text
     fontWeight: 'bold',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    // No background color
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
-    overflow: 'hidden',
     minWidth: 140,
     textAlign: 'right',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)', // Strong black shadow
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   livesContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
     justifyContent: 'flex-end',
   },
   livesText: {
     fontSize: 16,
     fontFamily: 'SpaceMono',
-    color: '#000000',
+    color: '#FFFFFF', // White text
     fontWeight: 'bold',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    // No background color
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
-    overflow: 'hidden',
     minWidth: 140,
     textAlign: 'right',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)', // Strong black shadow
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   heartIcon: {
     fontSize: 16,
@@ -520,8 +575,44 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
-    marginBottom: 40,
+    marginBottom: 12, // Reduced from 40 to fit high score
     textAlign: 'center',
+  },
+  highScoreBanner: {
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  highScoreText: {
+    fontSize: 24,
+    fontFamily: 'hamaki-eng',
+    color: '#FFD700',
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(255, 215, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+    paddingHorizontal: 8,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  highScoreCongrats: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    color: '#FFD700',
+    marginTop: 4,
+  },
+  highScoreDisplay: {
+    fontSize: 18,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    marginBottom: 30,
+    marginTop: 4,
+    opacity: 0.8,
   },
   gameOverButtons: {
     gap: 30, // Increased gap for better spacing

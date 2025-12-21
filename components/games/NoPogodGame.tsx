@@ -507,11 +507,11 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
           <Text style={styles.cooldownIcon}>⏰</Text>
           <Text style={styles.cooldownTitle}>Cooldown Active</Text>
           <Text style={styles.cooldownMessage}>
-            You've played {MAX_ROUNDS} rounds!
+            You&apos;ve played {MAX_ROUNDS} rounds!
           </Text>
           <Text style={styles.cooldownSubtext}>
             Come back in 2 hours to play again.{'\n'}
-            You'll get a notification when it's ready!
+            You&apos;ll get a notification when it&apos;s ready!
           </Text>
 
           <View style={styles.cooldownStats}>

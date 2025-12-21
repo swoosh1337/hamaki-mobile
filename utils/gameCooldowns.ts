@@ -166,6 +166,20 @@ export async function updateGameLastPlayed(
 }
 
 /**
+ * Record a game play session (wrapper for updateGameLastPlayed)
+ */
+export async function recordGamePlay(
+  userId: string,
+  gameType: string, // Accept string to be more flexible, but internally map to GameType
+  isDemoMode: boolean = false
+): Promise<{ success: boolean; error?: string }> {
+  // Map game names if necessary or validate
+  const validGameType = gameType === 'hammock-jump' ? 'flappybird' : (gameType as GameType);
+
+  return updateGameLastPlayed(userId, validGameType, isDemoMode);
+}
+
+/**
  * Schedule a push notification for when the game cooldown expires
  */
 async function scheduleCooldownNotification(gameType: GameType): Promise<void> {

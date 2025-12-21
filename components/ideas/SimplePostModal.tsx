@@ -1,15 +1,15 @@
 import { Colors } from '@/constants/Colors';
 import React, { useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 interface SimplePostModalProps {
@@ -26,13 +26,13 @@ export const SimplePostModal: React.FC<SimplePostModalProps> = ({
   isSubmitting,
 }) => {
   console.log('📝 SimplePostModal render', { visible, isSubmitting });
-  
+
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
 
   const handleSubmit = async () => {
     console.log('📝 Submit pressed', { title, content });
-    
+
     if (!title.trim() || !content.trim()) {
       console.log('❌ Validation failed');
       return;
@@ -42,7 +42,7 @@ export const SimplePostModal: React.FC<SimplePostModalProps> = ({
       console.log('📝 Calling onSubmit...');
       await onSubmit(title, content);
       console.log('✅ onSubmit completed');
-      
+
       // Reset and close
       setTitle('');
       setContent('');
@@ -62,55 +62,55 @@ export const SimplePostModal: React.FC<SimplePostModalProps> = ({
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} disabled={isSubmitting}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            
-            <Text style={styles.headerTitle}>New Idea</Text>
-            
-            <TouchableOpacity 
-              onPress={handleSubmit}
-              disabled={isSubmitting || !title.trim() || !content.trim()}
-            >
-              <Text style={[
-                styles.submitText,
-                (isSubmitting || !title.trim() || !content.trim()) && styles.submitTextDisabled
-              ]}>
-                {isSubmitting ? 'Submitting...' : 'Submit'}
-              </Text>
-            </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} disabled={isSubmitting}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.headerTitle}>New Idea</Text>
+
+          <TouchableOpacity
+            onPress={handleSubmit}
+            disabled={isSubmitting || !title.trim() || !content.trim()}
+          >
+            <Text style={[
+              styles.submitText,
+              (isSubmitting || !title.trim() || !content.trim()) && styles.submitTextDisabled
+            ]}>
+              {isSubmitting ? 'Submitting...' : 'Submit'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Content */}
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.content}
         >
-            <Text style={styles.label}>Title *</Text>
-            <TextInput
-              style={styles.titleInput}
-              placeholder="What's your video idea?"
-              placeholderTextColor={Colors.dark.tabIconDefault}
-              value={title}
-              onChangeText={setTitle}
-              maxLength={100}
-              editable={!isSubmitting}
-            />
-            
-            <Text style={styles.label}>Description *</Text>
-            <TextInput
-              style={styles.contentInput}
-              placeholder="Describe your idea..."
-              placeholderTextColor={Colors.dark.tabIconDefault}
-              value={content}
-              onChangeText={setContent}
-              maxLength={1000}
-              multiline
-              numberOfLines={6}
-              textAlignVertical="top"
-              editable={!isSubmitting}
-            />
-          </View>
+          <Text style={styles.label}>Title *</Text>
+          <TextInput
+            style={styles.titleInput}
+            placeholder="What's your video idea?"
+            placeholderTextColor={Colors.dark.tabIconDefault}
+            value={title}
+            onChangeText={setTitle}
+            maxLength={100}
+            editable={!isSubmitting}
+          />
+
+          <Text style={styles.label}>Description *</Text>
+          <TextInput
+            style={styles.contentInput}
+            placeholder="Describe your idea..."
+            placeholderTextColor={Colors.dark.tabIconDefault}
+            value={content}
+            onChangeText={setContent}
+            maxLength={1000}
+            multiline
+            numberOfLines={6}
+            textAlignVertical="top"
+            editable={!isSubmitting}
+          />
+
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>

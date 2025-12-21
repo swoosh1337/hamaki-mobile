@@ -1,4 +1,5 @@
 import { Accelerometer } from 'expo-sensors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
@@ -38,6 +39,23 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
   const [hasAccelerometer, setHasAccelerometer] = useState(true);
   const lastTapTime = useRef<number>(0);
   const doubleTapDelay = 400; // ms - increased for better detection
+  const [highScore, setHighScore] = useState<number>(0);
+  const [isNewHighScore, setIsNewHighScore] = useState(false);
+
+  // Load high score on mount
+  useEffect(() => {
+    const loadHighScore = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('hammock_high_score');
+        if (stored) {
+          setHighScore(parseInt(stored, 10));
+        }
+      } catch (error) {
+        console.error('Error loading high score:', error);
+      }
+    };
+    loadHighScore();
+  }, []);
 
   // Initialize game engine and accelerometer
   useEffect(() => {
@@ -108,6 +126,7 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
     if (gameEngineRef.current) {
       gameEngineRef.current.startGame();
       setXpAwarded(false); // Reset XP flag on new game
+      setIsNewHighScore(false); // Reset high score flag
       updateGameState();
     }
   }, [updateGameState]);
@@ -140,14 +159,14 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
   const handleDoubleTap = useCallback(() => {
     const currentTime = Date.now();
     const timeSinceLastTap = currentTime - lastTapTime.current;
-    
+
     if (timeSinceLastTap < doubleTapDelay) {
       // Double tap detected!
       if (gameEngineRef.current) {
         gameEngineRef.current.performDoubleJump();
       }
     }
-    
+
     lastTapTime.current = currentTime;
   }, []);
 
@@ -167,6 +186,18 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
       const xpToAward = Math.max(1, Math.floor(gameState.score / 50));
       const newXP = userProfile.xp_points + xpToAward;
 
+      // Check for high score
+      if (gameState.score > highScore) {
+        setIsNewHighScore(true);
+        setHighScore(gameState.score);
+        try {
+          await AsyncStorage.setItem('hammock_high_score', gameState.score.toString());
+          console.log('🏆 NEW HIGH SCORE!', gameState.score);
+        } catch (error) {
+          console.error('Error saving high score:', error);
+        }
+      }
+
       try {
         const success = await userService.updateUserXP(userProfile.google_id, newXP);
         if (!success) {
@@ -179,7 +210,7 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
 
         // Record cooldown
         const { recordGamePlay } = await import('@/utils/gameCooldowns');
-        await recordGamePlay(userProfile.id, 'hammock-jump');
+        await recordGamePlay(userProfile.id, 'hammock-jump', isDemoMode);
 
         // Invalidate XP cache (await, but non-fatal)
         try {
@@ -243,6 +274,8 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
             onDoubleTap={handleDoubleTap}
             hasAccelerometer={hasAccelerometer}
             gameEngine={gameEngineRef.current}
+            highScore={highScore}
+            isNewHighScore={isNewHighScore}
           />
         </View>
       </SafeAreaView>

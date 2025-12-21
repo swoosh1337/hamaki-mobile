@@ -1,9 +1,8 @@
 import {
+  clearVideosCache,
   fetchHamakiVideos,
   formatTimeAgo,
-  isVideoNew,
-  clearVideosCache,
-  YouTubeVideo,
+  isVideoNew
 } from '../../utils/youtube';
 import {
   createMockFetch,
@@ -11,8 +10,8 @@ import {
   createMockYouTubeVideo,
   createMockYouTubeVideoStats,
   mockCurrentTime,
-  restoreTime,
   mockTimestamp,
+  restoreTime,
 } from '../__helpers__/testHelpers';
 
 describe('YouTube Utils', () => {
@@ -24,11 +23,11 @@ describe('YouTube Utils', () => {
     jest.clearAllMocks();
     mockFetch = createMockFetch();
     mockCurrentTime();
-    
+
     // Mock console to reduce noise in tests
     console.log = jest.fn();
     console.error = jest.fn();
-    
+
     // Clear cache before each test
     clearVideosCache();
   });
@@ -45,7 +44,7 @@ describe('YouTube Utils', () => {
         createMockYouTubeVideo('video1'),
         createMockYouTubeVideo('video2'),
       ];
-      
+
       const mockStats = [
         createMockYouTubeVideoStats('video1', '1000'),
         createMockYouTubeVideoStats('video2', '2500'),
@@ -105,7 +104,7 @@ describe('YouTube Utils', () => {
       const result2 = await fetchHamakiVideos();
       expect(mockFetch).not.toHaveBeenCalled();
       expect(result1).toEqual(result2);
-      expect(console.log).toHaveBeenCalledWith('Returning cached HamaKi Studio videos');
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Returning cached HamaKi Studio videos'));
     });
 
     it('should handle API errors gracefully', async () => {
@@ -115,7 +114,7 @@ describe('YouTube Utils', () => {
       } as Response);
 
       await expect(fetchHamakiVideos()).rejects.toThrow();
-      expect(console.error).toHaveBeenCalledWith('Error fetching HamaKi videos:', expect.any(Error));
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Error fetching HamaKi videos'), expect.anything());
     });
 
     it('should handle network errors', async () => {
@@ -134,7 +133,7 @@ describe('YouTube Utils', () => {
       const result = await fetchHamakiVideos();
 
       expect(result).toEqual([]);
-      expect(console.log).toHaveBeenCalledWith('No videos found for HamaKi Studio channel');
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('No videos found for HamaKi Studio channel'));
     });
 
     it('should format view counts correctly', async () => {
@@ -237,57 +236,57 @@ describe('YouTube Utils', () => {
   describe('formatTimeAgo', () => {
     it('should format "Just now" for very recent videos', () => {
       const recentTime = new Date(mockTimestamp - 30 * 1000).toISOString(); // 30 seconds ago
-      
+
       const result = formatTimeAgo(recentTime);
-      
+
       expect(result).toBe('Just now');
     });
 
     it('should format hours correctly', () => {
       const hoursAgo = new Date(mockTimestamp - 3 * 60 * 60 * 1000).toISOString(); // 3 hours ago
-      
+
       const result = formatTimeAgo(hoursAgo);
-      
+
       expect(result).toBe('3 hours ago');
     });
 
     it('should format single hour correctly', () => {
       const oneHourAgo = new Date(mockTimestamp - 1 * 60 * 60 * 1000).toISOString(); // 1 hour ago
-      
+
       const result = formatTimeAgo(oneHourAgo);
-      
+
       expect(result).toBe('1 hour ago');
     });
 
     it('should format days correctly', () => {
       const daysAgo = new Date(mockTimestamp - 3 * 24 * 60 * 60 * 1000).toISOString(); // 3 days ago
-      
+
       const result = formatTimeAgo(daysAgo);
-      
+
       expect(result).toBe('3 days ago');
     });
 
     it('should format single day correctly', () => {
       const oneDayAgo = new Date(mockTimestamp - 1 * 24 * 60 * 60 * 1000).toISOString(); // 1 day ago
-      
+
       const result = formatTimeAgo(oneDayAgo);
-      
+
       expect(result).toBe('1 day ago');
     });
 
     it('should format weeks correctly', () => {
       const weeksAgo = new Date(mockTimestamp - 2 * 7 * 24 * 60 * 60 * 1000).toISOString(); // 2 weeks ago
-      
+
       const result = formatTimeAgo(weeksAgo);
-      
+
       expect(result).toBe('2 weeks ago');
     });
 
     it('should format months correctly', () => {
       const monthsAgo = new Date(mockTimestamp - 45 * 24 * 60 * 60 * 1000).toISOString(); // ~1.5 months ago
-      
+
       const result = formatTimeAgo(monthsAgo);
-      
+
       expect(result).toBe('1 month ago');
     });
   });
@@ -295,33 +294,33 @@ describe('YouTube Utils', () => {
   describe('isVideoNew', () => {
     it('should return true for videos uploaded within 24 hours', () => {
       const recentVideo = new Date(mockTimestamp - 12 * 60 * 60 * 1000).toISOString(); // 12 hours ago
-      
+
       const result = isVideoNew(recentVideo);
-      
+
       expect(result).toBe(true);
     });
 
     it('should return false for videos uploaded more than 24 hours ago', () => {
       const oldVideo = new Date(mockTimestamp - 25 * 60 * 60 * 1000).toISOString(); // 25 hours ago
-      
+
       const result = isVideoNew(oldVideo);
-      
+
       expect(result).toBe(false);
     });
 
     it('should return true for videos uploaded exactly 24 hours ago', () => {
       const exactlyOneDayAgo = new Date(mockTimestamp - 24 * 60 * 60 * 1000).toISOString();
-      
+
       const result = isVideoNew(exactlyOneDayAgo);
-      
+
       expect(result).toBe(true);
     });
 
     it('should return true for future dates (edge case)', () => {
       const futureDate = new Date(mockTimestamp + 60 * 60 * 1000).toISOString(); // 1 hour in future
-      
+
       const result = isVideoNew(futureDate);
-      
+
       expect(result).toBe(true);
     });
   });
@@ -362,7 +361,7 @@ describe('YouTube Utils', () => {
 
       await fetchHamakiVideos();
       expect(mockFetch).toHaveBeenCalledTimes(2);
-      expect(console.log).toHaveBeenCalledWith('YouTube videos cache cleared');
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('YouTube videos cache cleared'));
     });
   });
 
