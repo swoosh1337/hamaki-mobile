@@ -1,9 +1,12 @@
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
+import { createLogger } from './logger';
 import { fetchHamakiVideos, YouTubeVideo } from './youtube';
+
+const log = createLogger('Notifications');
 
 // Configuration
 const LAST_VIDEO_CHECK_KEY = 'hamaki_last_video_check';
@@ -51,18 +54,18 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       }
 
       if (finalStatus !== 'granted') {
-        console.log('Failed to get push token for push notifications!');
+        log.warn('Failed to get push token for push notifications - permission denied');
         return null;
       }
 
       token = (await Notifications.getExpoPushTokenAsync()).data;
-      console.log('Push notification token:', token);
+      log.info('Push notification token generated');
     } else {
-      console.log('Must use physical device for Push Notifications');
+      log.info('Non-physical device detected, skipping push token generation');
     }
   } catch (error) {
     // Silently handle permission errors (e.g., missing aps-environment entitlement in development)
-    console.log('Push notifications not available:', error instanceof Error ? error.message : 'Unknown error');
+    log.debug('Push notifications not available in this environment', { error });
   }
 
   return token;
@@ -76,7 +79,7 @@ async function storeKnownVideos(videos: YouTubeVideo[]): Promise<void> {
     const videoIds = videos.map(video => video.id);
     await SecureStore.setItemAsync(KNOWN_VIDEOS_KEY, JSON.stringify(videoIds));
   } catch (error) {
-    console.error('Error storing known videos:', error);
+    log.error('Error storing known videos:', error);
   }
 }
 
@@ -88,7 +91,7 @@ async function getKnownVideos(): Promise<string[]> {
     const knownVideosJson = await SecureStore.getItemAsync(KNOWN_VIDEOS_KEY);
     return knownVideosJson ? JSON.parse(knownVideosJson) : [];
   } catch (error) {
-    console.error('Error getting known videos:', error);
+    log.error('Error getting known videos:', error);
     return [];
   }
 }
@@ -98,35 +101,35 @@ async function getKnownVideos(): Promise<string[]> {
  */
 export async function checkForNewVideos(): Promise<YouTubeVideo[]> {
   try {
-    console.log('Checking for new HamaKi Studio videos...');
-    
+    log.info('Checking for new HamaKi Studio videos...');
+
     // Fetch latest videos
     const latestVideos = await fetchHamakiVideos(5);
     const knownVideoIds = await getKnownVideos();
-    
+
     // Find new videos (not in known list)
     const newVideos = latestVideos.filter(video => !knownVideoIds.includes(video.id));
-    
+
     if (newVideos.length > 0) {
-      console.log(`Found ${newVideos.length} new video(s):`, newVideos.map(v => v.title));
-      
+      log.info(`Found ${newVideos.length} new video(s)`, { titles: newVideos.map(v => v.title) });
+
       // Send notification for each new video
       for (const video of newVideos) {
         await sendNewVideoNotification(video);
       }
-      
+
       // Update known videos
       await storeKnownVideos(latestVideos);
     } else {
-      console.log('No new videos found');
+      log.info('No new videos found since last check');
     }
-    
+
     // Update last check time
     await SecureStore.setItemAsync(LAST_VIDEO_CHECK_KEY, Date.now().toString());
-    
+
     return newVideos;
   } catch (error) {
-    console.error('Error checking for new videos:', error);
+    log.error('Error checking for new videos:', error);
     return [];
   }
 }
@@ -149,10 +152,10 @@ async function sendNewVideoNotification(video: YouTubeVideo): Promise<void> {
       },
       trigger: null, // Send immediately
     });
-    
-    console.log('Notification sent for new video:', video.title);
+
+    log.info('Notification sent for new video', { title: video.title });
   } catch (error) {
-    console.error('Error sending notification:', error);
+    log.error('Error sending notification:', error);
   }
 }
 
@@ -163,13 +166,13 @@ export async function shouldCheckForVideos(): Promise<boolean> {
   try {
     const lastCheckString = await SecureStore.getItemAsync(LAST_VIDEO_CHECK_KEY);
     if (!lastCheckString) return true;
-    
+
     const lastCheck = parseInt(lastCheckString);
     const timeSinceLastCheck = Date.now() - lastCheck;
-    
+
     return timeSinceLastCheck >= VIDEO_CHECK_INTERVAL;
   } catch (error) {
-    console.error('Error checking video check timing:', error);
+    log.error('Error checking video check timing:', error);
     return true;
   }
 }
@@ -185,28 +188,25 @@ export async function initializeNotifications(): Promise<void> {
     const token = await registerForPushNotificationsAsync();
 
     if (token) {
-      console.log('✅ Notification system initialized with token');
+      log.info('Notification system initialized with push token');
     } else {
-      console.log('ℹ️ Notification system initialized without push token (development mode or permissions denied)');
+      log.info('Notification system initialized (push token not available)');
     }
 
     // Set up notification received listener
     Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification received:', notification);
+      log.debug('Notification received', { notification });
     });
 
     // Set up notification response listener (when user taps notification)
     Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
       if (data.type === 'new_video' && data.videoId) {
-        // Handle opening the video when notification is tapped
-        console.log('User tapped notification for video:', data.videoId);
-        // You can navigate to the video or home screen here
+        log.info('User tapped notification for video', { videoId: data.videoId });
       }
     });
   } catch (error) {
-    // Non-critical error - app can continue without push notifications
-    console.log('ℹ️ Push notifications not available:', error instanceof Error ? error.message : 'Unknown error');
+    log.warn('Push notifications not available', { error });
   }
 }
 
@@ -219,6 +219,6 @@ export async function backgroundVideoCheck(): Promise<void> {
       await checkForNewVideos();
     }
   } catch (error) {
-    console.error('Background video check failed:', error);
+    log.error('Background video check failed:', error);
   }
 }

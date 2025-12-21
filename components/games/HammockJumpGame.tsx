@@ -11,8 +11,11 @@ import {
 
 import { useAuth } from '@/contexts/AuthContext';
 import { GameAssets, HammockGameEngine } from '@/utils/gameEngine';
+import { createLogger } from '@/utils/logger';
 import { userService } from '@/utils/supabase';
 import { GameCanvas } from './GameCanvas';
+
+const log = createLogger('HammockJumpGame');
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -51,7 +54,7 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
           setHighScore(parseInt(stored, 10));
         }
       } catch (error) {
-        console.error('Error loading high score:', error);
+        log.error('Error loading high score', error);
       }
     };
     loadHighScore();
@@ -73,7 +76,7 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
             const isAvailable = await Accelerometer.isAvailableAsync();
             if (cancelled) return;
             if (!isAvailable) {
-              console.log('Accelerometer not available on this device');
+              log.debug('Accelerometer not available on this device');
               setHasAccelerometer(false);
               return;
             }
@@ -88,11 +91,11 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
                   gameEngineRef.current.setMoveAnalog(clampedValue);
                 }
               });
-              console.log('✅ Accelerometer setup successful');
+              log.debug('Accelerometer setup successful');
             }
           } catch (error) {
             if (!cancelled) {
-              console.log('Accelerometer setup failed, using touch controls as fallback:', error);
+              log.debug('Accelerometer setup failed, using touch controls as fallback', { error });
               setHasAccelerometer(false);
             }
           }
@@ -192,16 +195,16 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
         setHighScore(gameState.score);
         try {
           await AsyncStorage.setItem('hammock_high_score', gameState.score.toString());
-          console.log('🏆 NEW HIGH SCORE!', gameState.score);
+          log.info('NEW HIGH SCORE!', { score: gameState.score });
         } catch (error) {
-          console.error('Error saving high score:', error);
+          log.error('Error saving high score', error);
         }
       }
 
       try {
         const success = await userService.updateUserXP(userProfile.google_id, newXP);
         if (!success) {
-          console.warn('[HammockJump] updateUserXP returned false; not updating local state or leaderboard');
+          log.warn('updateUserXP returned false; not updating local state or leaderboard');
           return;
         }
 
@@ -217,21 +220,21 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
           const { invalidateXPStatsCache } = await import('@/utils/xpStatsCache');
           await invalidateXPStatsCache(userProfile.id);
         } catch (err) {
-          console.error('[HammockJump] Failed to invalidate XP cache:', err);
+          log.error('Failed to invalidate XP cache', err);
         }
 
         // Trigger leaderboard update in background only after DB success
         userService
           .updateLeaderboardPoints(userProfile.id, xpToAward)
           .then((ok) => {
-            if (!ok) console.warn('[HammockJump] Leaderboard update returned false');
+            if (!ok) log.warn('Leaderboard update returned false');
           })
-          .catch((err) => console.error('[HammockJump] Leaderboard update error:', err));
+          .catch((err) => log.error('Leaderboard update error', err));
 
         // Only now mark as awarded
         setXpAwarded(true);
       } catch (err) {
-        console.error('[HammockJump] Error awarding XP:', err);
+        log.error('Error awarding XP', err);
       }
     };
 

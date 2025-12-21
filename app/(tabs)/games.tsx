@@ -8,6 +8,9 @@ import { NoPogodGame } from '@/components/games/NoPogodGame';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { checkGameCooldown, formatCooldownTime, GameCooldownStatus } from '@/utils/gameCooldowns';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('Games');
 
 interface GameItem {
   id: string;
@@ -61,7 +64,7 @@ export default function GamesScreen() {
         'hammock-jump': hammockJumpStatus,
       });
     } catch (error) {
-      console.error('Error checking cooldowns:', error);
+      log.error('Error checking cooldowns', error);
     }
   };
 

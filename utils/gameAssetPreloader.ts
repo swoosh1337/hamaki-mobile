@@ -4,6 +4,9 @@
  */
 
 import { Image } from 'react-native';
+import { createLogger } from './logger';
+
+const log = createLogger('AssetPreloader');
 
 export interface PreloadedAssets {
   [key: string]: number; // Asset paths mapped to loaded asset IDs
@@ -28,22 +31,22 @@ async function preloadImage(
     if (typeof source === 'number') {
       Image.prefetch(Image.resolveAssetSource(source).uri)
         .then(() => {
-          console.log(`✅ Pre-loaded: ${name}`);
+          log.debug(`Pre-loaded: ${name}`);
           resolve({ name, success: true, source });
         })
         .catch((error) => {
-          console.error(`❌ Failed to pre-load ${name}:`, error);
+          log.error(`Failed to pre-load ${name}`, error);
           resolve({ name, success: false, source });
         });
     } else {
       // For URI strings
       Image.prefetch(source)
         .then(() => {
-          console.log(`✅ Pre-loaded: ${name}`);
+          log.debug(`Pre-loaded: ${name}`);
           resolve({ name, success: true, source });
         })
         .catch((error) => {
-          console.error(`❌ Failed to pre-load ${name}:`, error);
+          log.error(`Failed to pre-load ${name}`, error);
           resolve({ name, success: false, source });
         });
     }
@@ -56,7 +59,7 @@ async function preloadImage(
 export async function preloadNoPogodAssets(
   onProgress?: (progress: PreloadProgress) => void
 ): Promise<{ success: boolean; failedAssets: string[] }> {
-  console.log('🎮 Starting No Pogod asset pre-loading...');
+  log.info('Starting No Pogod asset pre-loading...');
 
   const assets = [
     // Background
@@ -120,11 +123,14 @@ export async function preloadNoPogodAssets(
   }
 
   const success = failedAssets.length === 0;
-  console.log(
-    success
-      ? '✅ All No Pogod assets pre-loaded successfully!'
-      : `⚠️ Pre-loading completed with ${failedAssets.length} failures: ${failedAssets.join(', ')}`
-  );
+  if (success) {
+    log.info('All No Pogod assets pre-loaded successfully!');
+  } else {
+    log.warn('Pre-loading completed with failures', {
+      failureCount: failedAssets.length,
+      failedAssets
+    });
+  }
 
   return { success, failedAssets };
 }
@@ -135,7 +141,7 @@ export async function preloadNoPogodAssets(
 export async function preloadHammockJumpAssets(
   onProgress?: (progress: PreloadProgress) => void
 ): Promise<{ success: boolean; failedAssets: string[] }> {
-  console.log('🎮 Starting Hammock Jump asset pre-loading...');
+  log.info('Starting Hammock Jump asset pre-loading...');
 
   // Add Hammock Jump assets here when needed
   const assets: Array<{ name: string; source: any }> = [];
@@ -194,7 +200,7 @@ export async function preloadHammockJumpAssets(
 export async function preloadAllGameAssets(
   onProgress?: (progress: PreloadProgress) => void
 ): Promise<{ success: boolean; failedAssets: string[] }> {
-  console.log('🎮 Starting pre-load of all game assets...');
+  log.info('Starting pre-load of all game assets...');
 
   const allFailedAssets: string[] = [];
 
@@ -221,11 +227,11 @@ export async function preloadAllGameAssets(
   allFailedAssets.push(...hammockResult.failedAssets);
 
   const success = allFailedAssets.length === 0;
-  console.log(
-    success
-      ? '✅ All game assets pre-loaded successfully!'
-      : `⚠️ Pre-loading completed with ${allFailedAssets.length} failures`
-  );
+  if (success) {
+    log.info('All game assets pre-loaded successfully!');
+  } else {
+    log.warn('Pre-loading completed with failures', { count: allFailedAssets.length });
+  }
 
   return { success, failedAssets: allFailedAssets };
 }
@@ -258,5 +264,5 @@ export function setHammockJumpAssetsLoaded(loaded: boolean): void {
 export function resetAssetLoadingState(): void {
   noPogodAssetsLoaded = false;
   hammockJumpAssetsLoaded = false;
-  console.log('🔄 Asset loading state reset');
+  log.info('Asset loading state reset');
 }

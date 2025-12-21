@@ -17,12 +17,15 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { NoPogodEngine } from '@/features/games/noPogod';
+import { createLogger } from '@/utils/logger';
 import { NOPOGOD_GAME_ASSETS } from '@/utils/noPogodGameAssets';
-import { NoPogodGameEngine } from '@/utils/noPogodGameEngine';
 import { ResponsiveScalingManager } from '@/utils/noPogodResponsiveScaling';
 import { NoPogodSpriteRenderer } from '@/utils/noPogodSpriteRenderer';
 import { userService } from '@/utils/supabase';
 import { NoPogodGameCanvas } from './NoPogodGameCanvas';
+
+const log = createLogger('NoPogodGame');
 
 
 
@@ -38,7 +41,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   onClose,
 }) => {
   const { userProfile, updateUserProfile, isDemoMode } = useAuth();
-  const gameEngineRef = useRef<NoPogodGameEngine | null>(null);
+  const gameEngineRef = useRef<NoPogodEngine | null>(null);
   const spriteRendererRef = useRef<NoPogodSpriteRenderer | null>(null);
   const responsiveScalingRef = useRef<ResponsiveScalingManager | null>(null);
   const [gameState, setGameState] = useState<any>(null);
@@ -67,7 +70,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   // Initialize game engine, sprite renderer, and responsive scaling
   useEffect(() => {
     if (visible && !gameEngineRef.current) {
-      gameEngineRef.current = new NoPogodGameEngine(SCREEN_WIDTH, SCREEN_HEIGHT, NOPOGOD_GAME_ASSETS);
+      gameEngineRef.current = new NoPogodEngine(SCREEN_WIDTH, SCREEN_HEIGHT, NOPOGOD_GAME_ASSETS);
       spriteRendererRef.current = new NoPogodSpriteRenderer(NOPOGOD_GAME_ASSETS, SCREEN_WIDTH, SCREEN_HEIGHT);
       responsiveScalingRef.current = new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT);
       setGameState(gameEngineRef.current.getState());
@@ -81,7 +84,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         setHighScore(parseInt(stored, 10));
       }
     } catch (error) {
-      console.error('Error loading high score:', error);
+      log.error('Error loading high score:', error);
     }
   };
 
@@ -91,9 +94,9 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       setHighScore(score);
       try {
         await AsyncStorage.setItem('nopogod_high_score', score.toString());
-        console.log('🏆 NEW HIGH SCORE!', score);
+        log.info('New high score achieved!', { score });
       } catch (error) {
-        console.error('Error saving high score:', error);
+        log.error('Error saving high score:', error);
       }
     } else {
       setIsNewHighScore(false);
@@ -109,7 +112,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         gamePhaseRef.current = state.phase;  // Keep ref in sync for PanResponder
       }
     } catch (error) {
-      console.error('❌ Error updating game state:', error);
+      log.error('Error updating game state:', error);
       // Don't crash the game, just log the error
     }
   }, []);
@@ -154,7 +157,6 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
   // Handle continuous movement based on touch direction
   const startMovement = useCallback((direction: 'LEFT' | 'RIGHT') => {
-    console.log('🎮 START movement:', direction, 'Phase:', gamePhaseRef.current);
     if (gameEngineRef.current && gamePhaseRef.current === 'PLAYING') {
       isTouchingRef.current = true;
       touchDirectionRef.current = direction;
@@ -172,7 +174,6 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   }, [updateGameState, touchFeedbackOpacity]);
 
   const stopMovement = useCallback(() => {
-    console.log('🎮 STOP movement');
     if (gameEngineRef.current) {
       isTouchingRef.current = false;
       touchDirectionRef.current = null;
@@ -196,30 +197,23 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       onMoveShouldSetPanResponder: () => false,  // Don't track movement, just press/release
       onPanResponderGrant: (evt) => {
         if (gamePhaseRef.current !== 'PLAYING') {
-          console.log('👆 Touch ignored - phase:', gamePhaseRef.current);
           return;
         }
 
         const touchX = evt.nativeEvent.pageX;
         const screenWidth = SCREEN_WIDTH;
 
-        console.log('👆 TOUCH START at X:', touchX, 'Screen:', screenWidth);
-
         // Simple: LEFT half = move left, RIGHT half = move right
         if (touchX < screenWidth / 2) {
-          console.log('👆 LEFT half - moving LEFT');
           startMovement('LEFT');
         } else {
-          console.log('👆 RIGHT half - moving RIGHT');
           startMovement('RIGHT');
         }
       },
       onPanResponderRelease: () => {
-        console.log('👆 TOUCH RELEASE - stopping movement');
         stopMovement();
       },
       onPanResponderTerminate: () => {
-        console.log('👆 TOUCH TERMINATED - stopping movement');
         stopMovement();
       },
     })
@@ -233,7 +227,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         updateGameState();
       }
     } catch (error) {
-      console.error('❌ Error in game update loop:', error);
+      log.error('Error in game update loop:', error);
       // Don't crash the game loop, just log and continue
     }
   }, [updateGameState]);
@@ -282,15 +276,15 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
             if (success) {
               // Update local user profile
               updateUserProfile({ xp_points: newXP });
-              console.log(`✅ Awarded ${xpToAward} XP for No Pogodi game!`);
+              log.info(`Awarded ${xpToAward} XP for No Pogodi game`);
 
               // Invalidate XP stats cache so profile refreshes
               try {
                 const { invalidateXPStatsCache } = await import('@/utils/xpStatsCache');
                 await invalidateXPStatsCache(userProfile.id);
-                console.log('📊 XP stats cache invalidated after game');
+                log.debug('XP stats cache invalidated after game');
               } catch (error) {
-                console.error('Error invalidating XP cache:', error);
+                log.error('Error invalidating XP cache:', error);
               }
 
               // Update leaderboard entries (weekly and all-time) - non-blocking
@@ -298,23 +292,23 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
               userService.updateLeaderboardPoints(userProfile.id, xpToAward)
                 .then((success) => {
                   if (success) {
-                    console.log(`✅ Updated leaderboard with ${xpToAward} points!`);
+                    log.info(`Updated leaderboard with ${xpToAward} points`);
                   } else {
-                    console.warn('⚠️ Leaderboard update failed, but XP was saved');
+                    log.warn('Leaderboard update failed, but XP was saved');
                   }
                 })
                 .catch((error) => {
-                  console.error('❌ Leaderboard update error (non-critical):', error);
+                  log.error('Leaderboard update error (non-critical):', error);
                   // Don't throw - leaderboard update is not critical
                 });
             } else {
               // Silently update local profile even if server update fails
               updateUserProfile({ xp_points: newXP });
-              console.warn(`⚠️ XP update failed on server, but updated locally: ${xpToAward} XP`);
+              log.warn(`XP update failed on server, but updated locally: ${xpToAward} XP`);
             }
           } catch (error) {
             // Network error or other issue - still update locally to prevent data loss
-            console.error('❌ Error awarding XP, updating locally only:', error);
+            log.error('Error awarding XP, updating locally only:', error);
             updateUserProfile({ xp_points: newXP });
           }
         }
@@ -325,20 +319,20 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
         // Check if user has reached max rounds (only for non-demo users)
         if (!isDemoMode && newRoundsPlayed >= MAX_ROUNDS) {
-          console.log(`🎮 Max rounds reached (${MAX_ROUNDS}). Starting cooldown...`);
+          log.info(`Max rounds reached (${MAX_ROUNDS}). Starting cooldown...`);
 
           // Update game cooldown (start 2-hour cooldown)
           try {
             const { updateGameLastPlayed } = await import('@/utils/gameCooldowns');
             await updateGameLastPlayed(userProfile.id, 'nopogod', isDemoMode);
-            console.log('✅ Game cooldown started');
+            log.info('Game cooldown started');
 
             // Show cooldown screen after a short delay
             setTimeout(() => {
               setShowCooldownScreen(true);
             }, 2000); // 2 second delay to let user see final score
           } catch (error) {
-            console.error('❌ Error updating game cooldown:', error);
+            log.error('Error updating game cooldown:', error);
           }
         }
       }
@@ -346,7 +340,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
     // Use Promise.resolve to ensure errors don't crash the app
     awardXP().catch((error) => {
-      console.error('❌ Critical error in awardXP:', error);
+      log.error('Critical error in awardXP:', error);
     });
   }, [gameState?.phase, gameState?.score, xpAwarded, userProfile, updateUserProfile, isDemoMode, roundsPlayed]);
 

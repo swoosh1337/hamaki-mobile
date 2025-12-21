@@ -8,7 +8,10 @@ import { ProfilePostSkeleton, XPStatsSkeleton } from '@/components/ui/SkeletonLo
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAvatarSource } from '@/utils/avatars';
+import { createLogger } from '@/utils/logger';
 import { UserPost, userService, XPStats } from '@/utils/supabase';
+
+const log = createLogger('Profile');
 
 export default function ProfileScreen() {
   const { userProfile, updateUserProfile, isDemoMode } = useAuth();
@@ -81,7 +84,7 @@ export default function ProfileScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const handlePullToRefresh = async () => {
-    console.log('🔄 Pull-to-refresh triggered');
+    log.debug('Pull-to-refresh triggered');
     setIsRefreshing(true);
     await loadXPStats(true); // Force refresh, bypass cache
     setIsRefreshing(false);
@@ -123,7 +126,7 @@ export default function ProfileScreen() {
         const cachedStats = await getCachedXPStats(userProfile.id);
         
         if (cachedStats) {
-          console.log('📊 Using cached XP stats');
+          log.debug('Using cached XP stats');
           setXpStats(cachedStats);
           setIsXpLoading(false);
           return;
@@ -131,7 +134,7 @@ export default function ProfileScreen() {
       }
       
       // Fetch fresh data from database
-      console.log('📊 Fetching fresh XP stats from database');
+      log.debug('Fetching fresh XP stats from database');
       const stats = await userService.getUserXPStats(userProfile.google_id);
       setXpStats(stats);
 
@@ -141,7 +144,7 @@ export default function ProfileScreen() {
         await setCachedXPStats(userProfile.id, stats);
       }
     } catch (error) {
-      console.error('Error loading XP stats:', error);
+      log.error('Error loading XP stats', error);
     } finally {
       if (!isDemoMode) {
         setIsXpLoading(false);
@@ -189,7 +192,7 @@ export default function ProfileScreen() {
       setHasMorePosts(posts.length === POSTS_PER_PAGE);
       setCurrentPage(page);
     } catch (error) {
-      console.error('Error loading user posts:', error);
+      log.error('Error loading user posts', error);
     } finally {
       if (!isDemoMode) {
         setIsPostsLoading(false);
@@ -214,7 +217,7 @@ export default function ProfileScreen() {
         Alert.alert('Error', 'Failed to update avatar. Please try again.');
       }
     } catch (error) {
-      console.error('Error updating avatar:', error);
+      log.error('Error updating avatar', error);
       if (error instanceof Error) {
         Alert.alert('Error', error.message);
       } else {
@@ -252,7 +255,7 @@ export default function ProfileScreen() {
         Alert.alert('Error', 'Failed to update name. Please try again.');
       }
     } catch (error) {
-      console.error('Error updating name:', error);
+      log.error('Error updating name', error);
       if (error instanceof Error) {
         Alert.alert('Error', error.message);
       } else {

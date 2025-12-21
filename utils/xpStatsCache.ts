@@ -4,7 +4,10 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createLogger } from './logger';
 import { XPStats } from './supabase';
+
+const log = createLogger('XPCache');
 
 const CACHE_KEY_PREFIX = 'xp_stats_cache_';
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
@@ -39,22 +42,22 @@ export async function getCachedXPStats(userId: string): Promise<XPStats | null> 
     const cachedJson = await AsyncStorage.getItem(cacheKey);
 
     if (!cachedJson) {
-      console.log('📊 No cached XP stats found');
+      log.debug('No cached XP stats found');
       return null;
     }
 
     const cached: CachedXPStats = JSON.parse(cachedJson);
 
     if (!isCacheValid(cached)) {
-      console.log('📊 Cached XP stats expired');
+      log.debug('Cached XP stats expired');
       await AsyncStorage.removeItem(cacheKey);
       return null;
     }
 
-    console.log('📊 Using cached XP stats');
+    log.debug('Using cached XP stats');
     return cached.data;
   } catch (error) {
-    console.error('Error reading XP stats cache:', error);
+    log.error('Error reading XP stats cache:', error);
     return null;
   }
 }
@@ -71,9 +74,9 @@ export async function setCachedXPStats(userId: string, stats: XPStats): Promise<
     };
 
     await AsyncStorage.setItem(cacheKey, JSON.stringify(cached));
-    console.log('📊 XP stats cached successfully');
+    log.debug('XP stats cached successfully');
   } catch (error) {
-    console.error('Error saving XP stats cache:', error);
+    log.error('Error saving XP stats cache:', error);
   }
 }
 
@@ -84,9 +87,9 @@ export async function invalidateXPStatsCache(userId: string): Promise<void> {
   try {
     const cacheKey = getCacheKey(userId);
     await AsyncStorage.removeItem(cacheKey);
-    console.log('📊 XP stats cache invalidated');
+    log.debug('XP stats cache invalidated', { userId });
   } catch (error) {
-    console.error('Error invalidating XP stats cache:', error);
+    log.error('Error invalidating XP stats cache:', error);
   }
 }
 
@@ -97,12 +100,12 @@ export async function clearAllXPStatsCache(): Promise<void> {
   try {
     const keys = await AsyncStorage.getAllKeys();
     const cacheKeys = keys.filter(key => key.startsWith(CACHE_KEY_PREFIX));
-    
+
     if (cacheKeys.length > 0) {
       await AsyncStorage.multiRemove(cacheKeys);
-      console.log(`📊 Cleared ${cacheKeys.length} XP stats cache(s)`);
+      log.info(`Cleared ${cacheKeys.length} XP stats cache(s)`);
     }
   } catch (error) {
-    console.error('Error clearing all XP stats cache:', error);
+    log.error('Error clearing all XP stats cache:', error);
   }
 }

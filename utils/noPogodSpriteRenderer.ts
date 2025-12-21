@@ -4,8 +4,8 @@
  */
 
 import { ImageRequireSource } from 'react-native';
+import { FallingItem, ItemType, NoPogodGameState, PlayerState, ShonzikaState } from '@/features/games/noPogod';
 import { NoPogodGameAssets } from './noPogodGameAssets';
-import { FallingItem, ItemType, NoPogodGameState, PlayerState, ShonzikaState } from './noPogodGameEngine';
 
 // Sprite rendering configuration
 export interface SpriteRenderConfig {

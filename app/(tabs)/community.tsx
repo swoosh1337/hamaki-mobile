@@ -19,7 +19,10 @@ import { ProfilePostSkeleton } from '@/components/ui/SkeletonLoader';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
+import { createLogger } from '@/utils/logger';
 import { supabase, UserPost, userService } from '@/utils/supabase';
+
+const log = createLogger('Community');
 
 type PostWithUserData = UserPost & {
   isUpvoted?: boolean;
@@ -83,7 +86,7 @@ export default function IdeasScreen() {
       setShowPartialError(false);
       setRetryCount(0);
     } catch (err) {
-      console.error('Error loading posts:', err);
+      log.error('Error loading posts', err);
       const isNetwork = checkNetworkError(err);
       setIsNetworkError(isNetwork);
       const errorMessage = getUserFriendlyErrorMessage(err);
@@ -137,7 +140,7 @@ export default function IdeasScreen() {
           filter: 'status=eq.approved',
         },
         (payload) => {
-          console.log('Posts subscription triggered:', payload);
+          log.debug('Posts subscription triggered', payload);
 
           if (payload.eventType === 'INSERT') {
             // New post approved, refresh to show it
@@ -169,7 +172,7 @@ export default function IdeasScreen() {
           table: 'post_upvotes',
         },
         (payload) => {
-          console.log('Upvotes subscription triggered:', payload);
+          log.debug('Upvotes subscription triggered', payload);
 
           // Check if the upvote change affects any of our displayed posts
           const postId = (payload.new as any)?.post_id || (payload.old as any)?.post_id;
@@ -188,7 +191,7 @@ export default function IdeasScreen() {
 
     // Cleanup subscriptions on unmount
     return () => {
-      console.log('Cleaning up real-time subscriptions');
+      log.debug('Cleaning up real-time subscriptions');
       supabase.removeChannel(postsSubscription);
       supabase.removeChannel(upvotesSubscription);
     };
@@ -243,7 +246,7 @@ export default function IdeasScreen() {
               await userService.upvotePost(postId, userProfile.id);
             }
           } catch (error) {
-            console.error('Error updating post upvote:', error);
+            log.error('Error updating post upvote', error);
             // Revert optimistic update on error
             loadPosts(0, true);
 
@@ -258,7 +261,7 @@ export default function IdeasScreen() {
         return updatedPosts;
       });
     } catch (error) {
-      console.error('Error in handlePostUpvote:', error);
+      log.error('Error in handlePostUpvote', error);
     } finally {
       setUpvotingPosts(prev => {
         const newSet = new Set(prev);
@@ -270,24 +273,24 @@ export default function IdeasScreen() {
 
   // Handle create post
   const handleCreatePost = useCallback(async (title: string, content: string, category?: string) => {
-    console.log('🎯 handleCreatePost called', { title, content, category, userId: userProfile?.id });
+    log.debug('handleCreatePost called', { title, content, category, userId: userProfile?.id });
 
     if (!userProfile?.id) {
-      console.error('❌ No user profile ID');
+      log.error('No user profile ID');
       throw new Error('User not authenticated');
     }
 
-    console.log('⏳ Setting isSubmittingPost to true');
+    log.debug('Setting isSubmittingPost to true');
     setIsSubmittingPost(true);
 
     try {
-      console.log('📤 Calling userService.createUserPost...');
+      log.debug('Calling userService.createUserPost...');
       const result = await userService.createUserPost(userProfile.id, title, content, category);
-      console.log('✅ Post created successfully:', result);
+      log.info('Post created successfully', result);
 
       // Success - show alert after modal closes
       setTimeout(() => {
-        console.log('🎉 Showing success alert');
+        log.debug('Showing success alert');
         Alert.alert(
           'Success',
           'Your idea has been submitted for review! You\'ll be notified when it\'s approved.',
@@ -295,16 +298,15 @@ export default function IdeasScreen() {
         );
       }, 300);
 
-      console.log('✅ handleCreatePost completed successfully');
+      log.debug('handleCreatePost completed successfully');
 
     } catch (error) {
-      console.error('❌ Error creating post:', error);
-      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      log.error('Error creating post', error, { details: error });
 
       // Re-throw the error so the modal can handle it
       throw error;
     } finally {
-      console.log('🏁 Setting isSubmittingPost to false');
+      log.debug('Setting isSubmittingPost to false');
       setIsSubmittingPost(false);
     }
   }, [userProfile?.id]);

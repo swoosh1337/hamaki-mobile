@@ -1,9 +1,12 @@
+import { createLogger } from '@/utils/logger';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '../utils/errorHandling';
 import { checkForNewVideos } from '../utils/notifications';
 import { fetchHamakiVideos, YouTubeVideo } from '../utils/youtube';
 import { useAuth } from './AuthContext';
+
+const log = createLogger('Video');
 
 
 const VIDEO_FETCH_LIMIT = 3;
@@ -21,7 +24,7 @@ const VideoContext = createContext<VideoContextType>({
   videos: [],
   isLoading: true,
   error: null,
-  refreshVideos: async () => {},
+  refreshVideos: async () => { },
   hasNewVideos: false,
   isNetworkError: false,
 });
@@ -50,9 +53,9 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setIsNetworkError(false);
       const fetchedVideos = await fetchHamakiVideos(VIDEO_FETCH_LIMIT);
       setVideos(fetchedVideos);
-      console.log(`Loaded ${fetchedVideos.length} videos`);
+      log.info(`Loaded ${fetchedVideos.length} videos`);
     } catch (err) {
-      console.error('Failed to load videos:', err);
+      log.error('Failed to load videos:', err);
       const isNetwork = checkNetworkError(err);
       setIsNetworkError(isNetwork);
       setError(getUserFriendlyErrorMessage(err));
@@ -72,18 +75,18 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!isAuthenticated || !isSubscribed) return;
 
     try {
-      console.log('Checking for new videos in background...');
+      log.debug('Checking for new videos in background...');
       const newVideos = await checkForNewVideos();
-      
+
       if (newVideos.length > 0) {
         // Update video list with new videos
         const updatedVideos = await fetchHamakiVideos(3);
         setVideos(updatedVideos);
         setHasNewVideos(true);
-        console.log(`Updated feed with ${newVideos.length} new video(s)`);
+        log.info('Updated feed with new videos', { count: newVideos.length });
       }
     } catch (error) {
-      console.error('Background video update failed:', error);
+      log.error('Background video update failed:', error);
     }
   };
 

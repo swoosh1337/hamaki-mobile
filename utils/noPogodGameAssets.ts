@@ -4,6 +4,9 @@
  */
 
 import { ImageRequireSource } from 'react-native';
+import { createLogger } from './logger';
+
+const log = createLogger('NoPogodAssets');
 
 // Asset type definitions
 export interface MiroSprites {
@@ -67,7 +70,7 @@ export const loadNoPogodGameAssets = (): NoPogodGameAssets => {
   try {
     const assets: NoPogodGameAssets = {
       background: require('@/assets/images/game/bg.png'),
-      
+
       miro: {
         idle: require('@/assets/images/game/miro/პროფილი დგომა.png'),
         step1: require('@/assets/images/game/miro/ნაბიჯი 1.png'),
@@ -76,7 +79,7 @@ export const loadNoPogodGameAssets = (): NoPogodGameAssets => {
         angle45: require('@/assets/images/game/miro/დგომა 45 გრადუსი.png'),
         angle90: require('@/assets/images/game/miro/დგომა 90 გრადუსი.png'),
       },
-      
+
       shonzika: {
         idle: require('@/assets/images/game/shonzika/დგომა პროფილი.png'),
         walking1: require('@/assets/images/game/shonzika/სიარული 1.png'),
@@ -88,7 +91,7 @@ export const loadNoPogodGameAssets = (): NoPogodGameAssets => {
         hand45: require('@/assets/images/game/shonzika/ხელი 45 აგრადუსი.png'),
         hand90: require('@/assets/images/game/shonzika/ხელი 90 გრადუსი.png'),
       },
-      
+
       items: {
         egg: require('@/assets/images/game/items/კვერცხი.png'),
         tomato: require('@/assets/images/game/items/პომიდორი.png'),
@@ -100,7 +103,7 @@ export const loadNoPogodGameAssets = (): NoPogodGameAssets => {
 
     return assets;
   } catch (error) {
-    console.error('Failed to load No Pogodi game assets:', error);
+    log.error('Failed to load No Pogodi game assets', error);
     return getFallbackAssets();
   }
 };
@@ -110,7 +113,7 @@ const getFallbackAssets = (): NoPogodGameAssets => {
   // Use existing app assets as fallbacks
   const fallbackSprite = require('@/assets/images/person-1-idle.png');
   const fallbackBackground = require('@/assets/images/background.png');
-  
+
   return {
     background: fallbackBackground,
     miro: {
@@ -275,7 +278,7 @@ export class SpriteAnimationManager {
     if (!this.currentAnimation) {
       return 0;
     }
-    
+
     const totalFrames = this.currentAnimation.frames.length;
     return Math.min(this.currentFrameIndex / Math.max(totalFrames - 1, 1), 1);
   }
@@ -303,10 +306,10 @@ export const validateAssets = (assets: NoPogodGameAssets): boolean => {
     for (const path of requiredPaths) {
       const pathParts = path.split('.');
       let current: any = assets;
-      
+
       for (const part of pathParts) {
         if (!current || !current[part]) {
-          console.warn(`Missing asset: ${path}`);
+          log.warn(`Missing asset: ${path}`);
           return false;
         }
         current = current[part];
@@ -315,7 +318,7 @@ export const validateAssets = (assets: NoPogodGameAssets): boolean => {
 
     return true;
   } catch (error) {
-    console.error('Asset validation failed:', error);
+    log.error('Asset validation failed', error);
     return false;
   }
 };
@@ -325,5 +328,5 @@ export const NOPOGOD_GAME_ASSETS = loadNoPogodGameAssets();
 
 // Validate assets on load
 if (!validateAssets(NOPOGOD_GAME_ASSETS)) {
-  console.warn('Some No Pogodi game assets failed validation, using fallbacks');
+  log.warn('Some No Pogodi game assets failed validation, using fallbacks');
 }

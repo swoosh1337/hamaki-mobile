@@ -8,6 +8,9 @@ import { InlineError } from '@/components/ui/InlineError';
 import { CarouselSkeleton, PostSkeleton } from '@/components/ui/SkeletonLoader';
 import { useContent } from '@/contexts/ContentContext';
 import { trackPostClose, trackPostOpen } from '@/utils/analytics';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('Home');
 
 // Unified Post Types
 interface Post {
@@ -205,7 +208,7 @@ function PostCard({ post, isExpanded, onToggleExpand }: { post: Post; isExpanded
           await Linking.openURL(post.metadata.applicationUrl);
         }
       } catch (error) {
-        console.error('Error opening application URL:', error);
+        log.error('Error opening application URL', error);
       }
     }
   };

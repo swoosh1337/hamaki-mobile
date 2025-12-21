@@ -5,7 +5,10 @@ import { NetworkError } from '@/components/ui/NetworkError';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
+import { createLogger } from '@/utils/logger';
 import { supabase } from '@/utils/supabase';
+
+const log = createLogger('Leaderboard');
 
 type TabType = 'weekly' | 'main' | 'prizes';
 
@@ -65,7 +68,7 @@ export default function LeaderboardScreen() {
           table: 'leaderboard_entries',
         },
         (payload) => {
-          console.log('Leaderboard updated:', payload);
+          log.debug('Leaderboard updated', payload);
           // Refresh leaderboard data
           fetchLeaderboardData();
         }
@@ -82,7 +85,7 @@ export default function LeaderboardScreen() {
           table: 'sponsors',
         },
         (payload) => {
-          console.log('Sponsor updated:', payload);
+          log.debug('Sponsor updated', payload);
           // Refresh prizes data
           fetchPrizes();
         }
@@ -95,7 +98,7 @@ export default function LeaderboardScreen() {
           table: 'sponsor_prizes',
         },
         (payload) => {
-          console.log('Prize updated:', payload);
+          log.debug('Prize updated', payload);
           // Refresh prizes data
           fetchPrizes();
         }
@@ -104,7 +107,7 @@ export default function LeaderboardScreen() {
 
     // Cleanup subscriptions on unmount
     return () => {
-      console.log('Cleaning up leaderboard subscriptions');
+      log.debug('Cleaning up leaderboard subscriptions');
       supabase.removeChannel(leaderboardChannel);
       supabase.removeChannel(sponsorChannel);
     };
@@ -133,8 +136,8 @@ export default function LeaderboardScreen() {
 
       // If foreign key relationship doesn't exist, fetch separately
       if (weeklyError && weeklyError.code === 'PGRST200') {
-        console.log('Foreign key not found, fetching users separately');
-        
+        log.debug('Foreign key not found, fetching users separately');
+
         const { data: entries } = await supabase
           .from('leaderboard_entries')
           .select('user_id, points')
@@ -158,7 +161,7 @@ export default function LeaderboardScreen() {
           }));
         }
       } else if (weeklyError) {
-        console.error('Error fetching weekly leaderboard:', weeklyError);
+        log.error('Error fetching weekly leaderboard', weeklyError);
       }
 
       if (weeklyEntries) {
@@ -182,8 +185,8 @@ export default function LeaderboardScreen() {
 
       // If foreign key relationship doesn't exist, fetch separately
       if (mainError && mainError.code === 'PGRST200') {
-        console.log('Foreign key not found, fetching users separately');
-        
+        log.debug('Foreign key not found, fetching users separately');
+
         const { data: entries } = await supabase
           .from('leaderboard_entries')
           .select('user_id, points')
@@ -206,7 +209,7 @@ export default function LeaderboardScreen() {
           }));
         }
       } else if (mainError) {
-        console.error('Error fetching main leaderboard:', mainError);
+        log.error('Error fetching main leaderboard', mainError);
       }
 
       if (mainEntries) {
@@ -274,7 +277,7 @@ export default function LeaderboardScreen() {
         }
       }
     } catch (err) {
-      console.error('Error fetching leaderboard:', err);
+      log.error('Error fetching leaderboard', err);
       const isNetwork = checkNetworkError(err);
       setIsNetworkError(isNetwork);
       setError(getUserFriendlyErrorMessage(err));
@@ -292,7 +295,7 @@ export default function LeaderboardScreen() {
         .order('sort_order', { ascending: true });
 
       if (error) {
-        console.error('Error fetching sponsors:', error);
+        log.error('Error fetching sponsors', error);
         return;
       }
 
@@ -306,7 +309,7 @@ export default function LeaderboardScreen() {
 
       setPrizes(formattedPrizes);
     } catch (error) {
-      console.error('Error fetching prizes:', error);
+      log.error('Error fetching prizes', error);
     }
   };
 

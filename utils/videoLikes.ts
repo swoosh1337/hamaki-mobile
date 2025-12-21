@@ -4,7 +4,10 @@
  */
 
 import { ChannelKey, YOUTUBE_CHANNELS } from './channelSubscriptions';
+import { createLogger } from './logger';
 import { supabase } from './supabase';
+
+const log = createLogger('VideoLikes');
 
 const YOUTUBE_API_KEY_ENV = process.env.EXPO_PUBLIC_YOUTUBE_API_KEY;
 if (!YOUTUBE_API_KEY_ENV || YOUTUBE_API_KEY_ENV.trim() === '') {
@@ -36,12 +39,12 @@ export interface VideoLikeStatus {
 async function getLatestVideo(channelId: string): Promise<{ id: string; title: string } | null> {
   try {
     const url = `https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${channelId}&part=snippet&order=date&type=video&maxResults=1`;
-    
+
     const response = await fetch(url);
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('YouTube API error getting latest video:', data);
+      log.error('YouTube API error getting latest video:', data);
       throw new Error(data.error?.message || 'Failed to fetch latest video');
     }
 
@@ -55,7 +58,7 @@ async function getLatestVideo(channelId: string): Promise<{ id: string; title: s
 
     return null;
   } catch (error) {
-    console.error(`Error getting latest video for channel ${channelId}:`, error);
+    log.error(`Error getting latest video for channel ${channelId}:`, error);
     throw error;
   }
 }
@@ -71,7 +74,7 @@ async function checkVideoLike(accessToken: string, videoId: string): Promise<boo
   try {
     // Use the videos.getRating endpoint to check if user has liked the video
     const url = `https://www.googleapis.com/youtube/v3/videos/getRating?id=${videoId}`;
-    
+
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -81,29 +84,28 @@ async function checkVideoLike(accessToken: string, videoId: string): Promise<boo
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('YouTube API error checking video rating:', data);
-      
+      log.error('YouTube API error checking video rating:', data);
+
       // If permission denied, the user needs to re-authenticate with the new scope
       if (data.error?.code === 403) {
-        console.log(`⚠️ Insufficient permissions to check video rating. User needs to re-authenticate.`);
+        log.warn('Insufficient permissions to check video rating. User needs to re-authenticate.');
       }
-      
+
       return false;
     }
 
     // Check if the rating is 'like'
-    // Response format: { items: [{ videoId: "...", rating: "like" | "dislike" | "none" }] }
     const isLiked = data.items && data.items.length > 0 && data.items[0].rating === 'like';
-    
+
     if (isLiked) {
-      console.log(`✅ User has liked video ${videoId}`);
+      log.info(`User has liked video ${videoId}`);
     } else {
-      console.log(`ℹ️ User has not liked video ${videoId}`);
+      log.debug(`User has not liked video ${videoId}`);
     }
-    
+
     return isLiked;
   } catch (error) {
-    console.error(`Error checking like for video ${videoId}:`, error);
+    log.error(`Error checking like for video ${videoId}:`, error);
     return false;
   }
 }
@@ -125,7 +127,7 @@ export async function checkAllVideoLikes(
     .single();
 
   if (error) {
-    console.error('Error fetching user video like XP data:', error);
+    log.error('Error fetching user video like XP data:', error);
   }
 
   const awardedLikes = userData?.video_like_xp_awarded || {};
@@ -133,11 +135,11 @@ export async function checkAllVideoLikes(
   // Check each channel
   for (const [key, channel] of Object.entries(YOUTUBE_CHANNELS)) {
     const channelKey = key as ChannelKey;
-    
+
     try {
       // Get latest video from channel
       const latestVideo = await getLatestVideo(channel.id);
-      
+
       if (!latestVideo) {
         statuses.push({
           channelKey,
@@ -153,7 +155,7 @@ export async function checkAllVideoLikes(
 
       // Check if user has liked this video
       const isLiked = await checkVideoLike(accessToken, latestVideo.id);
-      
+
       // Check if XP was already awarded for this specific video
       const xpAwarded = awardedLikes[latestVideo.id] || false;
 
@@ -167,7 +169,7 @@ export async function checkAllVideoLikes(
         xpAwarded,
       });
     } catch (error) {
-      console.error(`Error checking video for ${channel.name}:`, error);
+      log.error(`Error checking video for ${channel.name}:`, error);
       // Add error status
       statuses.push({
         channelKey,
@@ -203,7 +205,7 @@ export async function awardVideoLikeXP(
     .single();
 
   if (fetchError) {
-    console.error('❌ Error fetching user data for XP award:', fetchError);
+    log.error('Error fetching user data for XP award:', fetchError);
     errors.push(`Failed to fetch user data: ${fetchError.message}`);
     return { success: false, xpAwarded: 0, errors };
   }
@@ -211,41 +213,29 @@ export async function awardVideoLikeXP(
   const currentAwardedLikes = userData?.video_like_xp_awarded || {};
   const currentXP = userData?.xp_points || 0;
 
-  console.log('📊 Current XP:', currentXP);
-  console.log('📊 Current awarded likes:', currentAwardedLikes);
-  console.log('📊 Video statuses to check:', videoLikeStatuses.map(s => ({
-    channel: s.channelName,
-    videoId: s.videoId,
-    isLiked: s.isLiked,
-    xpAwarded: s.xpAwarded,
-  })));
+  log.debug('Processing video like XP rewards', {
+    currentXP,
+    videoCount: videoLikeStatuses.length
+  });
 
   // Check each video like status
   for (const status of videoLikeStatuses) {
-    console.log(`🔍 Checking ${status.channelName}: isLiked=${status.isLiked}, xpAwarded=${status.xpAwarded}, videoId=${status.videoId}`);
-    
     if (status.isLiked && !status.xpAwarded && status.videoId) {
       // User has liked the video and hasn't been awarded XP yet
       totalXPAwarded += status.xpReward;
       newAwardedLikes[status.videoId] = true;
-      
-      console.log(`✅ Will award ${status.xpReward} XP for liking ${status.channelName} latest video (${status.videoId})`);
+
+      log.info(`Awarding ${status.xpReward} XP for liking ${status.channelName} latest video`, { videoId: status.videoId });
     }
   }
-
-  console.log('💰 Total XP to award:', totalXPAwarded);
-  console.log('📝 New awarded likes:', newAwardedLikes);
 
   // If there's XP to award, update the database
   if (totalXPAwarded > 0) {
     try {
       const updatedAwardedLikes = { ...currentAwardedLikes, ...newAwardedLikes };
-      
-      console.log('💾 Updating database with:', {
-        newXP: currentXP + totalXPAwarded,
-        updatedAwardedLikes,
-      });
-      
+
+      log.debug('Updating database with earned video like XP');
+
       const { error, data: updateData } = await supabase
         .from('users')
         .update({
@@ -257,21 +247,19 @@ export async function awardVideoLikeXP(
         .select();
 
       if (error) {
-        console.error('❌ Error awarding video like XP:', error);
-        console.error('❌ Error details:', JSON.stringify(error, null, 2));
+        log.error('Error awarding video like XP:', error);
         errors.push(`Failed to update XP in database: ${error.message}`);
         return { success: false, xpAwarded: 0, errors };
       }
 
-      console.log('✅ Database update result:', updateData);
-      console.log(`🎉 Successfully awarded ${totalXPAwarded} XP for video likes!`);
+      log.info(`Successfully awarded ${totalXPAwarded} XP for video likes!`);
     } catch (error) {
-      console.error('❌ Exception in awardVideoLikeXP:', error);
+      log.error('Exception in awardVideoLikeXP:', error);
       errors.push('Failed to award XP');
       return { success: false, xpAwarded: 0, errors };
     }
   } else {
-    console.log('ℹ️ No XP to award (either no likes or already awarded)');
+    log.debug('No video like XP to award');
   }
 
   return {
@@ -291,16 +279,16 @@ export async function checkAndAwardVideoLikes(
   try {
     // Check all video likes
     const statuses = await checkAllVideoLikes(accessToken, userId);
-    
+
     // Award XP for new likes
     const result = await awardVideoLikeXP(userId, statuses);
-    
+
     return {
       ...result,
       statuses,
     };
   } catch (error) {
-    console.error('Error in checkAndAwardVideoLikes:', error);
+    log.error('Error in checkAndAwardVideoLikes:', error);
     return {
       success: false,
       xpAwarded: 0,

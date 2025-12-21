@@ -1,6 +1,9 @@
 import { Colors } from '@/constants/Colors';
+import { createLogger } from '@/utils/logger';
 import React from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+const log = createLogger('TestModal');
 
 interface TestModalProps {
   visible: boolean;
@@ -8,8 +11,8 @@ interface TestModalProps {
 }
 
 export const TestModal: React.FC<TestModalProps> = ({ visible, onClose }) => {
-  console.log('🧪 TestModal render', { visible });
-  
+  log.debug('Render', { visible });
+
   return (
     <Modal
       visible={visible}
@@ -21,7 +24,7 @@ export const TestModal: React.FC<TestModalProps> = ({ visible, onClose }) => {
         <Text style={styles.title}>Test Modal</Text>
         <Text style={styles.text}>If you can see this and tap the button, the modal works!</Text>
         <TouchableOpacity style={styles.button} onPress={() => {
-          console.log('🧪 Close button pressed');
+          log.info('Close button pressed');
           onClose();
         }}>
           <Text style={styles.buttonText}>Close</Text>

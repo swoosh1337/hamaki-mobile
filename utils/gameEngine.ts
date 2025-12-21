@@ -1,4 +1,8 @@
 // Doodle Jump-style Engine for Hammock Jump
+import { createLogger } from './logger';
+
+const log = createLogger('GameEngine');
+
 export interface GameState {
   phase: 'MENU' | 'PLAYING' | 'PAUSED' | 'GAME_OVER';
   score: number;
@@ -226,7 +230,7 @@ export class HammockGameEngine {
       y -= gap;
     }
 
-    console.log(`✅ Game started with ${state.platforms.length} platforms`);
+    log.info(`Game started with ${state.platforms.length} platforms`);
   }
 
   private getPlatformType(y: number, screenHeight: number, difficulty: number = 0): Platform['type'] {
@@ -354,7 +358,7 @@ export class HammockGameEngine {
     if (this.gameState.phase !== 'PLAYING') return;
     if (this.lastUpdateTime === 0) {
       this.lastUpdateTime = currentTime;
-      console.log('🎮 Game loop started!');
+      log.info('Game loop started');
       return;
     }
     const dt = Math.min(34, currentTime - this.lastUpdateTime); // clamp
@@ -376,25 +380,25 @@ export class HammockGameEngine {
     // Items don't move relative to world, but need collision check if player overlaps
     const s = this.gameState;
     const p = s.player;
-    
+
     s.items = s.items.filter(item => {
       if (item.collected) return false;
-      
+
       // Simple AABB collision check
-      const collision = 
+      const collision =
         p.x < item.x + item.width &&
         p.x + p.width > item.x &&
         p.y < item.y + item.height &&
         p.y + p.height > item.y;
-        
+
       if (collision) {
         // Collected!
         s.score += GAME_CONFIG.ITEM_SCORE;
-        this.createParticles(item.x + item.width/2, item.y + item.height/2, '#FFD700', 5);
-        console.log(`🍎 Collected item: ${item.type} (+${GAME_CONFIG.ITEM_SCORE})`);
+        this.createParticles(item.x + item.width / 2, item.y + item.height / 2, '#FFD700', 5);
+        log.debug(`Collected item: ${item.type}`, { score: GAME_CONFIG.ITEM_SCORE });
         return false; // Remove from list
       }
-      
+
       return true;
     });
   }
@@ -624,7 +628,7 @@ export class HammockGameEngine {
 
       // Debug log only for significant events
       if (s.combo > 2) {
-        console.log(`🔥 COMBO x${s.combo}! (+${totalScore} pts)`);
+        log.debug(`Combo hit! x${s.combo}`, { points: totalScore });
       }
     }
 
@@ -637,7 +641,7 @@ export class HammockGameEngine {
           this.addScreenShake(8);
           this.createParticles(plat.x + plat.width / 2, plat.y, '#FFD700', 15);
           s.combo += 2; // Bonus combo for spring
-          console.log('🚀 SPRING BOOST!');
+          log.debug('Spring boost triggered');
         } else {
           player.vy = PHYSICS.JUMP_VELOCITY;
           s.combo++;
@@ -753,7 +757,7 @@ export class HammockGameEngine {
         };
 
         s.platforms.push(newPlat);
-        
+
         // Attempt to spawn an item
         if (Math.random() < GAME_CONFIG.SPAWN_ITEM_CHANCE) {
           // Decide type
@@ -761,15 +765,15 @@ export class HammockGameEngine {
           let itemType: 'egg' | 'tomato' | 'pepper' = 'egg';
           if (r < 0.33) itemType = 'tomato';
           else if (r < 0.66) itemType = 'pepper';
-          
+
           const itemSize = GAME_CONFIG.ITEM_SIZE;
-          
+
           // Position: random X on platform (mostly), or slightly offset for air spawn
           // For now, place ON TOP of platform to ensure reachability
           // Center on platform with random offset
           const itemX = newPlat.x + (newPlat.width - itemSize) / 2 + (Math.random() - 0.5) * (newPlat.width * 0.5);
           const itemY = newPlat.y - itemSize - 10; // Float slightly above
-          
+
           s.items.push({
             id: Math.random().toString(36).slice(2),
             x: itemX,
@@ -780,7 +784,7 @@ export class HammockGameEngine {
             collected: false
           });
         }
-        
+
         currentHighest = newPlat;
       }
     }

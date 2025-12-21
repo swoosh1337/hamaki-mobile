@@ -11,6 +11,9 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ContentProvider } from '@/contexts/ContentContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('RootLayout');
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -30,7 +33,7 @@ function RootLayout() {
   // Hide splash screen when fonts are loaded
   useEffect(() => {
     if (loaded) {
-      console.log('✅ Fonts loaded - hiding splash screen');
+      log.info('Fonts loaded - hiding splash screen');
       SplashScreen.hideAsync();
     }
   }, [loaded]);

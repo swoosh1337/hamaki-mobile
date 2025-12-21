@@ -3,13 +3,13 @@
  * Demonstrates how to use the asset system, game engine, and sprite renderer together
  */
 
+import { NoPogodEngine } from '@/features/games/noPogod';
 import { createGameAnimations, loadNoPogodGameAssets, NOPOGOD_GAME_ASSETS } from './noPogodGameAssets';
-import { NoPogodGameEngine } from './noPogodGameEngine';
 import { NoPogodSpriteRenderer } from './noPogodSpriteRenderer';
 
 // Example integration class showing how all components work together
 export class NoPogodGameIntegration {
-  private gameEngine: NoPogodGameEngine;
+  private gameEngine: NoPogodEngine;
   private spriteRenderer: NoPogodSpriteRenderer;
   private assets: any;
   private animations: any;
@@ -17,13 +17,13 @@ export class NoPogodGameIntegration {
   constructor(screenWidth: number, screenHeight: number) {
     // Load game assets
     this.assets = loadNoPogodGameAssets();
-    
+
     // Create game engine with assets
-    this.gameEngine = new NoPogodGameEngine(screenWidth, screenHeight, this.assets);
-    
+    this.gameEngine = new NoPogodEngine(screenWidth, screenHeight, this.assets);
+
     // Create sprite renderer
     this.spriteRenderer = new NoPogodSpriteRenderer(this.assets, screenWidth, screenHeight);
-    
+
     // Create animations
     this.animations = createGameAnimations(this.assets);
   }
@@ -31,19 +31,19 @@ export class NoPogodGameIntegration {
   // Get all rendering information for the current game state
   public getRenderData() {
     const gameState = this.gameEngine.getState();
-    
+
     // Get current animated sprites
     const miroSprite = this.gameEngine.getCurrentMiroSprite();
     const shonzikaSprite = this.gameEngine.getCurrentShonzikaSprite();
-    
+
     // Get all sprite render information
     const sprites = this.spriteRenderer.getAllSprites(gameState, miroSprite, shonzikaSprite);
-    
+
     // Get UI positions and font sizes
     const uiPositions = this.spriteRenderer.getUIPositions();
     const fontSizes = this.spriteRenderer.getFontSizes();
     const touchZones = this.spriteRenderer.getTouchZones();
-    
+
     return {
       gameState,
       sprites,
@@ -51,7 +51,7 @@ export class NoPogodGameIntegration {
       fontSizes,
       touchZones,
       animations: {
-        miroProgress: this.gameEngine.getMiroAnimationProgress(),
+        miroProgress: this.gameEngine.getPlayerAnimationProgress(),
         shonzikaProgress: this.gameEngine.getShonzikaAnimationProgress(),
       },
     };
@@ -65,7 +65,7 @@ export class NoPogodGameIntegration {
   // Handle player input
   public handleTouch(x: number, y: number) {
     const touchZones = this.spriteRenderer.getTouchZones();
-    
+
     if (x < touchZones.left.width) {
       this.gameEngine.movePlayer('LEFT');
     } else if (x < touchZones.left.width + touchZones.center.width) {
@@ -118,6 +118,9 @@ export function createNoPogodGame(screenWidth: number, screenHeight: number): No
 export { NOPOGOD_GAME_ASSETS };
 
 // Export all asset-related utilities
-    export * from './noPogodGameAssets';
-    export * from './noPogodGameEngine';
-    export * from './noPogodSpriteRenderer';
+export {
+  ANIMATION, ITEM_DEFINITIONS, NO_POGOD_CONFIG, NoPogodEngine, NoPogodEngine as NoPogodGameEngine, PHYSICS, POSITIONS, SCORING, SIZES, SPAWN_WEIGHTS, TIMING
+} from '@/features/games/noPogod';
+export * from './noPogodGameAssets';
+export * from './noPogodSpriteRenderer';
+

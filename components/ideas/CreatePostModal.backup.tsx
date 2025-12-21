@@ -1,18 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Modal,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('CreatePostModalBackup');
 
 interface CreatePostModalProps {
   visible: boolean;
@@ -34,8 +37,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   onSubmit,
   isSubmitting,
 }) => {
-  console.log('🎨 CreatePostModal render', { visible, isSubmitting });
-  
+  log.debug('Render', { visible, isSubmitting });
+
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -91,25 +94,25 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   };
 
   const handleSubmit = async () => {
-    console.log('🎬 Modal handleSubmit called');
+    log.info('handleSubmit called');
     const isTitleValid = validateTitle(title);
     const isContentValid = validateContent(content);
 
     if (!isTitleValid || !isContentValid) {
-      console.log('❌ Validation failed', { isTitleValid, isContentValid });
+      log.warn('Validation failed', { isTitleValid, isContentValid });
       return;
     }
 
-    console.log('✅ Validation passed, calling onSubmit...');
-    
+    log.debug('Validation passed, calling onSubmit...');
+
     try {
       await onSubmit(title, content, selectedCategory || undefined);
-      console.log('✅ onSubmit completed, resetting and closing modal');
+      log.info('onSubmit completed, resetting and closing modal');
       handleReset();
       onClose();
-      console.log('✅ Modal closed');
+      log.debug('Modal closed');
     } catch (error) {
-      console.error('❌ Modal caught error:', error);
+      log.error('Modal caught error', error);
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to submit your idea. Please try again.');
     }
   };
@@ -130,10 +133,12 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
           'Are you sure you want to discard your changes?',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Discard', style: 'destructive', onPress: () => {
-              handleReset();
-              onClose();
-            }},
+            {
+              text: 'Discard', style: 'destructive', onPress: () => {
+                handleReset();
+                onClose();
+              }
+            },
           ]
         );
       } else {
@@ -152,17 +157,17 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.headerButton}
             onPress={handleClose}
             disabled={isSubmitting}
           >
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
-          
+
           <Text style={styles.headerTitle}>New Idea</Text>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={[styles.headerButton, styles.submitButton]}
             onPress={handleSubmit}
             disabled={isSubmitting || !title.trim() || !content.trim()}

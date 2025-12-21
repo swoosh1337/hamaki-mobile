@@ -32,6 +32,7 @@ describe('useUserProfile', () => {
         avatar_url: 'https://example.com/avatar.jpg',
         xp_points: 1000,
         is_subscribed: true,
+        youtube_subscribed: true,
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
     };
@@ -39,8 +40,8 @@ describe('useUserProfile', () => {
     const mockXPStats = {
         totalXP: 1000,
         weeklyXP: 150,
-        weekStartDate: '2024-01-01T00:00:00Z',
-        weekEndDate: '2024-01-07T23:59:59Z',
+        weeklyStartDate: '2024-01-01T00:00:00Z',
+        weeklyEndDate: '2024-01-07T23:59:59Z',
     };
 
     beforeEach(() => {

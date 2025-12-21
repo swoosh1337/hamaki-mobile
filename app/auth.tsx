@@ -7,6 +7,9 @@ import { ActivityIndicator, AppState, Image, SafeAreaView, StyleSheet, Text, Tou
 import { GoogleSignInButton } from '@/components/ui/GoogleSignInButton';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('Auth');
 
 /**
  * Authentication screen component
@@ -25,22 +28,22 @@ function AuthScreen() {
   // Monitor app state changes to detect return from OAuth
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
-      console.log('🔍 App state changed from', appState.current, 'to', nextAppState);
+      log.debug('App state changed', { from: appState.current, to: nextAppState });
       
       if (
         appState.current.match(/inactive|background/) &&
         nextAppState === 'active' &&
         isAuthenticating.current
       ) {
-        console.log('🔍 App became active after OAuth - checking for auth completion');
+        log.debug('App became active after OAuth - checking for auth completion');
         // Give a longer delay for any pending auth operations to complete
         setTimeout(() => {
-          console.log('🔍 Checking if WebBrowser can complete auth session');
+          log.debug('Checking if WebBrowser can complete auth session');
           WebBrowser.maybeCompleteAuthSession();
           
           // Additional retry after a bit more time
           setTimeout(() => {
-            console.log('🔍 Second attempt to complete auth session');
+            log.debug('Second attempt to complete auth session');
             WebBrowser.maybeCompleteAuthSession();
           }, 2000);
         }, 1500);
@@ -81,14 +84,14 @@ function AuthScreen() {
   
   // Handle demo sign-in
   const handleDemoSignIn = async () => {
-    console.log('🔍 Starting demo mode');
+    log.debug('Starting demo mode');
     setErrorMessage(null);
     
     try {
       await signInDemo();
       router.replace('/(tabs)');
     } catch (error) {
-      console.error('🔍 Demo sign in error:', error);
+      log.error('Demo sign in error', error);
       setErrorMessage('Demo mode failed. Please try again.');
     }
   };
@@ -104,7 +107,7 @@ function AuthScreen() {
 
   // Handle sign-in button press with Google authentication
   const handleSignIn = async () => {
-    console.log('🔍 Starting authentication process');
+    log.debug('Starting authentication process');
     setErrorMessage(null);
     isAuthenticating.current = true;
     
@@ -112,7 +115,7 @@ function AuthScreen() {
       const result = await signIn();
       isAuthenticating.current = false;
       
-      console.log('🔍 Authentication result received:', result);
+      log.debug('Authentication result received', result);
       
       if (result.success) {
         if (result.isSubscribed) {
@@ -124,11 +127,11 @@ function AuthScreen() {
         }
       } else {
         // Authentication failed
-        console.log('🔍 Authentication failed:', result.error);
+        log.debug('Authentication failed', { error: result.error });
         setErrorMessage(result.error || 'Authentication failed. Please try again.');
       }
     } catch (error) {
-      console.error('🔍 Sign in error:', error);
+      log.error('Sign in error', error);
       isAuthenticating.current = false;
       setErrorMessage('An unexpected error occurred. Please try again.');
     }

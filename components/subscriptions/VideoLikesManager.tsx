@@ -14,7 +14,10 @@ import {
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getValidAccessToken } from '@/utils/auth';
+import { createLogger } from '@/utils/logger';
 import { checkAndAwardVideoLikes, VideoLikeStatus } from '@/utils/videoLikes';
+
+const log = createLogger('VideoLikesManager');
 
 export const VideoLikesManager: React.FC = () => {
   const { userProfile } = useAuth();
@@ -54,10 +57,10 @@ export const VideoLikesManager: React.FC = () => {
       }
 
       if (result.errors.length > 0) {
-        console.error('Errors checking video likes:', result.errors);
+        log.error('Errors checking video likes', undefined, { errors: result.errors });
       }
     } catch (error) {
-      console.error('Error checking video likes:', error);
+      log.error('Error checking video likes', error);
       Alert.alert('Error', 'Failed to check video likes. Please try again.');
     } finally {
       setIsLoading(false);

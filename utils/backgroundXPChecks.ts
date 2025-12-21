@@ -5,8 +5,11 @@
 
 import { getValidAccessToken } from './auth';
 import { checkAllChannelSubscriptions, updateChannelSubscriptionsAndAwardXP } from './channelSubscriptions';
+import { createLogger } from './logger';
 import { userService } from './supabase';
 import { checkAndAwardVideoLikes } from './videoLikes';
+
+const log = createLogger('BackgroundXP');
 
 export interface BackgroundXPResult {
   subscriptionXP: number;
@@ -31,71 +34,73 @@ export async function performBackgroundXPChecks(userId: string): Promise<Backgro
     // Get valid access token
     const accessToken = await getValidAccessToken();
     if (!accessToken) {
-      console.log('⚠️ No valid access token for background XP checks');
+      log.warn('No valid access token available for background XP checks');
       result.errors.push('No valid access token');
       return result;
     }
 
-    console.log('🔍 Starting background XP checks...');
+    log.info('Starting background XP checks...');
 
     // Check channel subscriptions
     try {
-      console.log('📺 Checking channel subscriptions...');
-      
+      log.debug('Checking channel subscriptions...');
+
       // Fetch google_id via service helper (testable/mocked)
       const userData = await userService.getGoogleIdByUserId(userId);
 
       if (!userData) {
-        console.error('❌ Failed to get user google_id via service for userId:', userId);
+        log.error('Failed to get user google_id via service', { userId });
         result.errors.push('Failed to get user data');
       } else {
         const subscriptions = await checkAllChannelSubscriptions(accessToken);
         const subResult = await updateChannelSubscriptionsAndAwardXP(userData.google_id, subscriptions);
-        
+
         result.subscriptionXP = subResult.totalXPAwarded;
-        
+
         if (subResult.totalXPAwarded > 0) {
-          console.log(`✅ Awarded ${subResult.totalXPAwarded} XP for channel subscriptions`);
+          log.info(`Awarded ${subResult.totalXPAwarded} XP for channel subscriptions`);
         }
       }
     } catch (error) {
-      console.error('❌ Error checking channel subscriptions:', error);
+      log.error('Error checking channel subscriptions:', error);
       result.errors.push('Failed to check channel subscriptions');
     }
 
     // Check video likes
     try {
-      console.log('👍 Checking video likes...');
+      log.debug('Checking video likes...');
       const likesResult = await checkAndAwardVideoLikes(accessToken, userId);
-      
+
       result.videoLikeXP = likesResult.xpAwarded;
-      
+
       if (likesResult.xpAwarded > 0) {
-        console.log(`✅ Awarded ${likesResult.xpAwarded} XP for video likes`);
+        log.info(`Awarded ${likesResult.xpAwarded} XP for video likes`);
       }
-      
+
       if (likesResult.errors.length > 0) {
         result.errors.push(...likesResult.errors);
       }
     } catch (error) {
-      console.error('❌ Error checking video likes:', error);
+      log.error('Error checking video likes:', error);
       result.errors.push('Failed to check video likes');
     }
 
     result.totalXP = result.subscriptionXP + result.videoLikeXP;
 
     if (result.totalXP > 0) {
-      console.log(`🎉 Total XP awarded in background: ${result.totalXP} (Subscriptions: ${result.subscriptionXP}, Video Likes: ${result.videoLikeXP})`);
+      log.info('Background XP checks complete', {
+        total: result.totalXP,
+        subs: result.subscriptionXP,
+        likes: result.videoLikeXP
+      });
     } else {
-      console.log('ℹ️ No new XP to award (already claimed or no qualifying actions)');
+      log.debug('No new XP to award from background checks');
     }
 
     return result;
   } catch (error: any) {
-    const msg = error?.message || String(error);
-    const stack = error?.stack ? `\nStack: ${error.stack}` : '';
-    console.error(`❌ Error in performBackgroundXPChecks: ${msg}${stack}`);
-    result.errors.push(`performBackgroundXPChecks failed: ${msg}`);
+    log.error('Error in performBackgroundXPChecks:', error);
+    result.errors.push(`performBackgroundXPChecks failed: ${error.message || String(error)}`);
     return result;
   }
 }
@@ -119,7 +124,7 @@ export async function performBackgroundXPChecksWithNotification(
     try {
       showNotification('🎉 XP Earned!', `You earned ${result.totalXP} XP!\n${messages.join('\n')}`);
     } catch (err) {
-      console.error('Failed to show XP notification:', err);
+      log.error('Failed to show XP notification:', err);
     }
   }
 

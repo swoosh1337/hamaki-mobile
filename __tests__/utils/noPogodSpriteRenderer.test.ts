@@ -2,8 +2,8 @@
  * Tests for No Pogodi Game Sprite Renderer
  */
 
+import { NoPogodEngine } from '@/features/games/noPogod';
 import { loadNoPogodGameAssets } from '@/utils/noPogodGameAssets';
-import { NoPogodGameEngine } from '@/utils/noPogodGameEngine';
 import { NoPogodSpriteRenderer, SpriteUtils } from '@/utils/noPogodSpriteRenderer';
 
 // Mock the asset files
@@ -29,7 +29,7 @@ jest.mock('@/assets/images/game/items/ბომბი.png', () => 'mocked-bomb',
 
 describe('NoPogodSpriteRenderer', () => {
   let renderer: NoPogodSpriteRenderer;
-  let gameEngine: NoPogodGameEngine;
+  let gameEngine: NoPogodEngine;
   let assets: any;
 
   const SCREEN_WIDTH = 375;
@@ -38,7 +38,7 @@ describe('NoPogodSpriteRenderer', () => {
   beforeEach(() => {
     assets = loadNoPogodGameAssets();
     renderer = new NoPogodSpriteRenderer(assets, SCREEN_WIDTH, SCREEN_HEIGHT);
-    gameEngine = new NoPogodGameEngine(SCREEN_WIDTH, SCREEN_HEIGHT, assets);
+    gameEngine = new NoPogodEngine(SCREEN_WIDTH, SCREEN_HEIGHT, assets);
   });
 
   describe('Initialization', () => {

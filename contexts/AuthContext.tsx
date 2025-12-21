@@ -1,10 +1,13 @@
 import { analytics } from '@/utils/analytics';
+import { createLogger } from '@/utils/logger';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { RememberMeModal } from '../components/ui/RememberMeModal';
 import { authenticateWithGoogle, AuthResult, backgroundVerifySubscription, clearUserSession, loadPersistedUser, storeUserSession, storeUserSessionWithTokens } from '../utils/auth';
 import { backgroundVideoCheck, initializeNotifications } from '../utils/notifications';
 import { UserProfile, userService } from '../utils/supabase';
+
+const log = createLogger('Auth');
 
 interface AuthContextType {
   isLoading: boolean;
@@ -25,10 +28,10 @@ const AuthContext = createContext<AuthContextType>({
   isSubscribed: false,
   userProfile: null,
   signIn: async () => ({ success: false }),
-  signInDemo: async () => {},
-  signOut: async () => {},
+  signInDemo: async () => { },
+  signOut: async () => { },
   error: null,
-  updateUserProfile: () => {},
+  updateUserProfile: () => { },
   isDemoMode: false,
 });
 
@@ -41,7 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
-  
+
   // Remember Me modal state
   const [showRememberMeModal, setShowRememberMeModal] = useState(false);
   const [pendingAuthResult, setPendingAuthResult] = useState<AuthResult | null>(null);
@@ -52,32 +55,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkAuth = async () => {
       try {
         setIsLoading(true);
-        console.log('Checking for persisted authentication...');
-        
+        log.info('Checking for persisted authentication...');
+
         // Try to load persisted user session
         const persistedResult = await loadPersistedUser();
-        
+
         if (persistedResult.success && persistedResult.userData) {
           // Load user from Supabase to get latest profile data
           const supabaseUser = await userService.getUserProfile(persistedResult.userData.id);
-          
+
           if (supabaseUser) {
             setUserProfile(supabaseUser);
             setIsAuthenticated(true);
             setIsSubscribed(persistedResult.isSubscribed || false);
-            console.log('Successfully loaded persisted session for:', persistedResult.userData.email);
-            
+            log.info('Successfully loaded persisted session', { email: persistedResult.userData.email });
+
             // Initialize notifications for authenticated users
             await initializeNotifications();
           } else {
-            console.log('User not found in Supabase, clearing session');
+            log.warn('User not found in Supabase, clearing session');
             await clearUserSession();
           }
         } else {
-          console.log('No valid persisted session found');
+          log.debug('No valid persisted session found');
         }
       } catch (err) {
-        console.error('Auth check error:', err);
+        log.error('Auth check error:', err);
         await clearUserSession();
       } finally {
         setIsLoading(false);
@@ -91,15 +94,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const handleAppStateChange = async (nextAppState: string) => {
       if (nextAppState === 'active' && isAuthenticated && !isDemoMode && userProfile?.id) {
-        console.log('App became active, performing background checks...');
-        
+        log.info('App became active, performing background checks...');
+
         // Check subscription status (skip for demo users)
         const subscriptionStatus = await backgroundVerifySubscription();
         if (subscriptionStatus !== null && subscriptionStatus !== isSubscribed) {
           setIsSubscribed(subscriptionStatus);
-          console.log('Subscription status updated:', subscriptionStatus);
+          log.info('Subscription status updated', { subscriptionStatus });
         }
-        
+
         // Check for new videos and send notifications
         if (isSubscribed) {
           await backgroundVideoCheck();
@@ -109,10 +112,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const { performBackgroundXPChecks } = await import('../utils/backgroundXPChecks');
           const xpResult = await performBackgroundXPChecks(userProfile.id);
-          
+
           if (xpResult.totalXP > 0) {
-            console.log(`🎉 Background XP awarded: ${xpResult.totalXP} (Subs: ${xpResult.subscriptionXP}, Likes: ${xpResult.videoLikeXP})`);
-            
+            log.info('Background XP awarded', {
+              total: xpResult.totalXP,
+              subs: xpResult.subscriptionXP,
+              likes: xpResult.videoLikeXP
+            });
+
             // Refresh user profile to get updated XP
             const updatedProfile = await userService.getUserProfile(userProfile.google_id);
             if (updatedProfile) {
@@ -120,10 +127,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         } catch (error) {
-          console.error('Error performing background XP checks:', error);
+          log.error('Error performing background XP checks:', error);
         }
       } else if (nextAppState === 'background' && isAuthenticated && isTemporarySession && !isDemoMode) {
-        console.log('App went to background with temporary session - clearing session...');
+        log.info('App went to background with temporary session - clearing session...');
         await clearUserSession();
         setIsAuthenticated(false);
         setIsSubscribed(false);
@@ -140,10 +147,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (): Promise<AuthResult> => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const result = await authenticateWithGoogle();
-      
+
       if (result.success && result.userData) {
         // Only show Remember Me modal if user is authenticated AND subscribed
         if (result.isSubscribed) {
@@ -151,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setPendingAuthResult(result);
           setShowRememberMeModal(true);
           setIsLoading(false);
-          
+
           // Return success but user isn't fully authenticated until they choose remember me option
           return { success: true, userData: result.userData, isSubscribed: result.isSubscribed };
         } else {
@@ -176,41 +183,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInDemo = async (): Promise<void> => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
-      console.log('🎭 Starting demo mode - fetching demouser@apple.com from database');
-      
+      log.info('Starting demo mode - fetching demouser@apple.com from database');
+
       // Fetch the real demo user from Supabase
       const { data: demoUsers, error: fetchError } = await userService.supabase
         .from('users')
         .select('*')
         .eq('email', 'demouser@apple.com')
         .single();
-      
+
       if (fetchError || !demoUsers) {
-        console.error('❌ Failed to fetch demo user:', fetchError);
+        log.error('Failed to fetch demo user', fetchError);
         throw new Error('Demo user not found in database. Please contact support.');
       }
-      
-      console.log('✅ Demo user loaded from database:', demoUsers);
-      
+
+      log.info('Demo user loaded from database', { email: demoUsers.email });
+
       // Set the real demo user profile
       setUserProfile(demoUsers);
       setIsAuthenticated(true);
       setIsSubscribed(demoUsers.is_subscribed || true);
       setIsDemoMode(true);
-      
+
       // Set analytics user id
       analytics.setUserId(demoUsers.google_id);
-      
-      console.log('🎭 Demo mode activated with real user');
-      
+
+      log.info('Demo mode activated with real user');
+
       // Initialize notifications for demo user
       await initializeNotifications();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Demo mode failed';
       setError(errorMessage);
-      console.error('❌ Demo sign in error:', err);
+      log.error('Demo sign in error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -219,21 +226,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sign out
   const signOut = async (): Promise<void> => {
     setIsLoading(true);
-    
+
     try {
       // Only clear user session if not in demo mode
       if (!isDemoMode) {
         await clearUserSession();
       }
-      
+
       setIsAuthenticated(false);
       setIsSubscribed(false);
       setUserProfile(null);
       setIsDemoMode(false);
-      console.log('User signed out successfully');
+      log.info('User signed out successfully');
       analytics.setUserId(null);
     } catch (err) {
-      console.error('Sign out error:', err);
+      log.error('Sign out error:', err);
       setError('Failed to sign out');
     } finally {
       setIsLoading(false);
@@ -244,13 +251,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleRememberMeChoice = async (rememberMe: boolean) => {
     setIsLoading(true);
     setShowRememberMeModal(false);
-    
+
     if (!pendingAuthResult) {
       setError('No pending authentication result');
       setIsLoading(false);
       return;
     }
-    
+
     try {
       // Save/update user data in Supabase
       const supabaseUser = await userService.upsertUserProfile({
@@ -273,28 +280,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
 
             if (result.totalXPAwarded > 0) {
-              console.log(`🎉 Awarded ${result.totalXPAwarded} XP for channel subscriptions on sign-in!`);
+              log.info('Awarded XP for channel subscriptions on sign-in', { xp: result.totalXPAwarded });
               updatedUser = result.updatedUser;
             }
           } catch (error) {
-            console.error('Failed to process channel subscriptions:', error);
+            log.error('Failed to process channel subscriptions:', error);
             // Continue with normal flow even if XP awarding fails
           }
         }
 
         // Check video likes and award XP automatically on sign-in
         try {
-          console.log('👍 Checking video likes on sign-in...');
+          log.debug('Checking video likes on sign-in...');
           const { checkAndAwardVideoLikes } = await import('../utils/videoLikes');
           const { getValidAccessToken } = await import('../utils/auth');
-          
+
           const accessToken = await getValidAccessToken();
           if (accessToken) {
             const likesResult = await checkAndAwardVideoLikes(accessToken, supabaseUser.id);
-            
+
             if (likesResult.xpAwarded > 0) {
-              console.log(`🎉 Awarded ${likesResult.xpAwarded} XP for video likes on sign-in!`);
-              
+              log.info('Awarded XP for video likes on sign-in', { xp: likesResult.xpAwarded });
+
               // Refresh user profile to get updated XP
               const refreshedUser = await userService.getUserProfile(supabaseUser.google_id);
               if (refreshedUser) {
@@ -303,7 +310,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         } catch (error) {
-          console.error('Failed to check video likes on sign-in:', error);
+          log.error('Failed to check video likes on sign-in:', error);
           // Continue with normal flow even if video likes check fails
         }
 
@@ -311,7 +318,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsAuthenticated(true);
         setIsSubscribed(pendingAuthResult.isSubscribed || false);
         setIsTemporarySession(!rememberMe);
-        console.log('User saved to Supabase:', updatedUser);
+        log.info('User saved to Supabase', { userId: updatedUser.id });
 
         // Set analytics user id
         analytics.setUserId(updatedUser.google_id);
@@ -368,7 +375,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }}
     >
       {children}
-      
+
       {/* Remember Me Modal */}
       <RememberMeModal
         visible={showRememberMeModal}

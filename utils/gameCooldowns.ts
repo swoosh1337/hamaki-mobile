@@ -4,7 +4,10 @@
  */
 
 import * as Notifications from 'expo-notifications';
+import { createLogger } from './logger';
 import { supabase } from './supabase';
+
+const log = createLogger('GameCooldown');
 
 // Cooldown duration in milliseconds (2 hours)
 export const GAME_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 hours
@@ -49,7 +52,7 @@ export async function checkGameCooldown(
       .single();
 
     if (error) {
-      console.error('Error fetching game cooldown data:', error);
+      log.error('Error fetching game cooldown data:', error);
       // On error, allow play (fail open)
       return {
         gameType,
@@ -91,7 +94,7 @@ export async function checkGameCooldown(
       remainingMinutes: Math.ceil(remainingMs / (60 * 1000)),
     };
   } catch (error) {
-    console.error('Error checking game cooldown:', error);
+    log.error('Error checking game cooldown:', error);
     // On error, allow play (fail open)
     return {
       gameType,
@@ -126,7 +129,7 @@ export async function updateGameLastPlayed(
       .single();
 
     if (fetchError) {
-      console.error('Error fetching game data:', fetchError);
+      log.error('Error fetching game data:', fetchError);
       return { success: false, error: fetchError.message };
     }
 
@@ -146,18 +149,18 @@ export async function updateGameLastPlayed(
       .eq('id', userId);
 
     if (updateError) {
-      console.error('Error updating game last played:', updateError);
+      log.error('Error updating game last played:', updateError);
       return { success: false, error: updateError.message };
     }
 
-    console.log(`✅ Updated last played time for ${gameType}`);
+    log.info(`Updated last played time for ${gameType}`);
 
     // Schedule cooldown notification
     await scheduleCooldownNotification(gameType);
 
     return { success: true };
   } catch (error) {
-    console.error('Error in updateGameLastPlayed:', error);
+    log.error('Error in updateGameLastPlayed:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -187,7 +190,7 @@ async function scheduleCooldownNotification(gameType: GameType): Promise<void> {
     // Check if we have notification permissions
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') {
-      console.log('⚠️ No notification permissions, skipping cooldown notification');
+      log.debug('No notification permissions, skipping cooldown notification');
       return;
     }
 
@@ -219,9 +222,9 @@ async function scheduleCooldownNotification(gameType: GameType): Promise<void> {
       },
     });
 
-    console.log(`📅 Scheduled cooldown notification for ${gameType} (ID: ${notificationId})`);
+    log.info(`Scheduled cooldown notification for ${gameType}`, { notificationId });
   } catch (error) {
-    console.error('Error scheduling cooldown notification:', error);
+    log.error('Error scheduling cooldown notification:', error);
     // Don't throw - notification scheduling is not critical
   }
 }
@@ -274,8 +277,8 @@ export async function cancelAllGameCooldownNotifications(): Promise<void> {
         await Notifications.cancelScheduledNotificationAsync(notification.identifier);
       }
     }
-    console.log('✅ Cancelled all game cooldown notifications');
+    log.info('Cancelled all game cooldown notifications');
   } catch (error) {
-    console.error('Error cancelling cooldown notifications:', error);
+    log.error('Error cancelling cooldown notifications:', error);
   }
 }

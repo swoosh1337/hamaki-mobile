@@ -1,6 +1,9 @@
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
+import { createLogger } from '@/utils/logger';
 import { supabase } from '@/utils/supabase';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+
+const log = createLogger('Content');
 
 // Types from our unified model
 interface Post {
@@ -79,7 +82,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       setError(null);
       setIsNetworkError(false);
-      
+
       const { data, error: fetchError } = await supabase
         .from('content_posts')
         .select('*')
@@ -87,7 +90,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .order('created_at', { ascending: false });
 
       if (fetchError) {
-        console.error('Error fetching content:', fetchError);
+        log.error('Error fetching content:', fetchError);
         const isNetwork = checkNetworkError(fetchError);
         setIsNetworkError(isNetwork);
         setError(getUserFriendlyErrorMessage(fetchError));
@@ -96,9 +99,9 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       const transformedPosts = data?.map(transformDatabasePost) || [];
       setPosts(transformedPosts);
-      
+
     } catch (err) {
-      console.error('Error in fetchContent:', err);
+      log.error('Error in fetchContent:', err);
       const isNetwork = checkNetworkError(err);
       setIsNetworkError(isNetwork);
       setError(getUserFriendlyErrorMessage(err));
@@ -147,8 +150,8 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     fetchContent();
 
     // Set up realtime subscription
-    console.log('Setting up realtime subscription for content_posts');
-    
+    log.info('Setting up realtime subscription for content_posts');
+
     const subscription = supabase
       .channel('content_posts_channel')
       .on(
@@ -160,10 +163,10 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
           // Removed filter to catch DELETE events
         },
         (payload) => {
-          console.log('Realtime update received:', payload);
-          
+          log.debug('Realtime update received:', payload);
+
           const { eventType, new: newRecord, old: oldRecord } = payload;
-          
+
           if (eventType === 'INSERT' && newRecord) {
             // New post added - only add if published
             if (newRecord.is_published) {
@@ -200,10 +203,10 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
           } else if (eventType === 'DELETE' && oldRecord) {
             // Post deleted - always remove it regardless of publish status
-            console.log('Deleting post with ID:', oldRecord.id);
+            log.info('Deleting post with ID', { id: oldRecord.id });
             setPosts(current => {
               const filtered = current.filter(post => post.id !== oldRecord.id);
-              console.log('Posts after deletion:', filtered.length, 'remaining');
+              log.debug('Posts after deletion', { remainingCount: filtered.length });
               return filtered;
             });
             // hasNewContent is calculated automatically based on post age
@@ -211,12 +214,12 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       )
       .subscribe((status) => {
-        console.log('Realtime subscription status:', status);
+        log.debug('Realtime subscription status:', { status });
       });
 
     // Cleanup subscription on unmount
     return () => {
-      console.log('Cleaning up realtime subscription');
+      log.info('Cleaning up realtime subscription');
       subscription.unsubscribe();
     };
   }, []);

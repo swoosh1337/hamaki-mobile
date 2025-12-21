@@ -6,7 +6,6 @@
 
 import {
   Canvas,
-  Circle,
   Image,
   Line,
   Rect,
@@ -17,10 +16,13 @@ import React, { useMemo } from 'react';
 import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
-import { NoPogodGameState } from '@/utils/noPogodGameEngine';
+import { NoPogodGameState } from '@/features/games/noPogod';
+import { createLogger } from '@/utils/logger';
 import { NOPOGOD_GAME_ASSETS } from '@/utils/noPogodGameAssets';
 import { ResponsiveScalingManager } from '@/utils/noPogodResponsiveScaling';
 import { NoPogodSpriteRenderer } from '@/utils/noPogodSpriteRenderer';
+
+const log = createLogger('NoPogodCanvas');
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -43,17 +45,17 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   const scaling = responsiveScaling || new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT);
   const scalingConfig = scaling.getScalingConfig();
   const responsiveSizes = scaling.getSizes();
-  
+
   // Load all game images using useImage hook
   const backgroundImage = useImage(NOPOGOD_GAME_ASSETS.background);
-  
+
   // Miro sprites
   const miroIdleImage = useImage(NOPOGOD_GAME_ASSETS.miro.idle);
   const miroStep1Image = useImage(NOPOGOD_GAME_ASSETS.miro.step1);
   const miroStep2Image = useImage(NOPOGOD_GAME_ASSETS.miro.step2);
   const miroAngle45Image = useImage(NOPOGOD_GAME_ASSETS.miro.angle45);
   const miroAngle90Image = useImage(NOPOGOD_GAME_ASSETS.miro.angle90);
-  
+
   // Shonzika sprites
   const shonzikaIdleImage = useImage(NOPOGOD_GAME_ASSETS.shonzika.idle);
   const shonzikaIdle90Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.angle90);
@@ -62,7 +64,7 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   const shonzikaHandProfileImage = useImage(NOPOGOD_GAME_ASSETS.shonzika.handProfile);
   const shonzikaHand45Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.hand45);
   const shonzikaHand90Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.hand90);
-  
+
   // Item sprites
   const eggImage = useImage(NOPOGOD_GAME_ASSETS.items.egg);
   const tomatoImage = useImage(NOPOGOD_GAME_ASSETS.items.tomato);
@@ -86,49 +88,44 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     tomatoImage &&
     pepperImage
   );
-  
+
   if (!allImagesLoaded) {
-      console.log('Assets Loading Status:', {
-          bg: !!backgroundImage,
-          miroIdle: !!miroIdleImage,
-          miroStep1: !!miroStep1Image,
-          miroStep2: !!miroStep2Image,
-          miro90: !!miroAngle90Image,
-          shonIdle: !!shonzikaIdleImage,
-          shon90: !!shonzikaIdle90Image,
-          shonW1: !!shonzikaWalk1Image,
-          shonW2: !!shonzikaWalk2Image,
-          shonHand: !!shonzikaHandProfileImage,
-          egg: !!eggImage,
-          tomato: !!tomatoImage,
-          pepper: !!pepperImage
-      });
+    log.debug('Assets Loading Status', {
+      bg: !!backgroundImage,
+      miroIdle: !!miroIdleImage,
+      miroStep1: !!miroStep1Image,
+      miroStep2: !!miroStep2Image,
+      miro90: !!miroAngle90Image,
+      shonIdle: !!shonzikaIdleImage,
+      shon90: !!shonzikaIdle90Image,
+      shonW1: !!shonzikaWalk1Image,
+      shonW2: !!shonzikaWalk2Image,
+      shonHand: !!shonzikaHandProfileImage,
+      egg: !!eggImage,
+      tomato: !!tomatoImage,
+      pepper: !!pepperImage
+    });
   }
 
   // Get current Miro sprite based on state and animation
   const getCurrentMiroImage = () => {
     if (miroSprite) return miroSprite;
-    
+
     if (gameState.player.isMoving) {
       // Alternate between step sprites based on animation progress
-      const sprite = gameState.player.animationProgress < 0.5 ? miroStep1Image : miroStep2Image;
-      console.log('Miro moving sprite:', sprite ? 'loaded' : 'null');
-      return sprite;
+      return gameState.player.animationProgress < 0.5 ? miroStep1Image : miroStep2Image;
     }
-    console.log('Miro idle sprite:', miroIdleImage ? 'loaded' : 'null');
     return miroIdleImage;
   };
 
   // Get current Shonzika sprite based on state
   const getCurrentShonzikaImage = () => {
     if (shonzikaSprite) return shonzikaSprite;
-    
+
     if (gameState.shonzika.sprite === 'THROWING') {
       // Use hand profile for throwing animation
-      console.log('Shonzika throwing sprite:', shonzikaHandProfileImage ? 'loaded' : 'null');
       return shonzikaHandProfileImage;
     }
-    console.log('Shonzika idle sprite (90°):', shonzikaIdle90Image ? 'loaded' : 'null');
     return shonzikaIdle90Image;
   };
 
@@ -151,34 +148,34 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
       const positions = scaling.getPositions();
       return {
         background: { sprite: null, x: 0, y: 0, width: scalingConfig.screenWidth, height: scalingConfig.screenHeight },
-        miro: { 
-          sprite: null, 
-          x: positions.playerPositions.center, 
-          y: positions.miroGroundY, 
-          width: responsiveSizes.characterSize, 
-          height: responsiveSizes.characterSize 
+        miro: {
+          sprite: null,
+          x: positions.playerPositions.center,
+          y: positions.miroGroundY,
+          width: responsiveSizes.characterSize,
+          height: responsiveSizes.characterSize
         },
-        shonzika: { 
-          sprite: null, 
-          x: positions.playerPositions.center, 
-          y: positions.shonzikaY, 
-          width: responsiveSizes.characterSize, 
-          height: responsiveSizes.characterSize 
+        shonzika: {
+          sprite: null,
+          x: positions.playerPositions.center,
+          y: positions.shonzikaY,
+          width: responsiveSizes.characterSize,
+          height: responsiveSizes.characterSize
         },
         items: [],
       };
     }
-    
+
     const currentMiroSprite = getCurrentMiroImage();
     const currentShonzikaSprite = getCurrentShonzikaImage();
-    
+
     return spriteRenderer.getAllSprites(gameState, currentMiroSprite, currentShonzikaSprite);
   }, [gameState, spriteRenderer, scaling, scalingConfig, responsiveSizes, getCurrentMiroImage(), getCurrentShonzikaImage()]);
 
   // Render background with responsive scaling
   const renderBackground = () => {
     if (!backgroundImage) {
-      console.log('🎨 ⚠️ BACKGROUND IMAGE NOT LOADED');
+      log.warn('Background image not loaded');
       return null; // Don't render if image not loaded
     }
 
@@ -204,9 +201,9 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     const spriteTop = miroSprite.y;
     const spriteBottom = miroSprite.y + miroSprite.height;
     const isOnScreen = spriteRight >= 0 && spriteLeft <= scalingConfig.screenWidth &&
-                       spriteBottom >= 0 && spriteTop <= scalingConfig.screenHeight;
+      spriteBottom >= 0 && spriteTop <= scalingConfig.screenHeight;
 
-    console.log('🎨 RENDER Miro:', {
+    log.debug('🎨 RENDER Miro:', {
       isMoving: gameState.player.isMoving,
       position: gameState.player.position,
       centerX: gameState.player.x,
@@ -215,11 +212,11 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
       renderY: miroSprite.y,
       width: miroSprite.width,
       height: miroSprite.height,
-      spriteLeft: spriteLeft,
-      spriteRight: spriteRight,
+      spriteLeft,
+      spriteRight,
       screenWidth: scalingConfig.screenWidth,
       screenHeight: scalingConfig.screenHeight,
-      isOnScreen: isOnScreen,
+      isOnScreen,
       fullyOnScreen: spriteLeft >= 0 && spriteRight <= scalingConfig.screenWidth,
     });
 
@@ -230,15 +227,13 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
       // 0.0 - 0.5: step1 (left leg forward)
       // 0.5 - 1.0: step2 (right leg forward)
       miroImage = gameState.player.animationProgress < 0.5 ? miroStep1Image : miroStep2Image;
-      console.log('🎨 Miro walking - progress:', gameState.player.animationProgress.toFixed(2), 'sprite:', gameState.player.animationProgress < 0.5 ? 'step1' : 'step2');
     } else {
       // Use idle sprite (90 degree angle sprite) - this is the correct idle pose
       miroImage = miroAngle90Image;
-      console.log('🎨 Miro idle sprite. Image loaded?', miroImage ? 'YES' : 'NO');
     }
 
     if (!miroImage) {
-      console.log('🎨 ⚠️ MIRO IMAGE NOT LOADED');
+      log.warn('Miro image not loaded');
       return null; // Don't render anything if image not loaded
     }
 
@@ -246,7 +241,13 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     // In continuous movement, flip when position is LEFT (moving or stopped on left side)
     const shouldFlip = gameState.player.position === 'LEFT';
 
-    console.log('🎨 RENDERING MIRO IMAGE at x:', miroSprite.x, 'y:', miroSprite.y, 'flipped?', shouldFlip, 'position:', gameState.player.position, 'width:', miroSprite.width);
+    log.debug('🎨 RENDERING MIRO IMAGE', {
+      x: miroSprite.x,
+      y: miroSprite.y,
+      flipped: shouldFlip,
+      position: gameState.player.position,
+      width: miroSprite.width
+    });
 
     // When flipping, use origin to specify the center point of the flip
     // This ensures the sprite flips in place around its center
@@ -335,7 +336,7 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   const renderShonzika = () => {
     const shonzikaSprite = renderData.shonzika;
 
-    console.log('🎨 RENDER Shonzika:', {
+    log.debug('🎨 RENDER Shonzika:', {
       sprite: gameState.shonzika.sprite,
       position: gameState.shonzika.position,
       isMoving: gameState.shonzika.isMoving,
@@ -356,14 +357,13 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     } else if (gameState.shonzika.sprite === 'WALKING' || gameState.shonzika.isMoving) {
       // Walking cycle: step1 ↔ step2 only (no profile idle)
       bodyImage = gameState.shonzika.animationProgress < 0.5 ? shonzikaWalk1Image : shonzikaWalk2Image;
-      console.log('🎨 Shonzika walking (step-step) - progress:', gameState.shonzika.animationProgress.toFixed(2));
     } else {
       // When idle, use the 90-degree idle sprite
       bodyImage = shonzikaIdle90Image;
     }
 
     if (!bodyImage) {
-      console.log('🎨 ⚠️ SHONZIKA IMAGE NOT LOADED');
+      log.warn('Shonzika image not loaded');
       return null; // Don't render anything if image not loaded
     }
 
@@ -371,7 +371,11 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     // Match Miro logic: face left when moving/position is LEFT
     const shouldFlip = gameState.shonzika.position === 'LEFT';
 
-    console.log('🎨 Shonzika flip:', shouldFlip, 'targetX:', gameState.shonzika.targetX, 'currentX:', gameState.shonzika.x);
+    log.debug('🎨 Shonzika flip:', {
+      shouldFlip,
+      targetX: gameState.shonzika.targetX,
+      currentX: gameState.shonzika.x
+    });
 
     // Use origin for proper flip point
     const transforms = shouldFlip ? [{ scaleX: -1 }] : undefined;
@@ -421,7 +425,7 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
 
       if (!itemImage) {
         // Don't render if image not loaded
-        console.log('🎨 ⚠️ ITEM IMAGE NOT LOADED:', item.type);
+        log.warn('Item image not loaded', { type: item.type });
         return null;
       }
 
@@ -454,7 +458,7 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
 
   // Show loading screen while images are loading
   if (!allImagesLoaded) {
-    console.log('🎨 ⚠️ Loading game assets...');
+    log.debug('Loading game assets...');
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.dark.tint} />

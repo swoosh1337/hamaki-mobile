@@ -30,7 +30,7 @@ describe('usePosts', () => {
             created_at: '2024-01-01T00:00:00Z',
             updated_at: '2024-01-01T00:00:00Z',
             isUpvoted: false,
-            user: { full_name: 'Author One', avatar_url: null },
+            user: { full_name: 'Author One', avatar_url: undefined },
         },
         {
             id: 'post-2',

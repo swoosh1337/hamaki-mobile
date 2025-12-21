@@ -6,6 +6,9 @@
  */
 
 import { youtubeService, type YouTubeVideo } from '@/services/youtube';
+import { createLogger } from './logger';
+
+const log = createLogger('YouTube');
 
 // Re-export types
 export type { YouTubeVideo };
@@ -67,7 +70,7 @@ export const clearVideosCache = youtubeService.clearCache.bind(youtubeService);
  */
 export function openYouTubeVideo(videoId: string): void {
   const url = youtubeService.getVideoUrl(videoId);
-  console.log('Opening YouTube video:', url);
+  log.info('Opening YouTube video', { videoId, url });
   // Note: This function previously didn't actually open the video
   // Use Linking.openURL(youtubeService.getVideoUrl(videoId)) in your component
 }

@@ -1,4 +1,5 @@
 import { Colors } from '@/constants/Colors';
+import { createLogger } from '@/utils/logger';
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -11,6 +12,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+const log = createLogger('SimplePostModal');
 
 interface SimplePostModalProps {
   visible: boolean;
@@ -25,30 +28,30 @@ export const SimplePostModal: React.FC<SimplePostModalProps> = ({
   onSubmit,
   isSubmitting,
 }) => {
-  console.log('📝 SimplePostModal render', { visible, isSubmitting });
+  log.debug('Render', { visible, isSubmitting });
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
 
   const handleSubmit = async () => {
-    console.log('📝 Submit pressed', { title, content });
+    log.info('Submit pressed', { title, length: content.length });
 
     if (!title.trim() || !content.trim()) {
-      console.log('❌ Validation failed');
+      log.warn('Validation failed: empty title or content');
       return;
     }
 
     try {
-      console.log('📝 Calling onSubmit...');
+      log.debug('Calling onSubmit...');
       await onSubmit(title, content);
-      console.log('✅ onSubmit completed');
+      log.info('Submit successful');
 
       // Reset and close
       setTitle('');
       setContent('');
       onClose();
     } catch (error) {
-      console.error('❌ Error in handleSubmit:', error);
+      log.error('Error in handleSubmit', error);
     }
   };
 

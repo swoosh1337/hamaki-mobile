@@ -26,6 +26,9 @@ import {
   verifyAndSyncSubscriptions,
   YOUTUBE_CHANNELS,
 } from '@/utils/channelSubscriptions';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('ChannelSubscriptionManager');
 
 export const ChannelSubscriptionManager: React.FC = () => {
   const { userProfile, updateUserProfile } = useAuth();
@@ -47,7 +50,7 @@ export const ChannelSubscriptionManager: React.FC = () => {
       const statuses = await getChannelSubscriptionStatus(userProfile.google_id);
       setSubscriptions(statuses);
     } catch (error) {
-      console.error('Error loading subscription status:', error);
+      log.error('Error loading subscription status', error);
       Alert.alert('Error', 'Failed to load subscription status');
     } finally {
       setIsLoading(false);
@@ -65,7 +68,7 @@ export const ChannelSubscriptionManager: React.FC = () => {
         Alert.alert('Error', 'Cannot open YouTube. Please install the YouTube app.');
       }
     } catch (error) {
-      console.error('Error opening YouTube channel:', error);
+      log.error('Error opening YouTube channel', error);
       Alert.alert('Error', 'Failed to open YouTube channel');
     }
   };
@@ -127,7 +130,7 @@ export const ChannelSubscriptionManager: React.FC = () => {
         );
       }
     } catch (error) {
-      console.error('Error verifying subscriptions:', error);
+      log.error('Error verifying subscriptions', error);
       Alert.alert(
         'Verification Failed',
         'Failed to verify subscriptions. Please try again later.'

@@ -3,7 +3,10 @@
  * Manages multi-channel YouTube subscriptions and XP rewards
  */
 
-import { supabase, UserProfile, userService } from './supabase';
+import { createLogger } from './logger';
+import { supabase, UserProfile } from './supabase';
+
+const log = createLogger('ChannelSubs');
 
 // Channel configuration with IDs and XP rewards
 export const YOUTUBE_CHANNELS = {
@@ -59,9 +62,8 @@ async function checkSingleChannelSubscription(
     let nextPageToken: string | undefined = undefined;
 
     do {
-      const url = `https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&mine=true&maxResults=50${
-        nextPageToken ? `&pageToken=${nextPageToken}` : ''
-      }`;
+      const url: string = `https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&mine=true&maxResults=50${nextPageToken ? `&pageToken=${nextPageToken}` : ''
+        }`;
 
       const response = await fetch(url, {
         headers: {
@@ -69,10 +71,10 @@ async function checkSingleChannelSubscription(
         },
       });
 
-      const data = await response.json();
+      const data: any = await response.json();
 
       if (!response.ok) {
-        console.error(`YouTube API error for channel ${channelId}:`, data);
+        log.error(`YouTube API error for channel ${channelId}`, data);
         throw new Error(
           `${response.status}: ${data.error?.message || 'Failed to fetch subscriptions'}`
         );
@@ -93,7 +95,7 @@ async function checkSingleChannelSubscription(
 
     return false;
   } catch (error) {
-    console.error(`Error checking subscription for channel ${channelId}:`, error);
+    log.error(`Error checking subscription for channel ${channelId}`, error);
     throw error;
   }
 }
@@ -105,7 +107,7 @@ export async function checkAllChannelSubscriptions(
   accessToken: string
 ): Promise<Record<ChannelKey, boolean>> {
   try {
-    console.log('🔍 Checking all channel subscriptions...');
+    log.info('Checking all channel subscriptions...');
 
     const subscriptionChecks = Object.entries(YOUTUBE_CHANNELS).map(
       async ([key, channel]) => {
@@ -120,10 +122,10 @@ export async function checkAllChannelSubscriptions(
     const results = await Promise.all(subscriptionChecks);
     const subscriptions = Object.fromEntries(results) as Record<ChannelKey, boolean>;
 
-    console.log('✅ Subscription check results:', subscriptions);
+    log.info('Subscription check completed', { subscriptions });
     return subscriptions;
   } catch (error) {
-    console.error('Error checking all channel subscriptions:', error);
+    log.error('Error checking all channel subscriptions:', error);
     throw error;
   }
 }
@@ -157,7 +159,7 @@ export async function getChannelSubscriptionStatus(
 
     return statuses;
   } catch (error) {
-    console.error('Error getting channel subscription status:', error);
+    log.error('Error getting channel subscription status:', error);
     throw error;
   }
 }
@@ -170,7 +172,7 @@ export async function updateChannelSubscriptionsAndAwardXP(
   subscriptions: Record<ChannelKey, boolean>
 ): Promise<{ totalXPAwarded: number; updatedUser: UserProfile }> {
   try {
-    console.log('📊 Updating channel subscriptions and awarding XP...');
+    log.info('Updating channel subscriptions and awarding XP...');
 
     // Get current user data
     const { data: currentUser, error: fetchError } = await supabase
@@ -208,7 +210,7 @@ export async function updateChannelSubscriptionsAndAwardXP(
       if (isSubscribed && !wasAwarded) {
         totalXPAwarded += channel.xpReward;
         xpAwardedRecord[channel.rewardKey] = true;
-        console.log(`💰 Awarding ${channel.xpReward} XP for ${channel.name}`);
+        log.info(`Awarding ${channel.xpReward} XP for subscription`, { channel: channel.name });
       }
     });
 
@@ -230,25 +232,25 @@ export async function updateChannelSubscriptionsAndAwardXP(
     // Always sync total XP to leaderboard (even if no new XP was awarded)
     // This ensures the leaderboard reflects the user's current total XP
     if (updatedUser) {
-      console.log(`📊 Syncing user's total XP (${updatedUser.xp_points}) to leaderboard...`);
+      log.debug(`Syncing user's total XP (${updatedUser.xp_points}) to leaderboard...`);
       try {
         // Sync the user's TOTAL XP to leaderboard, not just the newly awarded XP
         await syncUserXPToLeaderboard(updatedUser.id, updatedUser.xp_points);
-        console.log(`✅ Leaderboard synced with user's total XP`);
+        log.debug(`Leaderboard synced with user's total XP`);
       } catch (leaderboardError) {
-        console.error('⚠️ Failed to sync leaderboard:', leaderboardError);
+        log.error('Failed to sync leaderboard:', leaderboardError);
         // Don't fail the whole operation if leaderboard sync fails
       }
     }
 
-    console.log(`✅ Updated subscriptions. Total XP awarded: ${totalXPAwarded}`);
+    log.info(`Updated subscriptions. Total XP awarded: ${totalXPAwarded}`);
 
     return {
       totalXPAwarded,
       updatedUser: updatedUser as UserProfile,
     };
   } catch (error) {
-    console.error('Error updating channel subscriptions:', error);
+    log.error('Error updating channel subscriptions:', error);
     throw error;
   }
 }
@@ -269,7 +271,7 @@ async function syncUserXPToLeaderboard(userId: string, totalXP: number): Promise
       .single();
 
     if (allTimeCheckError && allTimeCheckError.code !== 'PGRST116') {
-      console.error('Error checking all-time leaderboard:', allTimeCheckError);
+      log.error('Error checking all-time leaderboard:', allTimeCheckError);
     }
 
     if (allTimeEntry) {
@@ -281,9 +283,9 @@ async function syncUserXPToLeaderboard(userId: string, totalXP: number): Promise
         .eq('period_type', 'all_time');
 
       if (updateError) {
-        console.error('Error updating all-time leaderboard:', updateError);
+        log.error('Error updating all-time leaderboard:', updateError);
       } else {
-        console.log(`✅ All-time leaderboard updated to ${totalXP} XP`);
+        log.debug(`All-time leaderboard updated to ${totalXP} XP`);
       }
     } else {
       // Create new entry with user's TOTAL XP
@@ -296,16 +298,16 @@ async function syncUserXPToLeaderboard(userId: string, totalXP: number): Promise
         });
 
       if (insertError) {
-        console.error('Error inserting all-time leaderboard:', insertError);
+        log.error('Error inserting all-time leaderboard:', insertError);
       } else {
-        console.log(`✅ All-time leaderboard entry created with ${totalXP} XP`);
+        log.debug(`All-time leaderboard entry created with ${totalXP} XP`);
       }
     }
 
     // Note: We don't sync weekly leaderboard here since subscription XP
     // shouldn't count toward weekly XP (only game scores should)
   } catch (error) {
-    console.error('Error syncing XP to leaderboard:', error);
+    log.error('Error syncing XP to leaderboard:', error);
     throw error;
   }
 }
@@ -331,7 +333,7 @@ export async function verifyAndSyncSubscriptions(
   googleId: string
 ): Promise<{ totalXPAwarded: number; updatedUser: UserProfile }> {
   try {
-    console.log('🔄 Verifying and syncing channel subscriptions...');
+    log.info('Verifying and syncing channel subscriptions...');
 
     // Check all subscriptions via YouTube API
     const subscriptions = await checkAllChannelSubscriptions(accessToken);
@@ -341,7 +343,7 @@ export async function verifyAndSyncSubscriptions(
 
     return result;
   } catch (error) {
-    console.error('Error verifying subscriptions:', error);
+    log.error('Error verifying subscriptions:', error);
     throw error;
   }
 }
