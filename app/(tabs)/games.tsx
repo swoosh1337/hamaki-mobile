@@ -1,13 +1,13 @@
 import GamesIcon from '@/components/GamesIcon';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { HammockJumpGame } from '@/components/games/HammockJumpGame';
 import { NoPogodGame } from '@/components/games/NoPogodGame';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { checkGameCooldown, formatCooldownTime, GameCooldownStatus } from '@/utils/gameCooldowns';
+import { useGameCooldown } from '@/hooks/useGameCooldown';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('Games');
@@ -43,30 +43,19 @@ const GAMES: GameItem[] = [
 export default function GamesScreen() {
   const { userProfile, isDemoMode } = useAuth();
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
-  const [cooldowns, setCooldowns] = useState<Record<string, GameCooldownStatus>>({});
 
-  // Check cooldowns on mount and when returning to screen
-  useEffect(() => {
-    if (userProfile?.id) {
-      checkAllCooldowns();
-    }
-  }, [userProfile?.id, isDemoMode]);
+  // Use cooldown hooks for each game
+  const noPogodCooldown = useGameCooldown({
+    gameId: 'no-pogodi',
+    cooldownMs: isDemoMode ? 0 : 15 * 60 * 1000, // 15 minutes, or no cooldown in demo
+    persist: true,
+  });
 
-  const checkAllCooldowns = async () => {
-    if (!userProfile?.id) return;
-
-    try {
-      const nopogodStatus = await checkGameCooldown(userProfile.id, 'nopogod', isDemoMode);
-      const hammockJumpStatus = await checkGameCooldown(userProfile.id, 'hammock-jump', isDemoMode);
-
-      setCooldowns({
-        'no-pogodi': nopogodStatus,
-        'hammock-jump': hammockJumpStatus,
-      });
-    } catch (error) {
-      log.error('Error checking cooldowns', error);
-    }
-  };
+  const hammockJumpCooldown = useGameCooldown({
+    gameId: 'hammock-jump',
+    cooldownMs: isDemoMode ? 0 : 15 * 60 * 1000, // 15 minutes, or no cooldown in demo
+    persist: true,
+  });
 
   const handleGamePress = async (gameId: string) => {
     if (!userProfile?.id) {
@@ -74,12 +63,13 @@ export default function GamesScreen() {
       return;
     }
 
-    // Enforce cooldown for both games
-    const cooldownStatus = cooldowns[gameId];
-    if (cooldownStatus && !cooldownStatus.canPlay) {
+    // Check cooldown based on game
+    const cooldown = gameId === 'no-pogodi' ? noPogodCooldown : hammockJumpCooldown;
+    
+    if (cooldown.isOnCooldown) {
       Alert.alert(
         '⏰ Cooldown Active',
-        `You can play again in ${formatCooldownTime(cooldownStatus.remainingMs)}.\n\nYou'll get a notification when it's ready!`,
+        `You can play again in ${cooldown.remainingFormatted}.\n\nYou'll get a notification when it's ready!`,
         [{ text: 'OK' }]
       );
       return;
@@ -91,13 +81,12 @@ export default function GamesScreen() {
 
   const closeGame = () => {
     setSelectedGame(null);
-    // Refresh cooldowns after closing game
-    checkAllCooldowns();
+    // Cooldowns are automatically managed by hooks
   };
 
   const renderGameCard = (game: GameItem) => {
-    const cooldownStatus = cooldowns[game.id];
-    const isOnCooldown = cooldownStatus && !cooldownStatus.canPlay;
+    const cooldown = game.id === 'no-pogodi' ? noPogodCooldown : hammockJumpCooldown;
+    const isOnCooldown = cooldown.isOnCooldown;
 
     return (
       <TouchableOpacity
@@ -135,7 +124,7 @@ export default function GamesScreen() {
             <View style={styles.cooldownBadge}>
               <Ionicons name="time-outline" size={14} color="#FFA500" />
               <Text style={styles.cooldownText}>
-                {formatCooldownTime(cooldownStatus.remainingMs)}
+                {cooldown.remainingFormatted}
               </Text>
             </View>
           )}

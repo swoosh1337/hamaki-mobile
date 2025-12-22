@@ -737,13 +737,22 @@ describe('NoPogod Game', () => {
         });
 
         test('should count down during gameplay', () => {
-            game.update(100);
-            for (let t = 150; t <= 5000; t += 50) {
-                game.update(t);
+            game.startGame();
+            const startTime = Date.now();
+            // First update initializes timing
+            game.update(startTime);
+            // Advance time in small increments (under maxDeltaTime of 100ms)
+            for (let i = 1; i <= 20; i++) {
+                game.update(startTime + (i * 50)); // 50ms steps = 1 second total
             }
 
-            const remaining = game.getTimeRemaining();
-            expect(remaining).toBeLessThan(60);
+            const remainingMs = game.getTimeRemainingMs();
+            const remainingSec = game.getTimeRemaining();
+            
+            // Timer should have decremented by ~1 second
+            expect(remainingMs).toBeLessThan(60000);
+            expect(remainingMs).toBeGreaterThan(58000);
+            expect(remainingSec).toBe(59);
         });
     });
 
@@ -791,27 +800,6 @@ describe('NoPogod Game', () => {
     describe('Sprite Rendering', () => {
         beforeEach(() => {
             game.startGame();
-        });
-
-        test('should return Miro sprite', () => {
-            const sprite = game.getCurrentMiroSprite();
-            // May be null if no assets loaded
-            expect(sprite).toBeDefined();
-        });
-
-        test('should return Shonzika sprite', () => {
-            const sprite = game.getCurrentShonzikaSprite();
-            expect(sprite).toBeDefined();
-        });
-
-        test('should return item sprites for each type', () => {
-            const itemTypes: ItemType[] = ['EGG', 'TOMATO', 'PEPPER', 'ELECTRIC_SHOCK', 'BOMB'];
-
-            for (const type of itemTypes) {
-                const sprite = game.getItemSprite(type);
-                // Sprites may be null if assets not loaded
-                expect(sprite).toBeDefined();
-            }
         });
 
         test('should track Miro movement state', () => {

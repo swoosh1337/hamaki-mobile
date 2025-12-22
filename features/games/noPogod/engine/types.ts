@@ -5,6 +5,7 @@
  * Types are organized by domain.
  */
 
+import type { ImageRequireSource } from 'react-native';
 import type { BaseGameState, GamePhase } from '../../core';
 
 // =============================================================================
@@ -130,7 +131,7 @@ export interface FallingItem {
     /** Vertical velocity */
     velocityY: number;
     /** Sprite reference (null if not loaded) */
-    sprite: unknown;
+    sprite: ImageRequireSource | null;
     /** Points awarded when caught */
     points: number;
     /** Whether this is a bad item */
@@ -151,8 +152,8 @@ export interface FallingItem {
  * Animation managers for characters
  */
 export interface GameAnimations {
-    miro: unknown;  // SpriteAnimationManager from assets
-    shonzika: unknown;
+    miro: null;
+    shonzika: null;
 }
 
 /**

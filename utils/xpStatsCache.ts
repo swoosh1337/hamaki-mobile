@@ -3,9 +3,9 @@
  * Caches weekly and total XP stats to reduce database queries
  */
 
+import type { XPStats } from '@/types/user';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createLogger } from './logger';
-import { XPStats } from './supabase';
 
 const log = createLogger('XPCache');
 

@@ -9,6 +9,7 @@ import {
   Image,
   Line,
   Rect,
+  SkImage,
   useImage,
   vec
 } from '@shopify/react-native-skia';
@@ -17,10 +18,10 @@ import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-nat
 
 import { Colors } from '@/constants/Colors';
 import { NoPogodGameState } from '@/features/games/noPogod';
+import { NOPOGOD_GAME_ASSETS } from '@/features/games/noPogod/utils/assets';
+import { ResponsiveScalingManager } from '@/features/games/noPogod/utils/responsiveScaling';
+import { NoPogodSpriteRenderer } from '@/features/games/noPogod/utils/spriteRenderer';
 import { createLogger } from '@/utils/logger';
-import { NOPOGOD_GAME_ASSETS } from '@/utils/noPogodGameAssets';
-import { ResponsiveScalingManager } from '@/utils/noPogodResponsiveScaling';
-import { NoPogodSpriteRenderer } from '@/utils/noPogodSpriteRenderer';
 
 const log = createLogger('NoPogodCanvas');
 
@@ -29,16 +30,12 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 interface NoPogodGameCanvasProps {
   gameState: NoPogodGameState;
   spriteRenderer: NoPogodSpriteRenderer;
-  miroSprite?: any;
-  shonzikaSprite?: any;
   responsiveScaling?: ResponsiveScalingManager;
 }
 
 export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   gameState,
   spriteRenderer,
-  miroSprite,
-  shonzikaSprite,
   responsiveScaling,
 }) => {
   // Initialize responsive scaling if not provided
@@ -109,8 +106,6 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
 
   // Get current Miro sprite based on state and animation
   const getCurrentMiroImage = () => {
-    if (miroSprite) return miroSprite;
-
     if (gameState.player.isMoving) {
       // Alternate between step sprites based on animation progress
       return gameState.player.animationProgress < 0.5 ? miroStep1Image : miroStep2Image;
@@ -120,8 +115,6 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
 
   // Get current Shonzika sprite based on state
   const getCurrentShonzikaImage = () => {
-    if (shonzikaSprite) return shonzikaSprite;
-
     if (gameState.shonzika.sprite === 'THROWING') {
       // Use hand profile for throwing animation
       return shonzikaHandProfileImage;
@@ -166,11 +159,8 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
       };
     }
 
-    const currentMiroSprite = getCurrentMiroImage();
-    const currentShonzikaSprite = getCurrentShonzikaImage();
-
-    return spriteRenderer.getAllSprites(gameState, currentMiroSprite, currentShonzikaSprite);
-  }, [gameState, spriteRenderer, scaling, scalingConfig, responsiveSizes, getCurrentMiroImage(), getCurrentShonzikaImage()]);
+    return spriteRenderer.getAllSprites(gameState);
+  }, [gameState, spriteRenderer, scaling, scalingConfig, responsiveSizes]);
 
   // Render background with responsive scaling
   const renderBackground = () => {
@@ -524,7 +514,7 @@ const styles = StyleSheet.create({
 });
 
 // Helper function to check if all required images are loaded
-export const areImagesLoaded = (...images: (any | null)[]): boolean => {
+export const areImagesLoaded = (...images: Array<SkImage | null>): boolean => {
   return images.every(image => image !== null);
 };
 

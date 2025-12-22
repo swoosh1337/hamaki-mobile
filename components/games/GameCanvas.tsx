@@ -4,8 +4,8 @@ import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Colors } from '@/constants/Colors';
-import { GAME_CONFIG, GameAssets, GameState } from '@/utils/gameEngine';
-import { NOPOGOD_GAME_ASSETS } from '@/utils/noPogodGameAssets';
+import { GAME_CONFIG, GameAssets, GameState } from '@/features/games/hammockJump/engine/HammockJumpEngine';
+import { NOPOGOD_GAME_ASSETS } from '@/features/games/noPogod/utils/assets';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 

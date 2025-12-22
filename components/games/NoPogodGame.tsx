@@ -17,12 +17,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import type { NoPogodGameState } from '@/features/games/noPogod';
 import { NoPogodEngine } from '@/features/games/noPogod';
+import { NOPOGOD_GAME_ASSETS } from '@/features/games/noPogod/utils/assets';
+import { ResponsiveScalingManager } from '@/features/games/noPogod/utils/responsiveScaling';
+import { NoPogodSpriteRenderer } from '@/features/games/noPogod/utils/spriteRenderer';
+import { userService } from '@/services/supabase';
+import { leaderboardService } from '@/services/supabase/leaderboardService';
 import { createLogger } from '@/utils/logger';
-import { NOPOGOD_GAME_ASSETS } from '@/utils/noPogodGameAssets';
-import { ResponsiveScalingManager } from '@/utils/noPogodResponsiveScaling';
-import { NoPogodSpriteRenderer } from '@/utils/noPogodSpriteRenderer';
-import { userService } from '@/utils/supabase';
 import { NoPogodGameCanvas } from './NoPogodGameCanvas';
 
 const log = createLogger('NoPogodGame');
@@ -44,7 +46,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const gameEngineRef = useRef<NoPogodEngine | null>(null);
   const spriteRendererRef = useRef<NoPogodSpriteRenderer | null>(null);
   const responsiveScalingRef = useRef<ResponsiveScalingManager | null>(null);
-  const [gameState, setGameState] = useState<any>(null);
+  const [gameState, setGameState] = useState<NoPogodGameState | null>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const [xpAwarded, setXpAwarded] = useState(false);
   const [highScore, setHighScore] = useState<number>(0);
@@ -289,15 +291,15 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
               // Update leaderboard entries (weekly and all-time) - non-blocking
               // Run in background, don't wait for completion
-              userService.updateLeaderboardPoints(userProfile.id, xpToAward)
-                .then((success) => {
+              leaderboardService.updateLeaderboardPoints(userProfile.id, xpToAward)
+                .then((success: boolean) => {
                   if (success) {
                     log.info(`Updated leaderboard with ${xpToAward} points`);
                   } else {
                     log.warn('Leaderboard update failed, but XP was saved');
                   }
                 })
-                .catch((error) => {
+                .catch((error: Error) => {
                   log.error('Leaderboard update error (non-critical):', error);
                   // Don't throw - leaderboard update is not critical
                 });
@@ -575,8 +577,6 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
                 gameState={gameState}
                 spriteRenderer={spriteRendererRef.current!}
                 responsiveScaling={responsiveScalingRef.current!}
-                miroSprite={gameEngineRef.current?.getCurrentMiroSprite()}
-                shonzikaSprite={gameEngineRef.current?.getCurrentShonzikaSprite()}
               />
 
               {/* Swipe feedback (only during gameplay) */}

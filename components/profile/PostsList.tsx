@@ -1,15 +1,15 @@
+import { Colors } from '@/constants/Colors';
+import type { Post as UserPost } from '@/types/post';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
+    ActivityIndicator,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
-import { UserPost } from '@/utils/supabase';
 
 interface PostsListProps {
   posts: (UserPost & { isUpvoted?: boolean })[];

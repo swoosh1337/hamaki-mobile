@@ -3,9 +3,9 @@
  * Checks if user has liked the latest video from each channel and awards XP
  */
 
+import { supabase } from '@/services/supabase/client';
 import { ChannelKey, YOUTUBE_CHANNELS } from './channelSubscriptions';
 import { createLogger } from './logger';
-import { supabase } from './supabase';
 
 const log = createLogger('VideoLikes');
 

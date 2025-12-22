@@ -3,8 +3,8 @@
  */
 
 import { NoPogodEngine } from '@/features/games/noPogod';
-import { loadNoPogodGameAssets } from '@/utils/noPogodGameAssets';
-import { NoPogodSpriteRenderer, SpriteUtils } from '@/utils/noPogodSpriteRenderer';
+import { loadNoPogodGameAssets } from '@/features/games/noPogod/utils/assets';
+import { NoPogodSpriteRenderer, SpriteUtils } from '@/features/games/noPogod/utils/spriteRenderer';
 
 // Mock the asset files
 jest.mock('@/assets/images/game/bg.png', () => 'mocked-background', { virtual: true });
@@ -133,11 +133,14 @@ describe('NoPogodSpriteRenderer', () => {
         type: 'EGG' as const,
         x: 100,
         y: 200,
+        velocityX: 0,
         velocityY: 5,
-        sprite: 'mocked-egg',
+        sprite: 'mocked-egg' as any,
         points: 10,
         isBad: false,
         isDeadly: false,
+        mustCatch: true,
+        shouldAvoid: false,
       };
 
       const itemSprite = renderer.getItemSprite(mockItem);
@@ -168,11 +171,14 @@ describe('NoPogodSpriteRenderer', () => {
           type,
           x: 100,
           y: 200,
+          velocityX: 0,
           velocityY: 5,
           sprite: null,
           points: 10,
           isBad: false,
           isDeadly: false,
+          mustCatch: true,
+          shouldAvoid: false,
         };
 
         const itemSprite = renderer.getItemSprite(mockItem);

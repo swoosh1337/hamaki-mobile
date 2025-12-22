@@ -3,16 +3,16 @@
  * Demonstrates how to use the asset system, game engine, and sprite renderer together
  */
 
-import { NoPogodEngine } from '@/features/games/noPogod';
-import { createGameAnimations, loadNoPogodGameAssets, NOPOGOD_GAME_ASSETS } from './noPogodGameAssets';
-import { NoPogodSpriteRenderer } from './noPogodSpriteRenderer';
+import { NoPogodEngine } from '../engine/NoPogodEngine';
+import type { NoPogodGameAssets } from './assets';
+import { loadNoPogodGameAssets, NOPOGOD_GAME_ASSETS } from './assets';
+import { NoPogodSpriteRenderer } from './spriteRenderer';
 
 // Example integration class showing how all components work together
 export class NoPogodGameIntegration {
   private gameEngine: NoPogodEngine;
   private spriteRenderer: NoPogodSpriteRenderer;
-  private assets: any;
-  private animations: any;
+  private assets: NoPogodGameAssets;
 
   constructor(screenWidth: number, screenHeight: number) {
     // Load game assets
@@ -24,20 +24,14 @@ export class NoPogodGameIntegration {
     // Create sprite renderer
     this.spriteRenderer = new NoPogodSpriteRenderer(this.assets, screenWidth, screenHeight);
 
-    // Create animations
-    this.animations = createGameAnimations(this.assets);
   }
 
   // Get all rendering information for the current game state
   public getRenderData() {
     const gameState = this.gameEngine.getState();
 
-    // Get current animated sprites
-    const miroSprite = this.gameEngine.getCurrentMiroSprite();
-    const shonzikaSprite = this.gameEngine.getCurrentShonzikaSprite();
-
     // Get all sprite render information
-    const sprites = this.spriteRenderer.getAllSprites(gameState, miroSprite, shonzikaSprite);
+    const sprites = this.spriteRenderer.getAllSprites(gameState);
 
     // Get UI positions and font sizes
     const uiPositions = this.spriteRenderer.getUIPositions();
@@ -89,7 +83,7 @@ export class NoPogodGameIntegration {
   }
 
   // Get game engine for direct access
-  public getGameEngine(): NoPogodGameEngine {
+  public getGameEngine(): NoPogodEngine {
     return this.gameEngine;
   }
 
@@ -118,9 +112,9 @@ export function createNoPogodGame(screenWidth: number, screenHeight: number): No
 export { NOPOGOD_GAME_ASSETS };
 
 // Export all asset-related utilities
-export {
-  ANIMATION, ITEM_DEFINITIONS, NO_POGOD_CONFIG, NoPogodEngine, NoPogodEngine as NoPogodGameEngine, PHYSICS, POSITIONS, SCORING, SIZES, SPAWN_WEIGHTS, TIMING
-} from '@/features/games/noPogod';
-export * from './noPogodGameAssets';
-export * from './noPogodSpriteRenderer';
+    export {
+        ANIMATION, ITEM_DEFINITIONS, NO_POGOD_CONFIG, NoPogodEngine, PHYSICS, POSITIONS, SCORING, SIZES, SPAWN_WEIGHTS, TIMING
+    } from '../engine';
+    export * from './assets';
+    export * from './spriteRenderer';
 

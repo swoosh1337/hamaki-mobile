@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
-import { UserPost } from '@/utils/supabase';
+import type { Post as UserPost } from '@/types/post';
 
 interface PostListItemProps {
   post: UserPost & { 

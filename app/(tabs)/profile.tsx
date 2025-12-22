@@ -3,25 +3,39 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Image, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { AvatarPicker } from '@/components/profile/AvatarPicker';
+import { StatsCard } from '@/components/profile/StatsCard';
 import { SettingsModal } from '@/components/ui/SettingsModal';
-import { ProfilePostSkeleton, XPStatsSkeleton } from '@/components/ui/SkeletonLoader';
+import { ProfilePostSkeleton } from '@/components/ui/SkeletonLoader';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
+import { postService } from '@/services/supabase/postService';
+import type { Post as UserPost } from '@/types/post';
+import type { XPStats } from '@/types/user';
 import { getAvatarSource } from '@/utils/avatars';
 import { createLogger } from '@/utils/logger';
-import { UserPost, userService, XPStats } from '@/utils/supabase';
 
 const log = createLogger('Profile');
 
 export default function ProfileScreen() {
   const { userProfile, updateUserProfile, isDemoMode } = useAuth();
-  
-  // State management
+
+  // Use profile hook for XP stats
+  const {
+    xpStats,
+    isLoading: isXpLoading,
+    refetch: refetchProfile,
+    updateAvatar: updateAvatarViaHook,
+    updateUsername: updateUsernameViaHook,
+  } = useUserProfile({
+    googleId: userProfile?.google_id,
+    autoFetch: true,
+  });
+
+  // UI state management
   const [selectedAvatar, setSelectedAvatar] = useState<string>('avatar-1');
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const [isUsernameLoading, setIsUsernameLoading] = useState(false);
-  const [xpStats, setXpStats] = useState<XPStats | null>(null);
-  const [isXpLoading, setIsXpLoading] = useState(true);
   const [userPosts, setUserPosts] = useState<(UserPost & { isUpvoted?: boolean })[]>([]);
   const [isPostsLoading, setIsPostsLoading] = useState(true);
   const [hasMorePosts, setHasMorePosts] = useState(true);
@@ -55,12 +69,12 @@ export default function ProfileScreen() {
       isUpvoted: false,
     },
     {
-      id: 'demo-post-2', 
+      id: 'demo-post-2',
       title: 'Advanced JavaScript Concepts',
       content: 'Could you cover advanced JS concepts like closures, prototypes, and async/await in detail?',
       upvotes: 18,
       user_id: 'demo-user-id',
-      status: 'approved', 
+      status: 'approved',
       created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
       updated_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
       category: 'content',
@@ -82,11 +96,11 @@ export default function ProfileScreen() {
 
   // Pull-to-refresh handler
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+
   const handlePullToRefresh = async () => {
     log.debug('Pull-to-refresh triggered');
     setIsRefreshing(true);
-    await loadXPStats(true); // Force refresh, bypass cache
+    await refetchProfile(); // Refresh profile and XP stats
     setIsRefreshing(false);
   };
 
@@ -98,58 +112,8 @@ export default function ProfileScreen() {
       setSelectedAvatar(userProfile.avatar_url);
     }
 
-    // Load XP stats
-    await loadXPStats();
-    
     // Load user posts
     await loadUserPosts(0, true);
-  };
-
-  const loadXPStats = async (forceRefresh: boolean = false) => {
-    if (!userProfile?.google_id || !userProfile?.id) return;
-
-    try {
-      setIsXpLoading(true);
-      
-      if (isDemoMode) {
-        // Use demo data for demo mode
-        setTimeout(() => {
-          setXpStats(demoXPStats);
-          setIsXpLoading(false);
-        }, 500); // Simulate loading delay
-        return;
-      }
-
-      // Try to get from cache first (unless force refresh)
-      if (!forceRefresh) {
-        const { getCachedXPStats } = await import('@/utils/xpStatsCache');
-        const cachedStats = await getCachedXPStats(userProfile.id);
-        
-        if (cachedStats) {
-          log.debug('Using cached XP stats');
-          setXpStats(cachedStats);
-          setIsXpLoading(false);
-          return;
-        }
-      }
-      
-      // Fetch fresh data from database
-      log.debug('Fetching fresh XP stats from database');
-      const stats = await userService.getUserXPStats(userProfile.google_id);
-      setXpStats(stats);
-
-      // Cache the fresh data (only if not null)
-      if (stats) {
-        const { setCachedXPStats } = await import('@/utils/xpStatsCache');
-        await setCachedXPStats(userProfile.id, stats);
-      }
-    } catch (error) {
-      log.error('Error loading XP stats', error);
-    } finally {
-      if (!isDemoMode) {
-        setIsXpLoading(false);
-      }
-    }
   };
 
   const loadUserPosts = async (page: number = 0, reset: boolean = false) => {
@@ -177,7 +141,7 @@ export default function ProfileScreen() {
         return;
       }
 
-      const posts = await userService.getUserPosts(
+      const posts = await postService.getUserPosts(
         userProfile.id,
         POSTS_PER_PAGE,
         page * POSTS_PER_PAGE
@@ -206,12 +170,12 @@ export default function ProfileScreen() {
 
     try {
       setIsAvatarLoading(true);
-      const updatedProfile = await userService.updateUserAvatar(userProfile.google_id, avatarId);
-      
-      if (updatedProfile) {
+      const success = await updateAvatarViaHook(avatarId);
+
+      if (success) {
         setSelectedAvatar(avatarId);
         // reflect immediately in global state so header image updates
-        updateUserProfile({ avatar_url: updatedProfile.avatar_url });
+        updateUserProfile({ avatar_url: avatarId });
         Alert.alert('Success', 'Avatar updated successfully!');
       } else {
         Alert.alert('Error', 'Failed to update avatar. Please try again.');
@@ -244,11 +208,11 @@ export default function ProfileScreen() {
 
     try {
       setIsUsernameLoading(true);
-      const updatedProfile = await userService.updateUsername(userProfile.google_id, editedName.trim());
-      
-      if (updatedProfile) {
+      const success = await updateUsernameViaHook(editedName.trim());
+
+      if (success) {
         setIsEditingName(false);
-        updateUserProfile({ full_name: updatedProfile.full_name });
+        updateUserProfile({ full_name: editedName.trim() });
         Alert.alert('Success', 'Name updated successfully!');
         // Note: In a real app, you'd want to update the AuthContext to reflect this change
       } else {
@@ -302,7 +266,7 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -336,7 +300,7 @@ export default function ProfileScreen() {
           {!isEditingName ? (
             <View style={styles.nameRow}>
               <Text style={styles.userName}>{userProfile.full_name}</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.editButton}
                 onPress={handleEditName}
                 disabled={isUsernameLoading}
@@ -356,14 +320,14 @@ export default function ProfileScreen() {
                 maxLength={30}
               />
               <View style={styles.editButtons}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.cancelButton}
                   onPress={handleCancelEdit}
                   disabled={isUsernameLoading}
                 >
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.saveButton}
                   onPress={handleSaveName}
                   disabled={isUsernameLoading}
@@ -373,7 +337,7 @@ export default function ProfileScreen() {
               </View>
             </View>
           )}
-          
+
           <Text style={styles.email}>{userProfile.email}</Text>
         </View>
 
@@ -391,31 +355,13 @@ export default function ProfileScreen() {
 
         {/* Points Section */}
         <View style={styles.pointsSection}>
-          {isXpLoading ? (
-            <XPStatsSkeleton />
-          ) : (
-            <>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>This Week:</Text>
-                <Text style={styles.statValue}>
-                  {`${(xpStats?.weeklyXP || 0).toLocaleString()} XP`}
-                </Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Total:</Text>
-                <Text style={styles.statValue}>
-                  {`${(xpStats?.totalXP || 0).toLocaleString()} XP`}
-                </Text>
-              </View>
-            </>
-          )}
+          <StatsCard xpStats={xpStats} isLoading={isXpLoading} />
         </View>
 
         {/* My Posts Section */}
         <View style={styles.postsSection}>
           <Text style={styles.sectionTitle}>My Posts</Text>
-          
+
           {isPostsLoading ? (
             <ScrollView style={styles.postsScrollView} nestedScrollEnabled>
               {[...Array(3)].map((_, index) => (
@@ -437,10 +383,10 @@ export default function ProfileScreen() {
                   <View style={styles.postMeta}>
                     {/* Show upvote count but make it non-interactive for own posts */}
                     <View style={styles.upvoteDisplay}>
-                      <Ionicons 
-                        name="heart-outline" 
-                        size={16} 
-                        color={Colors.dark.tabIconDefault} 
+                      <Ionicons
+                        name="heart-outline"
+                        size={16}
+                        color={Colors.dark.tabIconDefault}
                       />
                       <Text style={styles.upvoteCount}>
                         {post.upvotes}
@@ -449,9 +395,9 @@ export default function ProfileScreen() {
                   </View>
                 </View>
               ))}
-              
+
               {hasMorePosts && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.loadMoreButton}
                   onPress={handleLoadMorePosts}
                   disabled={isPostsLoading}
@@ -528,7 +474,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: 'center',
   },
-  
+
   // Profile Header Section
   profileSection: {
     alignItems: 'center',
@@ -553,7 +499,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   // Name + Edit Section
   nameRow: {
     flexDirection: 'row',
@@ -621,7 +567,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     textAlign: 'center',
   },
-  
+
   // Section Titles
   sectionTitle: {
     fontSize: 28,
@@ -630,31 +576,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
-  
+
   // Points Section
   pointsSection: {
     marginBottom: 40,
   },
-  statItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(196, 255, 0, 0.2)',
-  },
-  statLabel: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.text,
-  },
-  statValue: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.tint,
-    fontWeight: 'bold',
-  },
-  
   // Posts Section
   postsSection: {
     flex: 1,

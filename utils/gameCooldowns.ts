@@ -3,9 +3,9 @@
  * Manages cooldowns for games and schedules notifications
  */
 
+import { supabase } from '@/services/supabase/client';
 import * as Notifications from 'expo-notifications';
 import { createLogger } from './logger';
-import { supabase } from './supabase';
 
 const log = createLogger('GameCooldown');
 

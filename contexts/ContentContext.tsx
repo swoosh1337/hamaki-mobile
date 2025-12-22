@@ -1,6 +1,6 @@
+import { supabase } from '@/services/supabase/client';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 import { createLogger } from '@/utils/logger';
-import { supabase } from '@/utils/supabase';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 const log = createLogger('Content');

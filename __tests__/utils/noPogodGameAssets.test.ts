@@ -8,7 +8,7 @@ import {
     NOPOGOD_GAME_ASSETS,
     SpriteAnimationManager,
     validateAssets,
-} from '@/utils/noPogodGameAssets';
+} from '@/features/games/noPogod/utils/assets';
 
 // Mock the require statements for testing
 jest.mock('@/assets/images/game/bg.png', () => 'mocked-background', { virtual: true });

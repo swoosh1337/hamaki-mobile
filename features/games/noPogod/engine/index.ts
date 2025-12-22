@@ -6,7 +6,7 @@
  */
 
 // Main engine
-export { NoPogodEngine, NoPogodEngine as NoPogodGameEngine } from './NoPogodEngine';
+export { NoPogodEngine } from './NoPogodEngine';
 export type { NoPogodGameAssets } from './NoPogodEngine';
 
 // Types

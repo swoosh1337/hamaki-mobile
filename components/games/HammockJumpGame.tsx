@@ -1,5 +1,5 @@
-import { Accelerometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Accelerometer } from 'expo-sensors';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
@@ -10,9 +10,10 @@ import {
 } from 'react-native';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { GameAssets, HammockGameEngine } from '@/utils/gameEngine';
+import { GameAssets, HammockGameEngine } from '@/features/games/hammockJump/engine/HammockJumpEngine';
+import { userService } from '@/services/supabase';
+import { leaderboardService } from '@/services/supabase/leaderboardService';
 import { createLogger } from '@/utils/logger';
-import { userService } from '@/utils/supabase';
 import { GameCanvas } from './GameCanvas';
 
 const log = createLogger('HammockJumpGame');
@@ -224,12 +225,12 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
         }
 
         // Trigger leaderboard update in background only after DB success
-        userService
+        leaderboardService
           .updateLeaderboardPoints(userProfile.id, xpToAward)
-          .then((ok) => {
+          .then((ok: boolean) => {
             if (!ok) log.warn('Leaderboard update returned false');
           })
-          .catch((err) => log.error('Leaderboard update error', err));
+          .catch((err: Error) => log.error('Leaderboard update error', err));
 
         // Only now mark as awarded
         setXpAwarded(true);

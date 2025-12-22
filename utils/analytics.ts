@@ -1,4 +1,4 @@
-import { supabase } from '@/utils/supabase';
+import { supabase } from '@/services/supabase/client';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
@@ -45,7 +45,7 @@ class AnalyticsClient {
       event_name: eventName,
       user_id: this.userId ?? null,
       session_id: this.sessionId,
-      app_version: Constants.manifest2?.extra?.expoClient?.app?.version ?? Constants.expoConfig?.version ?? null,
+      app_version: Constants.expoConfig?.version ?? null,
       device: {
         platform: Platform.OS,
         modelName: Device.modelName,

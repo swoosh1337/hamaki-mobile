@@ -7,8 +7,8 @@
  * This is the refactored version that follows clean architecture.
  */
 
-import type { NoPogodGameAssets } from '@/utils/noPogodGameAssets';
 import { BaseGameEngine } from '../../core';
+import type { NoPogodGameAssets } from '../utils/assets';
 import * as CollisionSystem from './CollisionSystem';
 import { SCORING, TIMING } from './config';
 import * as ItemSpawner from './ItemSpawner';
@@ -16,7 +16,6 @@ import * as PlayerController from './PlayerController';
 import * as ShonzikaAI from './ShonzikaAI';
 import type {
     FallingItem,
-    ItemType,
     NoPogodGameState,
     PlayerPosition,
     PlayerState,
@@ -27,18 +26,7 @@ import type {
 export * from './config';
 export * from './types';
 
-// Import types from original assets file for backwards compatibility
-export type { NoPogodGameAssets } from '@/utils/noPogodGameAssets';
-
-/**
- * Animation manager interface (simplified)
- */
-interface SpriteAnimationManager {
-    getCurrentFrame(): unknown;
-    startAnimation(frames: unknown[]): void;
-    isAnimationComplete(): boolean;
-    getAnimationProgress(): number;
-}
+export type { NoPogodGameAssets } from '../utils/assets';
 
 /**
  * NoPogod Game Engine
@@ -71,16 +59,11 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
         }
     }
 
-    // =========================================================================
-    // Asset Management (for backwards compatibility)
-    // =========================================================================
-
     /**
      * Set game assets
      */
     setAssets(assets: NoPogodGameAssets): void {
         this.assets = assets;
-        // Note: Animation managers would be initialized here if we had them
     }
 
     /**
@@ -88,48 +71,6 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
      */
     getAssets(): NoPogodGameAssets | null {
         return this.assets;
-    }
-
-    /**
-     * Get current Miro sprite frame
-     * @deprecated Use animation managers directly
-     */
-    getCurrentMiroSprite(): unknown {
-        if (this.gameState.animations?.miro &&
-            typeof (this.gameState.animations.miro as SpriteAnimationManager).getCurrentFrame === 'function') {
-            return (this.gameState.animations.miro as SpriteAnimationManager).getCurrentFrame();
-        }
-        // Fallback: return idle sprite from assets
-        return this.assets?.miro?.idle ?? null;
-    }
-
-    /**
-     * Get current Shonzika sprite frame
-     * @deprecated Use animation managers directly
-     */
-    getCurrentShonzikaSprite(): unknown {
-        if (this.gameState.animations?.shonzika &&
-            typeof (this.gameState.animations.shonzika as SpriteAnimationManager).getCurrentFrame === 'function') {
-            return (this.gameState.animations.shonzika as SpriteAnimationManager).getCurrentFrame();
-        }
-        // Fallback: return idle sprite from assets
-        return this.assets?.shonzika?.idle ?? null;
-    }
-
-    /**
-     * Get sprite for specific item type
-     */
-    getItemSprite(itemType: ItemType): unknown {
-        if (!this.assets) return null;
-
-        switch (itemType) {
-            case 'EGG': return this.assets.items.egg;
-            case 'TOMATO': return this.assets.items.tomato;
-            case 'PEPPER': return this.assets.items.pepper;
-            case 'ELECTRIC_SHOCK': return this.assets.items.electricShock;
-            case 'BOMB': return this.assets.items.bomb;
-            default: return null;
-        }
     }
 
     // =========================================================================
@@ -496,12 +437,3 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
         }
     }
 }
-
-// =============================================================================
-// BACKWARDS COMPATIBILITY EXPORTS
-// =============================================================================
-
-/**
- * @deprecated Use NoPogodEngine instead
- */
-export const NoPogodGameEngine = NoPogodEngine;

@@ -3,10 +3,10 @@
  * Automatically checks and awards XP for subscriptions and video likes
  */
 
+import { userService } from '@/services/supabase';
 import { getValidAccessToken } from './auth';
 import { checkAllChannelSubscriptions, updateChannelSubscriptionsAndAwardXP } from './channelSubscriptions';
 import { createLogger } from './logger';
-import { userService } from './supabase';
 import { checkAndAwardVideoLikes } from './videoLikes';
 
 const log = createLogger('BackgroundXP');
@@ -46,14 +46,14 @@ export async function performBackgroundXPChecks(userId: string): Promise<Backgro
       log.debug('Checking channel subscriptions...');
 
       // Fetch google_id via service helper (testable/mocked)
-      const userData = await userService.getGoogleIdByUserId(userId);
+      const googleId = await userService.getGoogleIdByUserId(userId);
 
-      if (!userData) {
+      if (!googleId) {
         log.error('Failed to get user google_id via service', { userId });
         result.errors.push('Failed to get user data');
       } else {
         const subscriptions = await checkAllChannelSubscriptions(accessToken);
-        const subResult = await updateChannelSubscriptionsAndAwardXP(userData.google_id, subscriptions);
+        const subResult = await updateChannelSubscriptionsAndAwardXP(googleId, subscriptions);
 
         result.subscriptionXP = subResult.totalXPAwarded;
 

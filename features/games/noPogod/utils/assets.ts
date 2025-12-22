@@ -3,8 +3,8 @@
  * Handles loading and organizing all game sprites with error handling and fallbacks
  */
 
+import { createLogger } from '@/utils/logger';
 import { ImageRequireSource } from 'react-native';
-import { createLogger } from './logger';
 
 const log = createLogger('NoPogodAssets');
 
@@ -305,14 +305,14 @@ export const validateAssets = (assets: NoPogodGameAssets): boolean => {
 
     for (const path of requiredPaths) {
       const pathParts = path.split('.');
-      let current: any = assets;
+      let current: NoPogodGameAssets | MiroSprites | ShonzikaSprites | ItemSprites | ImageRequireSource = assets;
 
       for (const part of pathParts) {
-        if (!current || !current[part]) {
+        if (!current || typeof current !== 'object' || !(part in current)) {
           log.warn(`Missing asset: ${path}`);
           return false;
         }
-        current = current[part];
+        current = (current as unknown as Record<string, unknown>)[part] as NoPogodGameAssets | MiroSprites | ShonzikaSprites | ItemSprites | ImageRequireSource;
       }
     }
 
