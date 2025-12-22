@@ -3,8 +3,9 @@
  * Manages multi-channel YouTube subscriptions and XP rewards
  */
 
+import { supabase } from '@/services/supabase/client';
+import type { UserProfile } from '@/types/user';
 import { createLogger } from './logger';
-import { supabase, UserProfile } from './supabase';
 
 const log = createLogger('ChannelSubs');
 

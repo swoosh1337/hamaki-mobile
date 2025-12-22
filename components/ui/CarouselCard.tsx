@@ -1,6 +1,6 @@
 import { Colors } from '@/constants/Colors';
+import { youtubeService } from '@/services';
 import { trackCarouselTap } from '@/utils/analytics';
-import { isVideoNew } from '@/utils/youtube';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -49,8 +49,8 @@ export const CarouselCard: React.FC<CarouselCardProps> = ({ post, onPostTap }) =
       accessibilityLabel={`View ${post.type} post: ${post.title}`}
       testID={`carousel-card-${post.id}`}
     >
-      <Image 
-        source={{ uri: post.thumbnail }} 
+      <Image
+        source={{ uri: post.thumbnail }}
         style={styles.carouselThumb}
         testID={`carousel-thumbnail-${post.id}`}
       />
@@ -59,7 +59,7 @@ export const CarouselCard: React.FC<CarouselCardProps> = ({ post, onPostTap }) =
           <Text style={styles.carouselBadgeText}>{post.metadata.badge}</Text>
         </View>
       )}
-      {post.type === 'video' && isVideoNew(post.publishedAt) && (
+      {post.type === 'video' && youtubeService.isVideoNew(post.publishedAt) && (
         <View style={styles.carouselBadge} testID={`carousel-new-badge-${post.id}`}>
           <Text style={styles.carouselBadgeText}>NEW</Text>
         </View>

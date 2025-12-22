@@ -1,11 +1,18 @@
+import { authService, tokenManager } from '@/services/auth';
+import { supabase } from '@/services/supabase/client';
+import { userService } from '@/services/supabase/userService';
+import type { AuthResult } from '@/types';
+import type { UserProfile } from '@/types/user';
 import { analytics } from '@/utils/analytics';
 import { createLogger } from '@/utils/logger';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { RememberMeModal } from '../components/ui/RememberMeModal';
-import { authenticateWithGoogle, AuthResult, backgroundVerifySubscription, clearUserSession, loadPersistedUser, storeUserSession, storeUserSessionWithTokens } from '../utils/auth';
 import { backgroundVideoCheck, initializeNotifications } from '../utils/notifications';
-import { UserProfile, userService } from '../utils/supabase';
+
+
+
+
 
 const log = createLogger('Auth');
 
@@ -58,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         log.info('Checking for persisted authentication...');
 
         // Try to load persisted user session
-        const persistedResult = await loadPersistedUser();
+        const persistedResult = await authService.loadSavedSession();
 
         if (persistedResult.success && persistedResult.userData) {
           // Load user from Supabase to get latest profile data
@@ -74,14 +81,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await initializeNotifications();
           } else {
             log.warn('User not found in Supabase, clearing session');
-            await clearUserSession();
+            await tokenManager.clearSession();
           }
         } else {
           log.debug('No valid persisted session found');
         }
       } catch (err) {
         log.error('Auth check error:', err);
-        await clearUserSession();
+        await tokenManager.clearSession();
       } finally {
         setIsLoading(false);
       }
@@ -97,10 +104,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         log.info('App became active, performing background checks...');
 
         // Check subscription status (skip for demo users)
-        const subscriptionStatus = await backgroundVerifySubscription();
-        if (subscriptionStatus !== null && subscriptionStatus !== isSubscribed) {
-          setIsSubscribed(subscriptionStatus);
-          log.info('Subscription status updated', { subscriptionStatus });
+        const session = await tokenManager.getStoredSession();
+        if (session) {
+          const subscriptionStatus = await authService.triggerBackgroundVerification(session);
+          if (subscriptionStatus !== null && subscriptionStatus !== isSubscribed) {
+            setIsSubscribed(subscriptionStatus);
+            log.info('Subscription status updated', { subscriptionStatus });
+          }
         }
 
         // Check for new videos and send notifications
@@ -131,7 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else if (nextAppState === 'background' && isAuthenticated && isTemporarySession && !isDemoMode) {
         log.info('App went to background with temporary session - clearing session...');
-        await clearUserSession();
+        await tokenManager.clearSession();
         setIsAuthenticated(false);
         setIsSubscribed(false);
         setUserProfile(null);
@@ -149,7 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
 
     try {
-      const result = await authenticateWithGoogle();
+      const result = await authService.authenticate();
 
       if (result.success && result.userData) {
         // Only show Remember Me modal if user is authenticated AND subscribed
@@ -188,7 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       log.info('Starting demo mode - fetching demouser@apple.com from database');
 
       // Fetch the real demo user from Supabase
-      const { data: demoUsers, error: fetchError } = await userService.supabase
+      const { data: demoUsers, error: fetchError } = await supabase
         .from('users')
         .select('*')
         .eq('email', 'demouser@apple.com')
@@ -230,7 +240,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Only clear user session if not in demo mode
       if (!isDemoMode) {
-        await clearUserSession();
+        await tokenManager.clearSession();
       }
 
       setIsAuthenticated(false);
@@ -293,9 +303,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           log.debug('Checking video likes on sign-in...');
           const { checkAndAwardVideoLikes } = await import('../utils/videoLikes');
-          const { getValidAccessToken } = await import('../utils/auth');
 
-          const accessToken = await getValidAccessToken();
+          const accessToken = await tokenManager.getValidAccessToken();
           if (accessToken) {
             const likesResult = await checkAndAwardVideoLikes(accessToken, supabaseUser.id);
 
@@ -325,16 +334,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Store session based on user choice
         if (pendingAuthResult.tokenData) {
-          await storeUserSessionWithTokens(
+          await tokenManager.storeSession(
             pendingAuthResult.tokenData,
             pendingAuthResult.userData,
             pendingAuthResult.isSubscribed || false,
             rememberMe
           );
         } else {
-          // Fallback for legacy token format
-          await storeUserSession(
-            pendingAuthResult.token || '',
+          // Fallback for legacy token format - create TokenData from string
+          const tokenData = {
+            accessToken: pendingAuthResult.token || '',
+            expiresIn: 30 * 24 * 60 * 60, // 30 days in seconds
+            expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days in ms
+          };
+          await tokenManager.storeSession(
+            tokenData,
             pendingAuthResult.userData,
             pendingAuthResult.isSubscribed || false,
             rememberMe

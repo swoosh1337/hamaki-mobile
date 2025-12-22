@@ -13,7 +13,7 @@ import {
 
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { getValidAccessToken } from '@/utils/auth';
+import { tokenManager } from '@/services/auth';
 import { createLogger } from '@/utils/logger';
 import { checkAndAwardVideoLikes, VideoLikeStatus } from '@/utils/videoLikes';
 
@@ -35,7 +35,7 @@ export const VideoLikesManager: React.FC = () => {
   const checkVideoLikes = async () => {
     if (!userProfile?.id) return;
 
-    const accessToken = await getValidAccessToken();
+    const accessToken = await tokenManager.getValidAccessToken();
     if (!accessToken) {
       Alert.alert('Error', 'Unable to get access token. Please sign in again.');
       return;
@@ -44,7 +44,7 @@ export const VideoLikesManager: React.FC = () => {
     try {
       setIsChecking(true);
       const result = await checkAndAwardVideoLikes(accessToken, userProfile.id);
-      
+
       setVideoStatuses(result.statuses);
       setLastChecked(new Date());
 
@@ -96,18 +96,18 @@ export const VideoLikesManager: React.FC = () => {
         <Text style={styles.subtitle}>
           Earn XP by liking the latest video from each channel
         </Text>
-        
+
         {/* XP Progress */}
         <View style={styles.xpProgress}>
           <Text style={styles.xpText}>
             {earnedXP} / {totalPossibleXP} XP Earned
           </Text>
           <View style={styles.progressBar}>
-            <View 
+            <View
               style={[
-                styles.progressFill, 
+                styles.progressFill,
                 { width: `${percent}%` }
-              ]} 
+              ]}
             />
           </View>
         </View>
@@ -141,10 +141,10 @@ export const VideoLikesManager: React.FC = () => {
           <View key={status.channelKey} style={styles.videoCard}>
             <View style={styles.videoHeader}>
               <View style={styles.channelInfo}>
-                <Ionicons 
-                  name="logo-youtube" 
-                  size={24} 
-                  color="#FF0000" 
+                <Ionicons
+                  name="logo-youtube"
+                  size={24}
+                  color="#FF0000"
                 />
                 <Text style={styles.channelName}>{status.channelName}</Text>
               </View>

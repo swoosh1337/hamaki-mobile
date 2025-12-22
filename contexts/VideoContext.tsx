@@ -1,9 +1,9 @@
+import { youtubeService, type YouTubeVideo } from '@/services/youtube';
 import { createLogger } from '@/utils/logger';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '../utils/errorHandling';
 import { checkForNewVideos } from '../utils/notifications';
-import { fetchHamakiVideos, YouTubeVideo } from '../utils/youtube';
 import { useAuth } from './AuthContext';
 
 const log = createLogger('Video');
@@ -51,7 +51,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setIsLoading(true);
       setError(null);
       setIsNetworkError(false);
-      const fetchedVideos = await fetchHamakiVideos(VIDEO_FETCH_LIMIT);
+      const fetchedVideos = await youtubeService.fetchHamakiVideos(VIDEO_FETCH_LIMIT);
       setVideos(fetchedVideos);
       log.info(`Loaded ${fetchedVideos.length} videos`);
     } catch (err) {
@@ -80,7 +80,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (newVideos.length > 0) {
         // Update video list with new videos
-        const updatedVideos = await fetchHamakiVideos(3);
+        const updatedVideos = await youtubeService.fetchHamakiVideos(3);
         setVideos(updatedVideos);
         setHasNewVideos(true);
         log.info('Updated feed with new videos', { count: newVideos.length });

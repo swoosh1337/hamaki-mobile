@@ -1,5 +1,5 @@
 // Doodle Jump-style Engine for Hammock Jump
-import { createLogger } from './logger';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('GameEngine');
 

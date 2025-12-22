@@ -3,8 +3,8 @@ import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
+import { youtubeService, type YouTubeVideo } from '@/services/youtube';
 import { createLogger } from './logger';
-import { fetchHamakiVideos, YouTubeVideo } from './youtube';
 
 const log = createLogger('Notifications');
 
@@ -104,7 +104,7 @@ export async function checkForNewVideos(): Promise<YouTubeVideo[]> {
     log.info('Checking for new HamaKi Studio videos...');
 
     // Fetch latest videos
-    const latestVideos = await fetchHamakiVideos(5);
+    const latestVideos = await youtubeService.fetchHamakiVideos(5);
     const knownVideoIds = await getKnownVideos();
 
     // Find new videos (not in known list)

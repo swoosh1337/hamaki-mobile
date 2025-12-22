@@ -4,7 +4,7 @@
  */
 
 import { userService } from '@/services/supabase';
-import { getValidAccessToken } from './auth';
+import { tokenManager } from '@/services/auth';
 import { checkAllChannelSubscriptions, updateChannelSubscriptionsAndAwardXP } from './channelSubscriptions';
 import { createLogger } from './logger';
 import { checkAndAwardVideoLikes } from './videoLikes';
@@ -32,7 +32,7 @@ export async function performBackgroundXPChecks(userId: string): Promise<Backgro
 
   try {
     // Get valid access token
-    const accessToken = await getValidAccessToken();
+    const accessToken = await tokenManager.getValidAccessToken();
     if (!accessToken) {
       log.warn('No valid access token available for background XP checks');
       result.errors.push('No valid access token');

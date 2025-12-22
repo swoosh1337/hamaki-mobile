@@ -18,6 +18,7 @@ import {
 
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { tokenManager } from '@/services/auth';
 import {
   ChannelSubscriptionStatus,
   getChannelSubscriptionStatus,
@@ -80,8 +81,7 @@ export const ChannelSubscriptionManager: React.FC = () => {
       setIsVerifying(true);
 
       // Get access token from auth
-      const { getValidAccessToken } = await import('@/utils/auth');
-      const accessToken = await getValidAccessToken();
+      const accessToken = await tokenManager.getValidAccessToken();
 
       if (!accessToken) {
         Alert.alert(
