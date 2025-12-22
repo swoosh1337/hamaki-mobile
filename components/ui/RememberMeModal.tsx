@@ -1,15 +1,15 @@
+import { Colors } from '@/constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   Modal,
-  View,
-  Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Switch,
-  Pressable,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Colors } from '@/constants/Colors';
-import { Ionicons } from '@expo/vector-icons';
 
 interface RememberMeModalProps {
   visible: boolean;
@@ -35,26 +35,26 @@ export const RememberMeModal: React.FC<RememberMeModalProps> = ({
       transparent
       statusBarTranslucent
     >
-      <Pressable style={styles.overlay} onPress={() => {}} activeOpacity={1}>
+      <Pressable style={styles.overlay} onPress={() => { }}>
         <View style={styles.modalContainer}>
           <View style={styles.modal}>
             {/* Icon */}
             <View style={styles.iconContainer}>
-              <Ionicons 
-                name="shield-checkmark" 
-                size={48} 
-                color={Colors.dark.tint} 
+              <Ionicons
+                name="shield-checkmark"
+                size={48}
+                color={Colors.dark.tint}
               />
             </View>
 
             {/* Title */}
             <Text style={styles.title}>Stay Signed In?</Text>
-            
+
             {/* Subtitle */}
             <Text style={styles.subtitle}>
               {userName ? `Welcome, ${userName}!` : 'Welcome to HamaKi!'}
             </Text>
-            
+
             {/* Description */}
             <Text style={styles.description}>
               Would you like to stay signed in for future visits? You can change this anytime in settings.
@@ -66,8 +66,8 @@ export const RememberMeModal: React.FC<RememberMeModalProps> = ({
                 <View style={styles.toggleTextContainer}>
                   <Text style={styles.toggleTitle}>Keep me signed in</Text>
                   <Text style={styles.toggleDescription}>
-                    {rememberMe 
-                      ? 'You\'ll stay signed in for 30 days' 
+                    {rememberMe
+                      ? 'You\'ll stay signed in for 30 days'
                       : 'Sign in each time you open the app'
                     }
                   </Text>
@@ -75,8 +75,8 @@ export const RememberMeModal: React.FC<RememberMeModalProps> = ({
                 <Switch
                   value={rememberMe}
                   onValueChange={setRememberMe}
-                  trackColor={{ 
-                    false: '#333', 
+                  trackColor={{
+                    false: '#333',
                     true: Colors.dark.tint + '40' // 40% opacity
                   }}
                   thumbColor={rememberMe ? Colors.dark.tint : '#666'}
@@ -92,10 +92,10 @@ export const RememberMeModal: React.FC<RememberMeModalProps> = ({
               activeOpacity={0.8}
             >
               <Text style={styles.continueButtonText}>Continue</Text>
-              <Ionicons 
-                name="arrow-forward" 
-                size={20} 
-                color="#0B0C1A" 
+              <Ionicons
+                name="arrow-forward"
+                size={20}
+                color="#0B0C1A"
                 style={styles.arrowIcon}
               />
             </TouchableOpacity>

@@ -1,5 +1,9 @@
+/**
+ * GoogleSignInButton Component Tests
+ */
+
+import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
 import { GoogleSignInButton } from '../../components/ui/GoogleSignInButton';
 
 describe('GoogleSignInButton', () => {
@@ -9,21 +13,14 @@ describe('GoogleSignInButton', () => {
     jest.clearAllMocks();
   });
 
-  it('should render with default text', () => {
+  it('should render with Georgian text (Google in English, rest in Georgian)', () => {
     const { getByText } = render(
       <GoogleSignInButton onPress={mockOnPress} />
     );
 
-    expect(getByText('Continue with Google')).toBeTruthy();
-  });
-
-  it('should render with custom text', () => {
-    const customText = 'Sign in with Google';
-    const { getByText } = render(
-      <GoogleSignInButton onPress={mockOnPress} text={customText} />
-    );
-
-    expect(getByText(customText)).toBeTruthy();
+    // Check that both parts of the text are rendered
+    expect(getByText('Google')).toBeTruthy();
+    expect(getByText('-ით გაგრძელება')).toBeTruthy();
   });
 
   it('should call onPress when button is pressed', () => {
@@ -38,12 +35,11 @@ describe('GoogleSignInButton', () => {
   });
 
   it('should render without errors', () => {
-    const { getByText } = render(
+    const { getByTestId } = render(
       <GoogleSignInButton onPress={mockOnPress} />
     );
 
-    // Component should render successfully with text
-    expect(getByText('Continue with Google')).toBeTruthy();
+    expect(getByTestId('google-sign-in-button')).toBeTruthy();
   });
 
   it('should have correct accessibility properties', () => {
@@ -51,9 +47,9 @@ describe('GoogleSignInButton', () => {
       <GoogleSignInButton onPress={mockOnPress} />
     );
 
-    const text = getByText('Continue with Google');
-    expect(text).toBeTruthy();
-    // TouchableOpacity is accessible by default in React Native Testing Library
+    // Both text parts should be accessible
+    expect(getByText('Google')).toBeTruthy();
+    expect(getByText('-ით გაგრძელება')).toBeTruthy();
   });
 
   it('should handle multiple rapid presses', () => {
@@ -62,8 +58,7 @@ describe('GoogleSignInButton', () => {
     );
 
     const button = getByTestId('google-sign-in-button');
-    
-    // Simulate rapid pressing
+
     fireEvent.press(button);
     fireEvent.press(button);
     fireEvent.press(button);

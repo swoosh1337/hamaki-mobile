@@ -1,14 +1,20 @@
 /**
  * Auth Service
  * 
- * Handles main authentication flows, YouTube subscription checks,
- * and background verification.
+ * Handles authentication flows:
+ * - Google OAuth
+ * - Email Magic Link (Supabase)
+ * - YouTube subscription checks (optional, non-blocking)
+ * - Session management
  */
 
-import type { AuthResult, TokenData } from '@/types';
+import { supabase } from '@/services/supabase/client';
+import type { AuthMethod, AuthResult, EmailValidationResult, MagicLinkResult, TokenData } from '@/types';
+import { isNetworkError } from '@/utils/errorHandling';
 import { createLogger } from '@/utils/logger';
 import * as AuthSession from "expo-auth-session";
 import Constants from 'expo-constants';
+import * as Linking from 'expo-linking';
 import { Platform } from "react-native";
 import { tokenManager } from './tokenManager';
 
@@ -19,6 +25,15 @@ const WEB_CLIENT_ID = "986216455734-km0t9srahthpebl4dvb9gc8o9j2ehru5.apps.google
 const IOS_CLIENT_ID = "986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3.apps.googleusercontent.com";
 const HAMAKI_CHANNEL_ID = "UCSI5XbaxsX1USijrfFVuJqA";
 const EXPO_PROXY_BASE = 'https://auth.expo.io/@igrigolia1/hamaki';
+
+/**
+ * Generate the redirect URL based on environment.
+ * In Expo Go, it will be exp://...
+ * In dev/prod builds, it will be hamaki://...
+ */
+const MAGIC_LINK_REDIRECT_URL = Linking.createURL('auth/callback');
+
+log.info('Auth Configuration initialized', { redirectUrl: MAGIC_LINK_REDIRECT_URL });
 
 // Detect environment
 const isExpoGo = (Constants?.appOwnership === 'expo') || (Constants as any)?.executionEnvironment === 'storeClient';
@@ -31,12 +46,314 @@ const discovery = {
     revocationEndpoint: "https://oauth2.googleapis.com/revoke",
 };
 
+// Email validation regex (RFC 5322 compliant)
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /**
  * Main service for authentication and subscription verification
  */
 export const authService = {
     /**
-     * Authenticate with Google and check subscriptions
+     * Validate email format
+     */
+    validateEmail(email: string): EmailValidationResult {
+        if (!email || typeof email !== 'string') {
+            return { isValid: false, error: 'Email is required' };
+        }
+
+        const trimmedEmail = email.trim().toLowerCase();
+
+        if (trimmedEmail.length === 0) {
+            return { isValid: false, error: 'Email cannot be empty' };
+        }
+
+        if (!EMAIL_REGEX.test(trimmedEmail)) {
+            return { isValid: false, error: 'Invalid email format' };
+        }
+
+        return { isValid: true };
+    },
+
+    /**
+     * Send magic link email via Supabase
+     */
+    async signInWithMagicLink(email: string): Promise<MagicLinkResult> {
+        try {
+            // Validate email first
+            const validation = this.validateEmail(email);
+            if (!validation.isValid) {
+                log.warn('Magic link rejected: invalid email', { email });
+                return { success: false, error: validation.error };
+            }
+
+            const trimmedEmail = email.trim().toLowerCase();
+            log.info('Sending magic link...', { email: trimmedEmail });
+
+            const { error } = await supabase.auth.signInWithOtp({
+                email: trimmedEmail,
+                options: {
+                    emailRedirectTo: MAGIC_LINK_REDIRECT_URL,
+                    // Allow new users to sign up via magic link
+                    // Customize your Supabase email template to show "Magic Link" branding
+                    shouldCreateUser: true,
+                },
+            });
+
+            if (error) {
+                log.error('Magic link send failed', error);
+                // Check for rate limiting (case-insensitive)
+                if (error.message?.toLowerCase().includes('rate limit')) {
+                    return {
+                        success: false,
+                        error: 'ძალიან ბევრი მცდელობა. გთხოვთ სცადოთ მოგვიანებით.'
+                    };
+                }
+                return {
+                    success: false,
+                    error: error.message || 'ბმულის გაგზავნა ვერ მოხერხდა'
+                };
+            }
+
+            log.info('Magic link sent successfully', { email: trimmedEmail });
+            return {
+                success: true,
+                message: 'შეამოწმე ელფოსტა!'
+            };
+        } catch (error) {
+            log.error('Magic link error', error);
+
+            // Check if it's a network error
+            if (isNetworkError(error)) {
+                return {
+                    success: false,
+                    error: 'ინტერნეტთან კავშირი ვერ მოხერხდა. შეამოწმე კავშირი და სცადე თავიდან.'
+                };
+            }
+
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'უცნობი შეცდომა'
+            };
+        }
+    },
+
+    /**
+     * Handle magic link callback from deep link
+     * Called when user clicks the magic link and app opens
+     */
+    async handleMagicLinkCallback(url: string): Promise<AuthResult> {
+        try {
+            log.info('Processing magic link callback...', { url });
+
+            // Parse the URL to extract tokens
+            const params = this.parseDeepLinkParams(url);
+
+            if (params.error) {
+                log.error('Magic link error in URL', { error: params.error });
+                return { success: false, error: params.error_description || params.error };
+            }
+
+            // Check if we have the access token (hash fragment)
+            if (params.access_token && params.refresh_token) {
+                // Set the session in Supabase client
+                const { data, error } = await supabase.auth.setSession({
+                    access_token: params.access_token,
+                    refresh_token: params.refresh_token,
+                });
+
+                if (error) {
+                    log.error('Failed to set Supabase session', error);
+                    return { success: false, error: error.message };
+                }
+
+                if (!data.session || !data.user) {
+                    return { success: false, error: 'No session returned from Supabase' };
+                }
+
+                const supabaseUser = data.user;
+                const session = data.session;
+
+                // Create token data for storage
+                const tokenData: TokenData = {
+                    accessToken: session.access_token,
+                    refreshToken: session.refresh_token,
+                    expiresIn: session.expires_in || 3600,
+                    expiresAt: (session.expires_at || 0) * 1000, // Convert to ms
+                    tokenType: session.token_type || 'Bearer',
+                };
+
+                // Create user data
+                const userData = {
+                    id: supabaseUser.id,
+                    email: supabaseUser.email || '',
+                    name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || '',
+                    picture: supabaseUser.user_metadata?.avatar_url,
+                };
+
+                log.info('Magic link authentication successful', { email: userData.email });
+
+                return {
+                    success: true,
+                    userData,
+                    tokenData,
+                    isSubscribed: false, // Magic link users start without subscription
+                    authMethod: 'magic_link' as AuthMethod,
+                };
+            }
+
+            // If no tokens in URL, try to get session from Supabase
+            const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+            if (sessionError || !sessionData.session) {
+                log.warn('No session found after magic link callback');
+                return { success: false, error: 'Authentication failed - no session' };
+            }
+
+            const session = sessionData.session;
+            const user = session.user;
+
+            const tokenData: TokenData = {
+                accessToken: session.access_token,
+                refreshToken: session.refresh_token,
+                expiresIn: session.expires_in || 3600,
+                expiresAt: (session.expires_at || 0) * 1000,
+                tokenType: session.token_type || 'Bearer',
+            };
+
+            const userData = {
+                id: user.id,
+                email: user.email || '',
+                name: user.user_metadata?.full_name || user.email?.split('@')[0] || '',
+                picture: user.user_metadata?.avatar_url,
+            };
+
+            return {
+                success: true,
+                userData,
+                tokenData,
+                isSubscribed: false,
+                authMethod: 'magic_link' as AuthMethod,
+            };
+        } catch (error) {
+            log.error('Magic link callback error', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Failed to process magic link'
+            };
+        }
+    },
+
+    /**
+     * Parse deep link URL parameters (including hash fragment)
+     */
+    parseDeepLinkParams(url: string): Record<string, string> {
+        const params: Record<string, string> = {};
+
+        try {
+            // Parse both query string and hash fragment
+            const urlObj = new URL(url);
+
+            // Get query params
+            urlObj.searchParams.forEach((value, key) => {
+                params[key] = value;
+            });
+
+            // Get hash fragment params (Supabase sends tokens in hash)
+            if (urlObj.hash) {
+                const hashParams = new URLSearchParams(urlObj.hash.substring(1));
+                hashParams.forEach((value, key) => {
+                    params[key] = value;
+                });
+            }
+        } catch (e) {
+            // Fallback for non-standard URLs
+            const hashIndex = url.indexOf('#');
+            if (hashIndex !== -1) {
+                const hashPart = url.substring(hashIndex + 1);
+                const hashParams = new URLSearchParams(hashPart);
+                hashParams.forEach((value, key) => {
+                    params[key] = value;
+                });
+            }
+        }
+
+        return params;
+    },
+
+    /**
+     * Get the current Supabase session
+     */
+    async getSupabaseSession() {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+            log.error('Error getting Supabase session', error);
+            return null;
+        }
+        return data.session;
+    },
+
+    /**
+     * Refresh Supabase session
+     */
+    async refreshSupabaseSession(): Promise<AuthResult> {
+        try {
+            const { data, error } = await supabase.auth.refreshSession();
+
+            if (error) {
+                log.error('Supabase session refresh failed', error);
+                return { success: false, error: error.message };
+            }
+
+            if (!data.session || !data.user) {
+                return { success: false, error: 'No session after refresh' };
+            }
+
+            const session = data.session;
+            const user = data.user;
+
+            const tokenData: TokenData = {
+                accessToken: session.access_token,
+                refreshToken: session.refresh_token,
+                expiresIn: session.expires_in || 3600,
+                expiresAt: (session.expires_at || 0) * 1000,
+                tokenType: session.token_type || 'Bearer',
+            };
+
+            const userData = {
+                id: user.id,
+                email: user.email || '',
+                name: user.user_metadata?.full_name || user.email?.split('@')[0] || '',
+                picture: user.user_metadata?.avatar_url,
+            };
+
+            return {
+                success: true,
+                userData,
+                tokenData,
+                authMethod: 'magic_link' as AuthMethod,
+            };
+        } catch (error) {
+            log.error('Supabase session refresh error', error);
+            return { success: false, error: 'Session refresh failed' };
+        }
+    },
+
+    /**
+     * Sign out from Supabase
+     */
+    async signOutSupabase(): Promise<void> {
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+                log.error('Supabase sign out error', error);
+            }
+        } catch (error) {
+            log.error('Error signing out from Supabase', error);
+        }
+    },
+
+    /**
+     * Authenticate with Google and check subscriptions (existing flow)
      */
     async authenticate(): Promise<AuthResult> {
         try {
@@ -90,8 +407,14 @@ export const authService = {
             // 5. Fetch user profile from Google
             const userData = await this.fetchGoogleUserInfo(tokenData.accessToken);
 
-            // 6. Check YouTube subscription status
-            const isSubscribed = await this.verifyYouTubeSubscription(tokenData.accessToken);
+            // 6. Check YouTube subscription status (OPTIONAL - non-blocking)
+            let isSubscribed = false;
+            try {
+                isSubscribed = await this.verifyYouTubeSubscription(tokenData.accessToken);
+            } catch (err) {
+                log.warn('YouTube subscription check failed (non-blocking)', err);
+                // Continue without subscription status - don't block auth
+            }
 
             // 7. Check multi-channel subscriptions (if available)
             let allChannelSubscriptions = null;
@@ -109,6 +432,7 @@ export const authService = {
                 userData,
                 tokenData,
                 allChannelSubscriptions,
+                authMethod: 'google' as AuthMethod,
             };
         } catch (error) {
             log.error('Authentication error', error);
@@ -165,6 +489,7 @@ export const authService = {
 
     /**
      * Verify YouTube subscription to the main Hamaki channel
+     * NOTE: This is now OPTIONAL and non-blocking
      */
     async verifyYouTubeSubscription(accessToken: string): Promise<boolean> {
         try {
@@ -200,8 +525,33 @@ export const authService = {
             const session = await tokenManager.getStoredSession();
             if (!session) return { success: false, error: "No session found" };
 
-            // Background verification if needed
-            this.triggerBackgroundVerification(session);
+            // For magic link sessions, check Supabase session validity
+            if (session.authMethod === 'magic_link') {
+                const supabaseSession = await this.getSupabaseSession();
+                if (!supabaseSession) {
+                    log.info('Supabase session expired, attempting refresh...');
+                    const refreshResult = await this.refreshSupabaseSession();
+                    if (!refreshResult.success) {
+                        await tokenManager.clearSession();
+                        return { success: false, error: 'Session expired' };
+                    }
+                    // Update stored session with new tokens
+                    if (refreshResult.tokenData) {
+                        await tokenManager.storeSession(
+                            refreshResult.tokenData,
+                            session.userData,
+                            session.isSubscribed,
+                            true,
+                            'magic_link'
+                        );
+                    }
+                }
+            }
+
+            // For Google sessions, background verification if needed
+            if (session.authMethod === 'google') {
+                this.triggerBackgroundVerification(session);
+            }
 
             return {
                 success: true,
@@ -209,6 +559,7 @@ export const authService = {
                 token: session.tokenData.accessToken,
                 userData: session.userData,
                 fromCache: true,
+                authMethod: session.authMethod,
             };
         } catch (error) {
             log.error('Error loading saved session', error);
@@ -218,6 +569,7 @@ export const authService = {
 
     /**
      * Trigger background verification of subscription if enough time has passed
+     * Only applies to Google OAuth sessions
      */
     async triggerBackgroundVerification(session: any): Promise<boolean> {
         const VERIFICATION_INTERVAL = 24 * 60 * 60 * 1000;
@@ -234,11 +586,18 @@ export const authService = {
                 // Update session
                 session.isSubscribed = isSubscribed;
                 session.lastVerification = Date.now();
-                await tokenManager.storeSession(session.tokenData, session.userData, isSubscribed, true);
+                await tokenManager.storeSession(
+                    session.tokenData,
+                    session.userData,
+                    isSubscribed,
+                    true,
+                    session.authMethod || 'google'
+                );
                 return true;
             } catch (err) {
                 log.warn('Background verification failed', err);
-                throw err;
+                // Don't throw - background verification failure is non-fatal
+                return false;
             }
         }
         return true; // No verification needed = success

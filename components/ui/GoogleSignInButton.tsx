@@ -1,16 +1,21 @@
+/**
+ * GoogleSignInButton Component
+ * 
+ * Styled button for Google OAuth authentication.
+ * Uses HamakiEng for English text and HamakiGeo for Georgian text.
+ */
+
+import { Colors } from '@/constants/Colors';
+import { AntDesign } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { AntDesign } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
 
 interface GoogleSignInButtonProps {
   onPress: () => void;
-  text?: string;
 }
 
 export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
   onPress,
-  text = 'Continue with Google',
 }) => {
   return (
     <TouchableOpacity
@@ -21,7 +26,10 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
     >
       <View style={styles.contentContainer}>
         <AntDesign name="google" size={24} color="#0B0C1A" style={styles.googleIcon} />
-        <Text style={styles.buttonText}>{text}</Text>
+        <Text style={styles.buttonText}>
+          <Text style={styles.englishText}>Google</Text>
+          <Text style={styles.georgianText}>-ით გაგრძელება</Text>
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -52,6 +60,18 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#0B0C1A', // Dark navy
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  englishText: {
+    fontFamily: 'HamakiEng',
+    color: '#0B0C1A',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  georgianText: {
+    fontFamily: 'HamakiGeo',
+    color: '#0B0C1A',
     fontSize: 18,
     fontWeight: '600',
   },

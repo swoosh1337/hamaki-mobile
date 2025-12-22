@@ -5,7 +5,8 @@ export default {
     version: "1.0.3",
     orientation: "portrait",
     icon: "./assets/images/hamaki-logo.png",
-    scheme: "com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3",
+    // Multiple schemes: hamaki for magic links, Google scheme for OAuth
+    scheme: ["hamaki", "com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3"],
     userInterfaceStyle: "dark",
     backgroundColor: "#0B0C1A",
     // splash: {
