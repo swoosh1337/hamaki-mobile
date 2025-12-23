@@ -29,7 +29,7 @@ describe('StatsCard', () => {
                 <StatsCard xpStats={mockXPStats} isLoading={false} />
             );
 
-            expect(getByText('This Week:')).toBeTruthy();
+            expect(getByText('კვირის:')).toBeTruthy();
             expect(getByText('350 XP')).toBeTruthy();
         });
 
@@ -38,7 +38,7 @@ describe('StatsCard', () => {
                 <StatsCard xpStats={mockXPStats} isLoading={false} />
             );
 
-            expect(getByText('Total:')).toBeTruthy();
+            expect(getByText('ჯამი:')).toBeTruthy();
             expect(getByText('1,250 XP')).toBeTruthy();
         });
 
@@ -89,8 +89,8 @@ describe('StatsCard', () => {
             );
 
             // Both labels should be present
-            expect(getByText('This Week:')).toBeTruthy();
-            expect(getByText('Total:')).toBeTruthy();
+            expect(getByText('კვირის:')).toBeTruthy();
+            expect(getByText('ჯამი:')).toBeTruthy();
         });
     });
 
@@ -135,7 +135,7 @@ describe('StatsCard', () => {
                 <StatsCard xpStats={mockXPStats} isLoading={false} />
             );
 
-            const weeklyStatItem = getByText('This Week:').parent;
+            const weeklyStatItem = getByText('კვირის:').parent;
 
             expect(weeklyStatItem?.props.style).toEqual(
                 expect.objectContaining({
@@ -151,7 +151,7 @@ describe('StatsCard', () => {
                 <StatsCard xpStats={mockXPStats} isLoading={false} />
             );
 
-            const statItem = getByText('Total:').parent;
+            const statItem = getByText('ჯამი:').parent;
 
             expect(statItem?.props.style).toEqual(
                 expect.objectContaining({
@@ -181,7 +181,7 @@ describe('StatsCard', () => {
                 <StatsCard xpStats={mockXPStats} isLoading={false} />
             );
 
-            const label = getByText('This Week:');
+            const label = getByText('კვირის:');
             const value = getByText('350 XP');
 
             expect(label.props.style).toEqual(

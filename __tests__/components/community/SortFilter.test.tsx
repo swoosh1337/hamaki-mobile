@@ -15,8 +15,8 @@ describe('SortFilter', () => {
                 <SortFilter sortBy="upvotes" onSortChange={mockOnSortChange} />
             );
 
-            expect(getByText('Popular')).toBeTruthy();
-            expect(getByText('Latest')).toBeTruthy();
+            expect(getByText('პოპულარური')).toBeTruthy();
+            expect(getByText('ბოლო')).toBeTruthy();
         });
 
         it('should highlight Popular button when sortBy is upvotes', () => {
@@ -24,8 +24,8 @@ describe('SortFilter', () => {
                 <SortFilter sortBy="upvotes" onSortChange={mockOnSortChange} />
             );
 
-            const popularButton = getByText('Popular').parent;
-            const latestButton = getByText('Latest').parent;
+            const popularButton = getByText('პოპულარური').parent;
+            const latestButton = getByText('ბოლო').parent;
 
             // Popular button should have active styles
             expect(popularButton?.props.style).toEqual(
@@ -47,8 +47,8 @@ describe('SortFilter', () => {
                 <SortFilter sortBy="latest" onSortChange={mockOnSortChange} />
             );
 
-            const popularButton = getByText('Popular').parent;
-            const latestButton = getByText('Latest').parent;
+            const popularButton = getByText('პოპულარური').parent;
+            const latestButton = getByText('ბოლო').parent;
 
             // Latest button should have active styles
             expect(latestButton?.props.style).toEqual(
@@ -72,7 +72,7 @@ describe('SortFilter', () => {
                 <SortFilter sortBy="latest" onSortChange={mockOnSortChange} />
             );
 
-            fireEvent.press(getByText('Popular'));
+            fireEvent.press(getByText('პოპულარური'));
 
             expect(mockOnSortChange).toHaveBeenCalledTimes(1);
             expect(mockOnSortChange).toHaveBeenCalledWith('upvotes');
@@ -83,7 +83,7 @@ describe('SortFilter', () => {
                 <SortFilter sortBy="upvotes" onSortChange={mockOnSortChange} />
             );
 
-            fireEvent.press(getByText('Latest'));
+            fireEvent.press(getByText('ბოლო'));
 
             expect(mockOnSortChange).toHaveBeenCalledTimes(1);
             expect(mockOnSortChange).toHaveBeenCalledWith('latest');
@@ -94,8 +94,8 @@ describe('SortFilter', () => {
                 <SortFilter sortBy="upvotes" onSortChange={mockOnSortChange} />
             );
 
-            fireEvent.press(getByText('Popular'));
-            fireEvent.press(getByText('Popular'));
+            fireEvent.press(getByText('პოპულარური'));
+            fireEvent.press(getByText('პოპულარური'));
 
             expect(mockOnSortChange).toHaveBeenCalledTimes(2);
             expect(mockOnSortChange).toHaveBeenCalledWith('upvotes');
@@ -106,9 +106,9 @@ describe('SortFilter', () => {
                 <SortFilter sortBy="upvotes" onSortChange={mockOnSortChange} />
             );
 
-            fireEvent.press(getByText('Popular'));
-            fireEvent.press(getByText('Latest'));
-            fireEvent.press(getByText('Popular'));
+            fireEvent.press(getByText('პოპულარური'));
+            fireEvent.press(getByText('ბოლო'));
+            fireEvent.press(getByText('პოპულარური'));
 
             expect(mockOnSortChange).toHaveBeenCalledTimes(3);
             expect(mockOnSortChange).toHaveBeenNthCalledWith(1, 'upvotes');
@@ -123,7 +123,7 @@ describe('SortFilter', () => {
                 <SortFilter sortBy="upvotes" onSortChange={mockOnSortChange} />
             );
 
-            const popularText = getByText('Popular');
+            const popularText = getByText('პოპულარური');
 
             expect(popularText.props.style).toEqual(
                 expect.arrayContaining([
@@ -137,7 +137,7 @@ describe('SortFilter', () => {
                 <SortFilter sortBy="upvotes" onSortChange={mockOnSortChange} />
             );
 
-            const latestText = getByText('Latest');
+            const latestText = getByText('ბოლო');
 
             expect(latestText.props.style).toEqual(
                 expect.arrayContaining([
@@ -151,7 +151,7 @@ describe('SortFilter', () => {
                 <SortFilter sortBy="upvotes" onSortChange={mockOnSortChange} />
             );
 
-            const popularButton = getByText('Popular').parent;
+            const popularButton = getByText('პოპულარური').parent;
 
             expect(popularButton?.props.style).toEqual(
                 expect.arrayContaining([

@@ -20,15 +20,14 @@ jest.mock('@/components/ui/RememberMeModal', () => ({
   RememberMeModal: () => null,
 }));
 
-// Mock the channel subscriptions module
-jest.mock('@/utils/channelSubscriptions', () => ({
-  updateChannelSubscriptionsAndAwardXP: jest.fn(),
-  checkAllChannelSubscriptions: jest.fn().mockResolvedValue({ hamaki: true }),
-}));
-
-// Mock the video likes module
-jest.mock('@/utils/videoLikes', () => ({
-  checkAndAwardVideoLikes: jest.fn().mockResolvedValue({ xpAwarded: 0 }),
+// Mock the new subscription service
+jest.mock('@/services/youtube/subscriptionService', () => ({
+  verifyAndAwardSubscriptionXP: jest.fn().mockResolvedValue({
+    success: true,
+    statuses: [{ channelKey: 'hamaki', isSubscribed: true, xpAwarded: false }],
+    totalXPAwarded: 0,
+    errors: [],
+  }),
 }));
 
 // Mock React Native modules - define inline to avoid hoisting issues
@@ -69,9 +68,8 @@ jest.mock('@/utils/analytics', () => ({
 }));
 
 // Import mocked modules
-import { updateChannelSubscriptionsAndAwardXP, checkAllChannelSubscriptions } from '@/utils/channelSubscriptions';
-import { initializeNotifications, backgroundVideoCheck } from '@/utils/notifications';
-import { checkAndAwardVideoLikes } from '@/utils/videoLikes';
+import { verifyAndAwardSubscriptionXP } from '@/services/youtube/subscriptionService';
+import { backgroundVideoCheck, initializeNotifications } from '@/utils/notifications';
 
 // Define mock implementations
 const mockAuthService = {
@@ -183,11 +181,13 @@ describe('AuthContext Background Checks', () => {
     (backgroundVideoCheck as jest.Mock).mockResolvedValue(undefined);
     (sendSubscriptionVerificationNotification as jest.Mock).mockResolvedValue(undefined);
 
-    // Re-establish channel subscription mocks
-    (checkAllChannelSubscriptions as jest.Mock).mockResolvedValue({ hamaki: true });
-
-    // Re-establish other utility mocks
-    (checkAndAwardVideoLikes as jest.Mock).mockResolvedValue({ xpAwarded: 0 });
+    // Re-establish subscription service mock (default: subscribed, no XP)
+    (verifyAndAwardSubscriptionXP as jest.Mock).mockResolvedValue({
+      success: true,
+      statuses: [{ channelKey: 'hamaki', isSubscribed: true, xpAwarded: false }],
+      totalXPAwarded: 0,
+      errors: [],
+    });
 
     // Default Supabase from mock
     __mockFrom.mockReturnValue({
@@ -226,13 +226,15 @@ describe('AuthContext Background Checks', () => {
       mockUserService.upsertUserProfile.mockResolvedValue(mockUser);
       mockUserService.getUserProfile.mockResolvedValue(mockUser);
 
-      // Mock background subscription check - returns subscribed
-      (checkAllChannelSubscriptions as jest.Mock).mockResolvedValue({ hamaki: true });
-
       // Mock subscription verification success - XP awarded
-      (updateChannelSubscriptionsAndAwardXP as jest.Mock).mockResolvedValue({
+      (verifyAndAwardSubscriptionXP as jest.Mock).mockResolvedValue({
+        success: true,
+        statuses: [
+          { channelKey: 'hamaki', isSubscribed: true, xpAwarded: true },
+          { channelKey: 'miro', isSubscribed: false, xpAwarded: false },
+        ],
         totalXPAwarded: 500,
-        updatedUser: { ...mockUser, xp_points: 500 },
+        errors: [],
       });
 
       mockSendNotification.mockResolvedValue(undefined);
@@ -267,7 +269,7 @@ describe('AuthContext Background Checks', () => {
       // Wait for background checks to complete
       await waitFor(
         () => {
-          expect(updateChannelSubscriptionsAndAwardXP).toHaveBeenCalled();
+          expect(verifyAndAwardSubscriptionXP).toHaveBeenCalled();
         },
         { timeout: 3000 }
       );
@@ -302,13 +304,14 @@ describe('AuthContext Background Checks', () => {
       mockUserService.upsertUserProfile.mockResolvedValue(mockUser);
       mockUserService.getUserProfile.mockResolvedValue(mockUser);
 
-      // Mock background subscription check - returns NOT subscribed
-      (checkAllChannelSubscriptions as jest.Mock).mockResolvedValue({ hamaki: false });
-
-      // Mock subscription verification - no XP awarded
-      (updateChannelSubscriptionsAndAwardXP as jest.Mock).mockResolvedValue({
+      // Mock subscription verification - NOT subscribed, no XP
+      (verifyAndAwardSubscriptionXP as jest.Mock).mockResolvedValue({
+        success: true,
+        statuses: [
+          { channelKey: 'hamaki', isSubscribed: false, xpAwarded: false },
+        ],
         totalXPAwarded: 0,
-        updatedUser: mockUser,
+        errors: [],
       });
 
       mockSendNotification.mockResolvedValue(undefined);
@@ -431,11 +434,8 @@ describe('AuthContext Background Checks', () => {
       mockUserService.upsertUserProfile.mockResolvedValue(mockUser);
       mockUserService.getUserProfile.mockResolvedValue(mockUser);
 
-      // Mock background subscription check
-      (checkAllChannelSubscriptions as jest.Mock).mockResolvedValue({ hamaki: true });
-
       // Mock subscription verification error
-      (updateChannelSubscriptionsAndAwardXP as jest.Mock).mockRejectedValue(
+      (verifyAndAwardSubscriptionXP as jest.Mock).mockRejectedValue(
         new Error('API Error')
       );
 
@@ -510,13 +510,14 @@ describe('AuthContext Background Checks', () => {
         .mockResolvedValueOnce(mockUser)
         .mockResolvedValueOnce(updatedUser);
 
-      // Mock background subscription check
-      (checkAllChannelSubscriptions as jest.Mock).mockResolvedValue({ hamaki: true });
-
       // Mock subscription verification success - XP awarded
-      (updateChannelSubscriptionsAndAwardXP as jest.Mock).mockResolvedValue({
+      (verifyAndAwardSubscriptionXP as jest.Mock).mockResolvedValue({
+        success: true,
+        statuses: [
+          { channelKey: 'hamaki', isSubscribed: true, xpAwarded: true },
+        ],
         totalXPAwarded: 500,
-        updatedUser,
+        errors: [],
       });
 
       mockSendNotification.mockResolvedValue(undefined);

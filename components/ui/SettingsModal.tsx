@@ -2,19 +2,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Modal,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { ChannelSubscriptionManager } from '@/components/subscriptions/ChannelSubscriptionManager';
 import { VideoLikesManager } from '@/components/subscriptions/VideoLikesManager';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -25,17 +26,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   visible,
   onClose,
 }) => {
-  const { signOut, userProfile, isDemoMode } = useAuth();
+  const { signOut, userProfile, isDemoMode, authMethod } = useAuth();
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [showVideoLikes, setShowVideoLikes] = useState(false);
 
+  // Get pending action count for badges (only for Google users)
+  const { pendingActionCount, subscriptionStatuses, videoLikeStatuses } = useYouTubeVerification();
+
+  // Count pending for each section
+  const pendingSubscriptions = subscriptionStatuses.filter(s => !s.xpAwarded).length;
+  const pendingVideoLikes = videoLikeStatuses.filter(s => s.latestVideoId && !s.xpAwarded).length;
+
   const handleSignOut = async () => {
     const title = isDemoMode ? 'Exit Demo' : 'Sign Out';
-    const message = isDemoMode 
+    const message = isDemoMode
       ? 'Are you sure you want to exit demo mode?'
       : 'Are you sure you want to sign out?';
     const buttonText = isDemoMode ? 'Exit Demo' : 'Sign Out';
-    
+
     Alert.alert(
       title,
       message,
@@ -103,7 +111,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {!isDemoMode && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Earn More XP</Text>
-              
+
               {/* Channel Subscriptions */}
               <TouchableOpacity
                 style={styles.subscriptionsCard}
@@ -113,6 +121,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <View style={styles.subscriptionsCardContent}>
                   <View style={styles.subscriptionsIcon}>
                     <Ionicons name="logo-youtube" size={24} color="#FF0000" />
+                    {/* Badge for pending subscriptions */}
+                    {authMethod === 'google' && pendingSubscriptions > 0 && (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{pendingSubscriptions}</Text>
+                      </View>
+                    )}
                   </View>
                   <View style={styles.subscriptionsText}>
                     <Text style={styles.subscriptionsTitle}>Channel Subscriptions</Text>
@@ -133,6 +147,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <View style={styles.subscriptionsCardContent}>
                   <View style={styles.subscriptionsIcon}>
                     <Ionicons name="thumbs-up" size={24} color={Colors.dark.tint} />
+                    {/* Badge for pending video likes */}
+                    {authMethod === 'google' && pendingVideoLikes > 0 && (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{pendingVideoLikes}</Text>
+                      </View>
+                    )}
                   </View>
                   <View style={styles.subscriptionsText}>
                     <Text style={styles.subscriptionsTitle}>Like Latest Videos</Text>
@@ -382,5 +402,23 @@ const styles = StyleSheet.create({
   subscriptionsContent: {
     flex: 1,
     padding: 20,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontFamily: 'SpaceMono',
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
 });

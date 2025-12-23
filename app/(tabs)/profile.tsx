@@ -360,7 +360,7 @@ export default function ProfileScreen() {
 
         {/* My Posts Section */}
         <View style={styles.postsSection}>
-          <Text style={styles.sectionTitle}>My Posts</Text>
+          <Text style={styles.sectionTitle}>ჩემი პოსტები</Text>
 
           {isPostsLoading ? (
             <ScrollView style={styles.postsScrollView} nestedScrollEnabled>
@@ -370,7 +370,7 @@ export default function ProfileScreen() {
             </ScrollView>
           ) : userPosts.length === 0 ? (
             <View style={styles.emptyPostsContainer}>
-              <Text style={styles.emptyPostsText}>No approved posts yet.</Text>
+              <Text style={styles.emptyPostsText}>ჯერ არ გაქვს დადასტურებული პოსტები.</Text>
               {/* <Text style={styles.emptyPostsSubtext}>
                 Submit ideas in the Community tab. Once approved by admins, they&apos;ll appear here!
               </Text> */}

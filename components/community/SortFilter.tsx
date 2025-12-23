@@ -36,7 +36,7 @@ export const SortFilter: React.FC<SortFilterProps> = ({
                     styles.sortButtonText,
                     sortBy === 'upvotes' && styles.sortButtonTextActive
                 ]}>
-                    Popular
+                    პოპულარური
                 </Text>
             </TouchableOpacity>
 
@@ -51,7 +51,7 @@ export const SortFilter: React.FC<SortFilterProps> = ({
                     styles.sortButtonText,
                     sortBy === 'latest' && styles.sortButtonTextActive
                 ]}>
-                    Latest
+                    ბოლო
                 </Text>
             </TouchableOpacity>
         </View>

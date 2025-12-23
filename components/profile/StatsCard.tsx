@@ -30,14 +30,14 @@ export const StatsCard: React.FC<StatsCardProps> = ({
     return (
         <>
             <View style={styles.statItem}>
-                <Text style={styles.statLabel}>This Week:</Text>
+                <Text style={styles.statLabel}>კვირის:</Text>
                 <Text style={styles.statValue}>
                     {`${(xpStats?.weeklyXP || 0).toLocaleString()} XP`}
                 </Text>
             </View>
 
             <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Total:</Text>
+                <Text style={styles.statLabel}>ჯამი:</Text>
                 <Text style={styles.statValue}>
                     {`${(xpStats?.totalXP || 0).toLocaleString()} XP`}
                 </Text>

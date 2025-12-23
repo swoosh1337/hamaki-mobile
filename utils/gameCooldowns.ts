@@ -210,8 +210,8 @@ async function scheduleCooldownNotification(gameType: GameType): Promise<void> {
     // Schedule new notification for 2 hours from now
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🎮 Game Ready!',
-        body: `${gameNames[gameType]} cooldown is over. Play again to earn more XP!`,
+        title: '🎮 Cooldown-ი მორჩა!',
+        body: `${gameNames[gameType]} cooldown-ი მორჩა, შეგიძლია თამაში ითამაშო და დააგროვო ქულები!`,
         data: { gameType, type: 'game_cooldown' },
         sound: true,
       },

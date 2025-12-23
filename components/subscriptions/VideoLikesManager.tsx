@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,59 +12,27 @@ import {
 } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
-import { useAuth } from '@/contexts/AuthContext';
-import { tokenManager } from '@/services/auth';
+import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
 import { createLogger } from '@/utils/logger';
-import { checkAndAwardVideoLikes, VideoLikeStatus } from '@/utils/videoLikes';
 
 const log = createLogger('VideoLikesManager');
 
 export const VideoLikesManager: React.FC = () => {
-  const { userProfile } = useAuth();
-  const [isLoading, setIsLoading] = useState(true);
-  const [isChecking, setIsChecking] = useState(false);
-  const [videoStatuses, setVideoStatuses] = useState<VideoLikeStatus[]>([]);
-  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const {
+    videoLikeStatuses,
+    isLoadingVideoLikes,
+    videoLikeError,
+    verifyVideoLikes,
+    totalVideoLikeXP,
+  } = useYouTubeVerification();
 
-  useEffect(() => {
-    if (userProfile?.id) {
-      checkVideoLikes();
-    }
-  }, [userProfile?.id]);
-
-  const checkVideoLikes = async () => {
-    if (!userProfile?.id) return;
-
-    const accessToken = await tokenManager.getValidAccessToken();
-    if (!accessToken) {
-      Alert.alert('Error', 'Unable to get access token. Please sign in again.');
-      return;
-    }
-
+  const handleCheckVideoLikes = async () => {
     try {
-      setIsChecking(true);
-      const result = await checkAndAwardVideoLikes(accessToken, userProfile.id);
-
-      setVideoStatuses(result.statuses);
-      setLastChecked(new Date());
-
-      if (result.xpAwarded > 0) {
-        Alert.alert(
-          '🎉 XP Awarded!',
-          `You earned ${result.xpAwarded} XP for liking videos!`,
-          [{ text: 'Awesome!' }]
-        );
-      }
-
-      if (result.errors.length > 0) {
-        log.error('Errors checking video likes', undefined, { errors: result.errors });
-      }
+      await verifyVideoLikes();
+      Alert.alert('Success', 'Video likes checked successfully!');
     } catch (error) {
       log.error('Error checking video likes', error);
       Alert.alert('Error', 'Failed to check video likes. Please try again.');
-    } finally {
-      setIsLoading(false);
-      setIsChecking(false);
     }
   };
 
@@ -72,14 +40,13 @@ export const VideoLikesManager: React.FC = () => {
     Linking.openURL(`https://www.youtube.com/watch?v=${videoId}`);
   };
 
-  const totalPossibleXP = videoStatuses.reduce((sum, status) => sum + status.xpReward, 0);
-  const earnedXP = videoStatuses
+  const earnedXP = videoLikeStatuses
     .filter(s => s.xpAwarded)
     .reduce((sum, status) => sum + status.xpReward, 0);
-  const rawPercent = totalPossibleXP > 0 ? (earnedXP / totalPossibleXP) * 100 : 0;
+  const rawPercent = totalVideoLikeXP > 0 ? (earnedXP / totalVideoLikeXP) * 100 : 0;
   const percent = Math.max(0, Math.min(100, rawPercent));
 
-  if (isLoading) {
+  if (isLoadingVideoLikes && videoLikeStatuses.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.dark.tint} />
@@ -92,15 +59,15 @@ export const VideoLikesManager: React.FC = () => {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Like Latest Videos</Text>
+        <Text style={styles.title}>დაალაიქე ჩვენი ვიდეობი</Text>
         <Text style={styles.subtitle}>
-          Earn XP by liking the latest video from each channel
+          დააგროვე XP ჩვენი ახალი ვიდეოების დალაიქებით
         </Text>
 
         {/* XP Progress */}
         <View style={styles.xpProgress}>
           <Text style={styles.xpText}>
-            {earnedXP} / {totalPossibleXP} XP Earned
+            {earnedXP} / {totalVideoLikeXP} XP მიღებულია
           </Text>
           <View style={styles.progressBar}>
             <View
@@ -115,29 +82,23 @@ export const VideoLikesManager: React.FC = () => {
         {/* Refresh Button */}
         <TouchableOpacity
           style={styles.refreshButton}
-          onPress={checkVideoLikes}
-          disabled={isChecking}
+          onPress={handleCheckVideoLikes}
+          disabled={isLoadingVideoLikes}
         >
-          {isChecking ? (
+          {isLoadingVideoLikes ? (
             <ActivityIndicator size="small" color={Colors.dark.background} />
           ) : (
             <>
               <Ionicons name="refresh" size={18} color={Colors.dark.background} />
-              <Text style={styles.refreshButtonText}>Check Again</Text>
+              <Text style={styles.refreshButtonText}>გადაამოწმე</Text>
             </>
           )}
         </TouchableOpacity>
-
-        {lastChecked && (
-          <Text style={styles.lastChecked}>
-            Last checked: {lastChecked.toLocaleTimeString()}
-          </Text>
-        )}
       </View>
 
       {/* Video List */}
       <View style={styles.videoList}>
-        {videoStatuses.map((status) => (
+        {videoLikeStatuses.map((status) => (
           <View key={status.channelKey} style={styles.videoCard}>
             <View style={styles.videoHeader}>
               <View style={styles.channelInfo}>
@@ -153,7 +114,7 @@ export const VideoLikesManager: React.FC = () => {
               </View>
             </View>
 
-            {status.videoId && status.videoTitle ? (
+            {status.latestVideoId && status.videoTitle ? (
               <>
                 <Text style={styles.videoTitle} numberOfLines={2}>
                   {status.videoTitle}
@@ -193,7 +154,7 @@ export const VideoLikesManager: React.FC = () => {
                 {!status.isLiked && (
                   <TouchableOpacity
                     style={styles.watchButton}
-                    onPress={() => openVideo(status.videoId!)}
+                    onPress={() => openVideo(status.latestVideoId!)}
                   >
                     <Ionicons name="play-circle-outline" size={20} color={Colors.dark.background} />
                     <Text style={styles.watchButtonText}>Watch & Like</Text>
@@ -211,7 +172,7 @@ export const VideoLikesManager: React.FC = () => {
       <View style={styles.infoBox}>
         <Ionicons name="information-circle-outline" size={24} color={Colors.dark.tint} />
         <Text style={styles.infoText}>
-          XP is awarded automatically when you like a video. Click "Check Again" after liking to claim your points!
+          XP გემატება ავტომატურად, როდესაც დაალაიქებ ჩვენს ვიდეოს. დააჭირე გადამოწმების ღილაკს რომ ნახო ცვლილება.
         </Text>
       </View>
     </ScrollView>

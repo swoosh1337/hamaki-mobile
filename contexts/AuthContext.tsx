@@ -14,12 +14,11 @@
 import { authService, rememberMeService, tokenManager } from '@/services/auth';
 import { supabase } from '@/services/supabase/client';
 import { userService } from '@/services/supabase/userService';
+import { verifyAndAwardSubscriptionXP } from '@/services/youtube/subscriptionService';
 import type { AuthMethod, AuthResult, MagicLinkResult } from '@/types';
 import type { UserProfile } from '@/types/user';
 import { analytics } from '@/utils/analytics';
-import { checkAllChannelSubscriptions, updateChannelSubscriptionsAndAwardXP } from '@/utils/channelSubscriptions';
 import { createLogger } from '@/utils/logger';
-import { checkAndAwardVideoLikes } from '@/utils/videoLikes';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 import { RememberMeModal } from '../components/ui/RememberMeModal';
@@ -198,8 +197,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Get user profile and update context
       const supabaseUser = await userService.getUserProfile(
-        pendingAuthResult.authMethod === 'magic_link' 
-          ? pendingAuthResult.userData.id 
+        pendingAuthResult.authMethod === 'magic_link'
+          ? pendingAuthResult.userData.id
           : pendingAuthResult.userData.id
       );
 
@@ -266,51 +265,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Check channel subscriptions using the token
-      let allChannelSubscriptions: Record<string, boolean> | null = null;
+      // Check and award XP for channel subscriptions using new service
       try {
-        allChannelSubscriptions = await checkAllChannelSubscriptions(accessToken);
-        log.info('Background: Channel subscriptions checked', { subscriptions: allChannelSubscriptions });
+        const result = await verifyAndAwardSubscriptionXP(
+          accessToken,
+          googleUserId || '',
+          googleId,
+          false // Use cache if available
+        );
+
+        if (result.success) {
+          log.info('Background: Channel subscriptions checked', {
+            subscriptions: result.statuses.map(s => ({ channel: s.channelKey, subscribed: s.isSubscribed })),
+            xpAwarded: result.totalXPAwarded
+          });
+
+          // Check if user is subscribed to main HamaKi channel
+          const hamakiSubscribed = result.statuses.find(s => s.channelKey === 'hamaki')?.isSubscribed || false;
+
+          // Send notification for subscription verification results
+          if (result.totalXPAwarded > 0) {
+            await sendSubscriptionVerificationNotification(true, 'HamaKi');
+
+            // Refresh user profile to get updated XP
+            const updatedProfile = await userService.getUserProfile(googleId);
+            if (updatedProfile) {
+              setUserProfile(updatedProfile);
+            }
+          } else if (!hamakiSubscribed) {
+            // Send notification that subscription was not found
+            await sendSubscriptionVerificationNotification(false, 'HamaKi');
+          }
+        }
       } catch (err) {
         log.warn('Failed to check channel subscriptions in background', err);
       }
 
-      // Award XP for channel subscriptions
-      if (allChannelSubscriptions) {
-        const xpResult = await updateChannelSubscriptionsAndAwardXP(googleId, allChannelSubscriptions);
-
-        // Send notification for subscription verification results
-        if (xpResult.totalXPAwarded > 0) {
-          log.info('Background: Awarded XP for channel subscriptions', { xp: xpResult.totalXPAwarded });
-
-          // Send notification that subscription was verified
-          await sendSubscriptionVerificationNotification(true, 'HamaKi');
-
-          // Refresh user profile to get updated XP
-          const updatedProfile = await userService.getUserProfile(googleId);
-          if (updatedProfile) {
-            setUserProfile(updatedProfile);
-          }
-        } else {
-          // Send notification that subscription was not found
-          await sendSubscriptionVerificationNotification(false, 'HamaKi');
-        }
-      }
-
-      // Check video likes and award XP
-      if (googleUserId) {
-        const xpResult = await checkAndAwardVideoLikes(googleId, googleUserId);
-
-        if (xpResult.xpAwarded > 0) {
-          log.info('Background: Awarded XP for video likes', { xp: xpResult.xpAwarded });
-
-          // Refresh user profile to get updated XP
-          const updatedProfile = await userService.getUserProfile(googleId);
-          if (updatedProfile) {
-            setUserProfile(updatedProfile);
-          }
-        }
-      }
+      // NOTE: Video like XP checks are now manual-only (from Settings)
+      // to save YouTube API quota and comply with YouTube policy
 
       log.info('Background subscription verification completed');
     } catch (error) {
@@ -454,7 +446,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (persistedResult.success && persistedResult.userData) {
           // Check if user chose to stay signed in
           const preference = await rememberMeService.getPreference(persistedResult.userData.email);
-          
+
           if (!preference || !preference.rememberMe) {
             log.info('User chose not to stay signed in, clearing session', {
               email: persistedResult.userData.email,
@@ -531,29 +523,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        // Perform background XP checks (subscriptions + video likes) for Google users
-        if (authMethod === 'google') {
-          try {
-            const { performBackgroundXPChecks } = await import('../utils/backgroundXPChecks');
-            const xpResult = await performBackgroundXPChecks(userProfile.id);
-
-            if (xpResult.totalXP > 0) {
-              log.info('Background XP awarded', {
-                total: xpResult.totalXP,
-                subs: xpResult.subscriptionXP,
-                likes: xpResult.videoLikeXP
-              });
-
-              // Refresh user profile to get updated XP
-              const updatedProfile = await userService.getUserProfile(userProfile.google_id);
-              if (updatedProfile) {
-                setUserProfile(updatedProfile);
-              }
-            }
-          } catch (error) {
-            log.error('Error performing background XP checks:', error);
-          }
-        }
+        // NOTE: Background XP checks removed to save YouTube API quota
+        // Users can manually verify subscriptions and video likes from Settings
+        // See: hooks/useYouTubeVerification.ts
       } else if (nextAppState === 'background' && isAuthenticated && isTemporarySession && !isDemoMode) {
         log.info('App went to background with temporary session - clearing session...');
         await tokenManager.clearSession();
@@ -582,10 +554,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (result.success && result.userData) {
         // Always complete authentication - no subscription gating
-      // Show Remember Me modal for better UX
-      setPendingAuthResult(result);
-      setShowRememberMeModal(true);
-      setIsLoading(false);
+        // Show Remember Me modal for better UX
+        setPendingAuthResult(result);
+        setShowRememberMeModal(true);
+        setIsLoading(false);
 
         return { success: true, userData: result.userData, isSubscribed: result.isSubscribed };
       } else {

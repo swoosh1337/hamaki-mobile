@@ -4,7 +4,7 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,49 +18,28 @@ import {
 
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { tokenManager } from '@/services/auth';
-import {
-  ChannelSubscriptionStatus,
-  getChannelSubscriptionStatus,
-  getTotalPossibleXP,
-  openYouTubeChannel,
-  verifyAndSyncSubscriptions,
-  YOUTUBE_CHANNELS,
-} from '@/utils/channelSubscriptions';
+import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
+import type { SubscriptionStatus } from '@/types/youtube';
+import { YOUTUBE_CHANNELS } from '@/types/youtube';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ChannelSubscriptionManager');
 
 export const ChannelSubscriptionManager: React.FC = () => {
   const { userProfile, updateUserProfile } = useAuth();
-  const [subscriptions, setSubscriptions] = useState<ChannelSubscriptionStatus[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isVerifying, setIsVerifying] = useState(false);
-
-  useEffect(() => {
-    if (userProfile?.google_id) {
-      loadSubscriptionStatus();
-    }
-  }, [userProfile?.google_id]);
-
-  const loadSubscriptionStatus = async () => {
-    if (!userProfile?.google_id) return;
-
-    try {
-      setIsLoading(true);
-      const statuses = await getChannelSubscriptionStatus(userProfile.google_id);
-      setSubscriptions(statuses);
-    } catch (error) {
-      log.error('Error loading subscription status', error);
-      Alert.alert('Error', 'Failed to load subscription status');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const {
+    subscriptionStatuses,
+    isLoadingSubscriptions,
+    subscriptionError,
+    verifySubscriptions,
+    lastSubscriptionCheck,
+    totalSubscriptionXP,
+    earnedSubscriptionXP,
+  } = useYouTubeVerification();
 
   const handleSubscribe = async (channelId: string, channelName: string) => {
     try {
-      const url = openYouTubeChannel(channelId);
+      const url = `https://www.youtube.com/channel/${channelId}?sub_confirmation=1`;
       const supported = await Linking.canOpenURL(url);
 
       if (supported) {
@@ -75,72 +54,40 @@ export const ChannelSubscriptionManager: React.FC = () => {
   };
 
   const handleVerifySubscriptions = async () => {
-    if (!userProfile?.google_id) return;
-
     try {
-      setIsVerifying(true);
+      await verifySubscriptions();
 
-      // Get access token from auth
-      const accessToken = await tokenManager.getValidAccessToken();
+      // Calculate XP earned
+      const newlyEarnedXP = subscriptionStatuses
+        .filter(s => s.xpAwarded)
+        .reduce((sum, s) => sum + s.xpReward, 0);
 
-      if (!accessToken) {
-        Alert.alert(
-          'Authentication Required',
-          'Please sign out and sign in again to verify subscriptions.'
-        );
-        return;
+      // Update user profile in context if XP changed
+      if (subscriptionStatuses.some(s => s.xpAwarded)) {
+        const subStatuses = subscriptionStatuses.reduce((acc, s) => {
+          if (s.channelKey === 'hamaki') acc.youtube_subscribed = s.isSubscribed;
+          else acc[`${s.channelKey}_channel_subscribed`] = s.isSubscribed;
+          return acc;
+        }, {} as Record<string, boolean>);
+        updateUserProfile(subStatuses);
       }
-
-      // Verify and sync subscriptions
-      const result = await verifyAndSyncSubscriptions(accessToken, userProfile.google_id);
-
-      // Update local state
-      await loadSubscriptionStatus();
-
-      // Update user profile in context safely
-      if (!result || !result.updatedUser) {
-        throw new Error('Missing updated user payload from verifyAndSyncSubscriptions');
-      }
-
-      const safeXp = typeof result.updatedUser.xp_points === 'number' ? result.updatedUser.xp_points : (userProfile?.xp_points ?? 0);
-      const safeYouTube = typeof result.updatedUser.youtube_subscribed === 'boolean' ? result.updatedUser.youtube_subscribed : (userProfile?.youtube_subscribed ?? false);
-      const safeMiro = typeof result.updatedUser.miro_channel_subscribed === 'boolean' ? result.updatedUser.miro_channel_subscribed : (userProfile?.miro_channel_subscribed ?? false);
-      const safeBastos = typeof result.updatedUser.bastos_channel_subscribed === 'boolean' ? result.updatedUser.bastos_channel_subscribed : (userProfile?.bastos_channel_subscribed ?? false);
-      const safeKoro = typeof result.updatedUser.koro_channel_subscribed === 'boolean' ? result.updatedUser.koro_channel_subscribed : (userProfile?.koro_channel_subscribed ?? false);
-
-      updateUserProfile({
-        xp_points: safeXp,
-        youtube_subscribed: safeYouTube,
-        miro_channel_subscribed: safeMiro,
-        bastos_channel_subscribed: safeBastos,
-        koro_channel_subscribed: safeKoro,
-      });
 
       // Show success message
-      if (result.totalXPAwarded > 0) {
-        Alert.alert(
-          'გამოწერა დადასტურდა!',
-          `Congratulations! You earned ${result.totalXPAwarded} XP from your channel subscriptions! 🎉`,
-          [{ text: 'Awesome!', style: 'default' }]
-        );
-      } else {
-        Alert.alert(
-          'გამოწერა დადასტურდა',
-          'გამოწერა წარმატებით დადასტურდა. თქვენ მოგემატად ბონუს ქულები'
-        );
-      }
+      Alert.alert(
+        'Verification Complete',
+        `Subscriptions verified successfully!`,
+        [{ text: 'OK' }]
+      );
     } catch (error) {
       log.error('Error verifying subscriptions', error);
       Alert.alert(
         'Verification Failed',
         'Failed to verify subscriptions. Please try again later.'
       );
-    } finally {
-      setIsVerifying(false);
     }
   };
 
-  const renderChannelCard = (status: ChannelSubscriptionStatus) => {
+  const renderChannelCard = (status: SubscriptionStatus) => {
     const channel = YOUTUBE_CHANNELS[status.channelKey];
 
     return (
@@ -189,7 +136,7 @@ export const ChannelSubscriptionManager: React.FC = () => {
     );
   };
 
-  if (isLoading) {
+  if (isLoadingSubscriptions) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.dark.tint} />
@@ -198,12 +145,8 @@ export const ChannelSubscriptionManager: React.FC = () => {
     );
   }
 
-  const totalPossibleXP = getTotalPossibleXP();
-  const earnedXP = subscriptions
-    .filter((s) => s.isSubscribed && s.xpAwarded)
-    .reduce((sum, s) => sum + s.xpReward, 0);
-  const subscribedCount = subscriptions.filter((s) => s.isSubscribed).length;
-  const totalChannels = subscriptions.length;
+  const subscribedCount = subscriptionStatuses.filter((s) => s.isSubscribed).length;
+  const totalChannels = subscriptionStatuses.length;
 
   return (
     <View style={styles.container}>
@@ -215,12 +158,12 @@ export const ChannelSubscriptionManager: React.FC = () => {
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{earnedXP}</Text>
+          <Text style={styles.statValue}>{earnedSubscriptionXP}</Text>
           <Text style={styles.statLabel}>XP Earned</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{totalPossibleXP}</Text>
+          <Text style={styles.statValue}>{totalSubscriptionXP}</Text>
           <Text style={styles.statLabel}>Total XP</Text>
         </View>
       </View>
@@ -229,16 +172,23 @@ export const ChannelSubscriptionManager: React.FC = () => {
       <ScrollView style={styles.channelList} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionTitle}>YouTube Channels</Text>
         <Text style={styles.sectionDescription}>
-          Subscribe to our channels and verify to earn bonus XP points!
+          გამოიწერე ჩვენი არხები და დააგროვე დამატებით XP
         </Text>
 
-        {subscriptions.map(renderChannelCard)}
+        {subscriptionStatuses.map(renderChannelCard)}
+
+        {/* Last Verified Timestamp */}
+        {lastSubscriptionCheck && (
+          <Text style={styles.lastVerified}>
+            Last verified: {lastSubscriptionCheck.toLocaleDateString()} at {lastSubscriptionCheck.toLocaleTimeString()}
+          </Text>
+        )}
 
         {/* Info Banner */}
         <View style={styles.infoBanner}>
           <Ionicons name="information-circle-outline" size={20} color={Colors.dark.tint} />
           <Text style={styles.infoBannerText}>
-            Subscribe on YouTube, then tap "Verify Subscriptions" to claim your XP rewards
+            გამოიწერე ჩვენი არხები და დააგროვე დამატებით XP
           </Text>
         </View>
       </ScrollView>
@@ -246,17 +196,17 @@ export const ChannelSubscriptionManager: React.FC = () => {
       {/* Verify Button */}
       <View style={styles.verifySection}>
         <TouchableOpacity
-          style={[styles.verifyButton, isVerifying && styles.verifyButtonDisabled]}
+          style={[styles.verifyButton, isLoadingSubscriptions && styles.verifyButtonDisabled]}
           onPress={handleVerifySubscriptions}
-          disabled={isVerifying}
+          disabled={isLoadingSubscriptions}
           activeOpacity={0.7}
         >
-          {isVerifying ? (
+          {isLoadingSubscriptions ? (
             <ActivityIndicator size="small" color={Colors.dark.background} />
           ) : (
             <>
               <Ionicons name="shield-checkmark" size={20} color={Colors.dark.background} />
-              <Text style={styles.verifyButtonText}>Verify Subscriptions</Text>
+              <Text style={styles.verifyButtonText}>დაადასტურე გამოწერა</Text>
             </>
           )}
         </TouchableOpacity>
@@ -442,6 +392,14 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
     lineHeight: 18,
+  },
+  lastVerified: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.tabIconDefault,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 8,
   },
   verifySection: {
     padding: 20,
