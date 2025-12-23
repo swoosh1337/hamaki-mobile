@@ -49,7 +49,7 @@ export const AvatarPicker: React.FC<AvatarPickerProps> = ({
   onSelect,
   isLoading = false,
 }) => {
-    if (isLoading) {
+  if (isLoading) {
     return (
       <View style={styles.container} testID="avatar-picker-container">
         <Text style={styles.title}>Choose Your Avatar</Text>
@@ -86,7 +86,7 @@ export const AvatarPicker: React.FC<AvatarPickerProps> = ({
                 activeOpacity={isDisabled ? 1 : 0.8}
                 disabled={isDisabled}
                 testID={`avatar-option-${avatar.id}`}
-                accessibilityLabel={`Select ${avatar.title}`}
+                accessibilityLabel={`ავატარის არჩევა ${avatar.title}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected, disabled: isDisabled }}
               >

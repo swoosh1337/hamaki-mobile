@@ -7,13 +7,12 @@ import {
   Modal,
   Platform,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  View,
+  View
 } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
@@ -21,35 +20,27 @@ import { Colors } from '@/constants/Colors';
 interface CreatePostModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (title: string, content: string, category?: string) => Promise<void>;
+  onSubmit: (title: string, content: string) => Promise<void>;
   isSubmitting: boolean;
 }
-
-const CATEGORIES = [
-  { value: 'tutorial', label: 'Tutorial', icon: 'school-outline', color: '#4ECDC4' },
-  { value: 'feature', label: 'Feature', icon: 'bulb-outline', color: '#45B7D1' },
-  { value: 'content', label: 'Content', icon: 'videocam-outline', color: '#96CEB4' },
-  { value: 'bug', label: 'Bug Report', icon: 'bug-outline', color: '#FF6B6B' },
-];
 
 export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: CreatePostModalProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [titleError, setTitleError] = useState('');
   const [contentError, setContentError] = useState('');
 
   const validateTitle = (value: string): boolean => {
     if (!value.trim()) {
-      setTitleError('Title is required');
+      setTitleError('სათაური აუცილებელია');
       return false;
     }
     if (value.length < 5) {
-      setTitleError('Title must be at least 5 characters');
+      setTitleError('სათაური უნდა შეიცავდეს მინიმუმ 5 სიმბოლოს');
       return false;
     }
     if (value.length > 100) {
-      setTitleError('Title must be less than 100 characters');
+      setTitleError('სათაური უნდა შეიცავდეს მაქსიმუმ 100 სიმბოლოს');
       return false;
     }
     setTitleError('');
@@ -58,15 +49,15 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
 
   const validateContent = (value: string): boolean => {
     if (!value.trim()) {
-      setContentError('Description is required');
+      setContentError('აღწერა აუცილებელია');
       return false;
     }
     if (value.length < 10) {
-      setContentError('Description must be at least 10 characters');
+      setContentError('აღწერა უნდა შეიცავდეს მინიმუმ 10 სიმბოლოს');
       return false;
     }
     if (value.length > 1000) {
-      setContentError('Description must be less than 1000 characters');
+      setContentError('აღწერა უნდა შეიცავდეს მაქსიმუმ 1000 სიმბოლოს');
       return false;
     }
     setContentError('');
@@ -90,7 +81,6 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
   const resetForm = () => {
     setTitle('');
     setContent('');
-    setSelectedCategory('');
     setTitleError('');
     setContentError('');
   };
@@ -104,11 +94,11 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
     }
 
     try {
-      await onSubmit(title, content, selectedCategory || undefined);
+      await onSubmit(title, content);
       resetForm();
       onClose();
     } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to submit your idea. Please try again.');
+      Alert.alert('შეცდომა', error instanceof Error ? error.message : 'იდეის გაგზავნა ვერ მოხერხდა. გთხოვთ სცადოთ თავიდან.');
     }
   };
 
@@ -116,14 +106,16 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
     if (!isSubmitting) {
       if (title.trim() || content.trim()) {
         Alert.alert(
-          'Discard Changes',
-          'Are you sure you want to discard your changes?',
+          'ცვლილებების გაუქმება',
+          'ნამდვილად გსურთ ცვლილებების გაუქმება?',
           [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Discard', style: 'destructive', onPress: () => {
-              resetForm();
-              onClose();
-            }},
+            { text: 'არა', style: 'cancel' },
+            {
+              text: 'დიახ', style: 'destructive', onPress: () => {
+                resetForm();
+                onClose();
+              }
+            },
           ]
         );
       } else {
@@ -147,112 +139,77 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
         <SafeAreaView style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.headerButton}
-            onPress={handleClose}
-            disabled={isSubmitting}
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={handleClose}
+              disabled={isSubmitting}
+            >
+              <Text style={styles.cancelText}>გაუქმება</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.headerTitle}>ახალი იდეა</Text>
+
+            <TouchableOpacity
+              style={[styles.headerButton, styles.submitButton]}
+              onPress={handleSubmit}
+              disabled={isSubmitting || !title.trim() || !content.trim()}
+            >
+              {isSubmitting ? (
+                <Text style={[styles.submitText, { opacity: 0.5 }]}>დასტურის დამუშავება...</Text>
+              ) : (
+                <Text style={[styles.submitText, (!title.trim() || !content.trim()) && { opacity: 0.4 }]}>დადასტურება</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.scrollView}
           >
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-          
-          <Text style={styles.headerTitle}>New Idea</Text>
-          
-          <TouchableOpacity 
-            style={[styles.headerButton, styles.submitButton]}
-            onPress={handleSubmit}
-            disabled={isSubmitting || !title.trim() || !content.trim()}
-          >
-            {isSubmitting ? (
-              <Text style={[styles.submitText, { opacity: 0.5 }]}>Submitting...</Text>
-            ) : (
-              <Text style={styles.submitText}>Submit</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+            {/* Title Input */}
+            <View style={styles.inputSection}>
+              <Text style={styles.label}>სათაური *</Text>
+              <TextInput
+                style={[styles.titleInput, titleError ? styles.inputError : null]}
+                placeholder="რა არის შენი ვიდეოს იდეა?"
+                placeholderTextColor={Colors.dark.tabIconDefault}
+                value={title}
+                onChangeText={handleTitleChange}
+                maxLength={100}
+                editable={!isSubmitting}
+                autoFocus
+              />
+              {titleError ? <Text style={styles.errorText}>{titleError}</Text> : null}
+              <Text style={styles.charCount}>{title.length}/100</Text>
+            </View>
 
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.scrollView}
-        >
-          {/* Title Input */}
-          <View style={styles.inputSection}>
-            <Text style={styles.label}>Title *</Text>
-            <TextInput
-              style={[styles.titleInput, titleError ? styles.inputError : null]}
-              placeholder="What's your video idea?"
-              placeholderTextColor={Colors.dark.tabIconDefault}
-              value={title}
-              onChangeText={handleTitleChange}
-              maxLength={100}
-              editable={!isSubmitting}
-              autoFocus
-            />
-            {titleError ? <Text style={styles.errorText}>{titleError}</Text> : null}
-            <Text style={styles.charCount}>{title.length}/100</Text>
-          </View>
+            {/* Content Input */}
+            <View style={styles.inputSection}>
+              <Text style={styles.label}>აღწერა *</Text>
+              <TextInput
+                style={[styles.contentInput, contentError ? styles.inputError : null]}
+                placeholder="აღწერე შენი იდეა დეტალურად. რას უნდა მოიცავდეს ვიდეო? რატომ იქნება საინტერესო?"
+                placeholderTextColor={Colors.dark.tabIconDefault}
+                value={content}
+                onChangeText={handleContentChange}
+                maxLength={1000}
+                multiline
+                numberOfLines={8}
+                textAlignVertical="top"
+                editable={!isSubmitting}
+              />
+              {contentError ? <Text style={styles.errorText}>{contentError}</Text> : null}
+              <Text style={styles.charCount}>{content.length}/1000</Text>
+            </View>
 
-          {/* Category Selection */}
-          <View style={styles.inputSection}>
-            <Text style={styles.label}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-              {CATEGORIES.map((category) => (
-                <TouchableOpacity
-                  key={category.value}
-                  style={[
-                    styles.categoryChip,
-                    selectedCategory === category.value && {
-                      backgroundColor: category.color + '30',
-                      borderColor: category.color,
-                    },
-                  ]}
-                  onPress={() => setSelectedCategory(
-                    selectedCategory === category.value ? '' : category.value
-                  )}
-                  disabled={isSubmitting}
-                >
-                  <Ionicons
-                    name={category.icon as any}
-                    size={16}
-                    color={selectedCategory === category.value ? category.color : Colors.dark.tabIconDefault}
-                  />
-                  <Text style={[
-                    styles.categoryText,
-                    selectedCategory === category.value && { color: category.color },
-                  ]}>
-                    {category.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Content Input */}
-          <View style={styles.inputSection}>
-            <Text style={styles.label}>Description *</Text>
-            <TextInput
-              style={[styles.contentInput, contentError ? styles.inputError : null]}
-              placeholder="Describe your idea in detail. What should the video cover? Why would it be helpful?"
-              placeholderTextColor={Colors.dark.tabIconDefault}
-              value={content}
-              onChangeText={handleContentChange}
-              maxLength={1000}
-              multiline
-              numberOfLines={8}
-              textAlignVertical="top"
-              editable={!isSubmitting}
-            />
-            {contentError ? <Text style={styles.errorText}>{contentError}</Text> : null}
-            <Text style={styles.charCount}>{content.length}/1000</Text>
-          </View>
-
-          {/* Info Box */}
-          <View style={styles.infoBox}>
-            <Ionicons name="information-circle-outline" size={20} color={Colors.dark.tint} />
-            <Text style={styles.infoText}>
-              Your idea will be reviewed before appearing in the Ideas feed. You'll be notified once it's approved!
-            </Text>
-          </View>
-        </KeyboardAvoidingView>
+            {/* Info Box */}
+            <View style={styles.infoBox}>
+              <Ionicons name="information-circle-outline" size={20} color={Colors.dark.tint} />
+              <Text style={styles.infoText}>
+                შენი იდეა განიხილება და დადასტურების შემთხვევაში გამოჩნდება იდეების სიაში!
+              </Text>
+            </View>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </TouchableWithoutFeedback>
     </Modal>
@@ -278,7 +235,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontFamily: 'HamakiEng',
+    fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
     fontWeight: 'bold',
   },
@@ -290,12 +247,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   submitText: {
-    color: Colors.dark.tint,
+    color: Colors.dark.text,
     fontSize: 16,
     fontWeight: '600',
   },
   scrollView: {
     flex: 1,
+    paddingTop: 20,
   },
   inputSection: {
     marginBottom: 24,
@@ -342,26 +300,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 4,
   },
-  categoryScroll: {
-    marginBottom: 8,
-  },
-  categoryChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(245, 245, 245, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(196, 255, 0, 0.3)',
-    marginRight: 8,
-    gap: 6,
-  },
-  categoryText: {
-    color: Colors.dark.text,
-    fontSize: 14,
-    fontWeight: '500',
-  },
+
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',

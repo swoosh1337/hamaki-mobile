@@ -91,7 +91,7 @@ export const RememberMeModal: React.FC<RememberMeModalProps> = ({
               onPress={handleContinue}
               activeOpacity={0.8}
             >
-              <Text style={styles.continueButtonText}>Continue</Text>
+              <Text style={styles.continueButtonText}>გაგრძელება</Text>
               <Ionicons
                 name="arrow-forward"
                 size={20}

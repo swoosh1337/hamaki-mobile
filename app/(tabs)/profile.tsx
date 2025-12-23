@@ -450,7 +450,7 @@ const styles = StyleSheet.create({
   },
   demoModeText: {
     fontSize: 12,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiEng',
     color: Colors.dark.background,
     fontWeight: 'bold',
   },
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 24,
-    fontFamily: 'HamakiENG',
+    fontFamily: 'HamakiEng',
     color: Colors.dark.tint,
     fontWeight: 'bold',
     marginRight: 8,
@@ -562,7 +562,7 @@ const styles = StyleSheet.create({
   },
   email: {
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiEng',
     color: Colors.dark.text,
     opacity: 0.7,
     textAlign: 'center',
@@ -571,7 +571,7 @@ const styles = StyleSheet.create({
   // Section Titles
   sectionTitle: {
     fontSize: 28,
-    fontFamily: 'HamakiENG',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.tint,
     marginBottom: 20,
     textAlign: 'center',
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
   loadingText: {
     color: Colors.dark.text,
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
   },
   emptyPostsContainer: {
     alignItems: 'center',
@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
   emptyPostsText: {
     color: Colors.dark.text,
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     opacity: 0.7,
     textAlign: 'center',
   },

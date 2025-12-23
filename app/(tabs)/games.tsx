@@ -15,6 +15,7 @@ const log = createLogger('Games');
 interface GameItem {
   id: string;
   title: string;
+  titleFont: 'HamakiGeo' | 'HamakiEng';
   description: string;
   icon: keyof typeof Ionicons.glyphMap;
   color: string;
@@ -25,6 +26,7 @@ const GAMES: GameItem[] = [
   {
     id: 'no-pogodi',
     title: 'მისაღებზე',
+    titleFont: 'HamakiGeo',
     description: 'დააჭერინე მიროს საჭმელი და აარიდე ცუდი რაღაცეები!',
     icon: 'game-controller',
     color: '#FF6B6B',
@@ -33,6 +35,7 @@ const GAMES: GameItem[] = [
   {
     id: 'hammock-jump',
     title: 'Hammock Jump',
+    titleFont: 'HamakiEng',
     description: 'იხტუნავე სანამ შეგიძლია!',
     icon: 'person',
     color: '#4ECDC4',
@@ -111,7 +114,7 @@ export default function GamesScreen() {
           )}
         </View>
         <View style={styles.gameInfo}>
-          <Text style={[styles.gameTitle, (!game.isAvailable || isOnCooldown) && styles.gameDisabledText]}>
+          <Text style={[styles.gameTitle, { fontFamily: game.titleFont }, (!game.isAvailable || isOnCooldown) && styles.gameDisabledText]}>
             {game.title}
           </Text>
           <Text style={[styles.gameDescription, (!game.isAvailable || isOnCooldown) && styles.gameDisabledText]}>
@@ -217,7 +220,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.text,
     opacity: 0.8,
     lineHeight: 22,
@@ -253,7 +256,7 @@ const styles = StyleSheet.create({
   },
   gameTitle: {
     fontSize: 18,
-    fontFamily: 'hamaki-eng',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.text,
     marginBottom: 4,
     fontWeight: 'bold',
@@ -263,7 +266,7 @@ const styles = StyleSheet.create({
   },
   gameDescription: {
     fontSize: 14,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.text,
     opacity: 0.8,
     lineHeight: 18,
@@ -273,7 +276,7 @@ const styles = StyleSheet.create({
   },
   comingSoonBadge: {
     fontSize: 12,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiEng',
     color: Colors.dark.tint,
     backgroundColor: 'rgba(196, 255, 0, 0.2)',
     paddingHorizontal: 8,
@@ -296,7 +299,7 @@ const styles = StyleSheet.create({
   },
   cooldownText: {
     fontSize: 12,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiEng',
     color: '#FFA500',
     fontWeight: '600',
   },
@@ -312,7 +315,7 @@ const styles = StyleSheet.create({
   },
   xpInfoText: {
     fontSize: 14,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.text,
     marginLeft: 12,
     flex: 1,

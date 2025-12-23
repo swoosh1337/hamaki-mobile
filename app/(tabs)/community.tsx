@@ -163,8 +163,8 @@ export default function IdeasScreen() {
   }, [userProfile?.id, checkIsUpvoted, upvote, removeUpvote, upvotingPosts]);
 
   // Handle create post
-  const handleCreatePost = useCallback(async (title: string, content: string, category?: string) => {
-    log.debug('handleCreatePost called', { title, content, category, userId: userProfile?.id });
+  const handleCreatePost = useCallback(async (title: string, content: string) => {
+    log.debug('handleCreatePost called', { title, content, userId: userProfile?.id });
 
     if (!userProfile?.id) {
       log.error('No user profile ID');
@@ -176,7 +176,7 @@ export default function IdeasScreen() {
 
     try {
       log.debug('Calling postService.createPost...');
-      const newPost = await postService.createPost({ userId: userProfile.id, title, content, category });
+      const newPost = await postService.createPost({ userId: userProfile.id, title, content });
       log.info('Post created successfully', newPost);
 
       // Close modal
@@ -186,8 +186,8 @@ export default function IdeasScreen() {
       setTimeout(() => {
         log.debug('Showing success alert');
         Alert.alert(
-          'Success',
-          'Your idea has been submitted for review! You\'ll be notified when it\'s approved.',
+          'წარმატება!',
+          'შენი იდეა გაიგზავნა განხილვისთვის! შეტყობინებას მიიღებ როცა დადასტურდება.',
           [{ text: 'OK' }]
         );
       }, 300);
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   },
   demoNoticeText: {
     fontSize: 13,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: '#FFA500',
     textAlign: 'center',
   },
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
   },
   errorBannerText: {
     fontSize: 13,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: '#FF6B6B',
     textAlign: 'center',
   },
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
   },
   connectionStatusText: {
     fontSize: 14,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.tint,
     opacity: 0.7,
   },
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontFamily: 'hamaki-eng',
+    fontFamily: 'HamakiEng',
     color: Colors.dark.tint,
     paddingHorizontal: 8, // Prevent italic font cropping
   },
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.text,
     opacity: 0.7,
     marginBottom: 14,

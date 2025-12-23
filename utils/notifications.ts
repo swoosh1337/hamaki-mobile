@@ -36,7 +36,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   try {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('hamaki-videos', {
-        name: 'New Videos',
+        name: 'ახალი ვიდეოები!',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#C4FF00',
@@ -141,7 +141,7 @@ async function sendNewVideoNotification(video: YouTubeVideo): Promise<void> {
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🎬 New HamaKi Video!',
+        title: '🎬 ახალი ვიდეო დაიდოოო!',
         body: video.title,
         data: {
           videoId: video.videoId,
@@ -186,7 +186,7 @@ export async function sendSubscriptionVerificationNotification(
 ): Promise<void> {
   try {
     const title = isSubscribed ? '✅ გამოწერა დადასტურდა' : '❌ გამოწერა ვერ მოიძებნა';
-    const body = isSubscribed 
+    const body = isSubscribed
       ? `${channelName} გამოწერა წარმატებით დადასტურდა. დამატებითი XP დაერიგისტრირდა!`
       : `${channelName} გამოწერა ვერ მოიძებნა. შეგიძლიათ ხელით შეამოწმოთ პარამეტრებში.`;
 
@@ -204,9 +204,9 @@ export async function sendSubscriptionVerificationNotification(
       trigger: null, // Send immediately
     });
 
-    log.info('Subscription verification notification sent', { 
-      isSubscribed, 
-      channelName 
+    log.info('Subscription verification notification sent', {
+      isSubscribed,
+      channelName
     });
   } catch (error) {
     log.error('Error sending subscription verification notification:', error);

@@ -14,7 +14,7 @@ describe('XPDisplay', () => {
 
     expect(getByTestId('total-xp-display')).toBeTruthy();
     expect(getByText('1,500')).toBeTruthy();
-    expect(getByText('Total XP')).toBeTruthy();
+    expect(getByText('XP ქულები')).toBeTruthy(); // Georgian title
   });
 
   it('should display weekly XP correctly', () => {
@@ -22,7 +22,7 @@ describe('XPDisplay', () => {
 
     expect(getByTestId('weekly-xp-display')).toBeTruthy();
     expect(getByText('250')).toBeTruthy();
-    expect(getByText('This Week')).toBeTruthy();
+    expect(getByText('კვირის')).toBeTruthy(); // Georgian "This Week"
   });
 
   it('should format large numbers with commas', () => {
@@ -90,9 +90,9 @@ describe('XPDisplay', () => {
   it('should display correct labels', () => {
     const { getByText } = render(<XPDisplay {...defaultProps} />);
 
-    expect(getByText('Experience Points')).toBeTruthy();
-    expect(getByText('Total XP')).toBeTruthy();
-    expect(getByText('This Week')).toBeTruthy();
+    expect(getByText('XP ქულები')).toBeTruthy(); // Georgian title
+    // Note: "Total XP" label was removed in favor of just the value display
+    expect(getByText('კვირის')).toBeTruthy(); // Georgian "This Week"
   });
 
   it('should have proper accessibility labels', () => {
@@ -128,6 +128,6 @@ describe('XPDisplay', () => {
   it('should show loading message when loading', () => {
     const { getByText } = render(<XPDisplay {...defaultProps} isLoading={true} />);
 
-    expect(getByText('Loading XP stats...')).toBeTruthy();
+    expect(getByText('იტვირთება XP სტატისტიკა...')).toBeTruthy(); // Georgian loading text
   });
 });

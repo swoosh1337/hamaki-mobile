@@ -62,7 +62,7 @@ describe('RememberMeModal', () => {
     expect(getByText('გსურთ დარჩეთ შესული ანგარიშში მომავალი ვიზიტებისთვის? ამის შეცვლა ნებისმიერ დროს შეგიძლიათ პარამეტრებში.')).toBeTruthy();
     expect(getByText('დამტოვე აქტიური')).toBeTruthy();
     expect(getByText('ანგარიში დარჩება აქტიური 30 დღის განმავლობაში ')).toBeTruthy();
-    expect(getByText('Continue')).toBeTruthy();
+    expect(getByText('გაგრძელება')).toBeTruthy(); // Georgian "Continue"
   });
 
   it('renders with custom user name', () => {
@@ -96,8 +96,8 @@ describe('RememberMeModal', () => {
       />
     );
 
-    // Find and press the Continue button
-    const continueButton = getByText('Continue');
+    // Find and press the Continue button (Georgian)
+    const continueButton = getByText('გაგრძელება');
     fireEvent.press(continueButton);
 
     // Should call with true (default value)
@@ -118,7 +118,7 @@ describe('RememberMeModal', () => {
     // Toggle the switch by pressing on it
     // Note: We need to find the switch component - it might not have testId
     // For now, let's press the continue button to see the default behavior
-    const continueButton = getByText('Continue');
+    const continueButton = getByText('გაგრძელება');
     fireEvent.press(continueButton);
 
     expect(mockOnContinue).toHaveBeenCalledWith(true);

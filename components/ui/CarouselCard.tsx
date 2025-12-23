@@ -46,7 +46,7 @@ export const CarouselCard: React.FC<CarouselCardProps> = ({ post, onPostTap }) =
         onPostTap(post);
       }}
       accessibilityRole="button"
-      accessibilityLabel={`View ${post.type} post: ${post.title}`}
+      accessibilityLabel={`ნახვა ${post.type} პოსტი: ${post.title}`}
       testID={`carousel-card-${post.id}`}
     >
       <Image

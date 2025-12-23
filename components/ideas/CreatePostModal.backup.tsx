@@ -47,15 +47,15 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
   const validateTitle = (value: string) => {
     if (!value.trim()) {
-      setTitleError('Title is required');
+      setTitleError('სათაური აუცილებელია');
       return false;
     }
     if (value.length < 5) {
-      setTitleError('Title must be at least 5 characters');
+      setTitleError('სათაური უნდა შეიცავდეს მინიმუმ 5 სიმბოლოს');
       return false;
     }
     if (value.length > 100) {
-      setTitleError('Title must be less than 100 characters');
+      setTitleError('სათაური უნდა შეიცავდეს მაქსიმუმ 100 სიმბოლოს');
       return false;
     }
     setTitleError('');
@@ -64,15 +64,15 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
   const validateContent = (value: string) => {
     if (!value.trim()) {
-      setContentError('Description is required');
+      setContentError('აღწერა აუცილებელია');
       return false;
     }
     if (value.length < 10) {
-      setContentError('Description must be at least 10 characters');
+      setContentError('აღწერა უნდა შეიცავდეს მინიმუმ 10 სიმბოლოს');
       return false;
     }
     if (value.length > 1000) {
-      setContentError('Description must be less than 1000 characters');
+      setContentError('აღწერა უნდა შეიცავდეს მაქსიმუმ 1000 სიმბოლოს');
       return false;
     }
     setContentError('');
@@ -129,10 +129,10 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     if (!isSubmitting) {
       if (title.trim() || content.trim()) {
         Alert.alert(
-          'Discard Changes',
-          'Are you sure you want to discard your changes?',
+          'გაუქმება',
+          'ნამდივალდ გსურთ გაუქმება?',
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: 'გაუქმება', style: 'cancel' },
             {
               text: 'Discard', style: 'destructive', onPress: () => {
                 handleReset();
@@ -162,10 +162,10 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             onPress={handleClose}
             disabled={isSubmitting}
           >
-            <Text style={styles.cancelText}>Cancel</Text>
+            <Text style={styles.cancelText}>გაუქმება</Text>
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>New Idea</Text>
+          <Text style={styles.headerTitle}>ახალი იდეა</Text>
 
           <TouchableOpacity
             style={[styles.headerButton, styles.submitButton]}
@@ -173,9 +173,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             disabled={isSubmitting || !title.trim() || !content.trim()}
           >
             {isSubmitting ? (
-              <Text style={[styles.submitText, { opacity: 0.5 }]}>Submitting...</Text>
+              <Text style={[styles.submitText, { opacity: 0.5 }]}>გაგზავნა...</Text>
             ) : (
-              <Text style={styles.submitText}>Submit</Text>
+              <Text style={styles.submitText}>გაგზავნა</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -183,10 +183,10 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           {/* Title Input */}
           <View style={styles.inputSection}>
-            <Text style={styles.label}>Title *</Text>
+            <Text style={styles.label}>სათაური *</Text>
             <TextInput
               style={[styles.titleInput, titleError ? styles.inputError : null]}
-              placeholder="What's your video idea?"
+              placeholder="რა არის შენი ვიდეოს იდეა?"
               placeholderTextColor={Colors.dark.tabIconDefault}
               value={title}
               onChangeText={handleTitleChange}
@@ -200,7 +200,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
           {/* Category Selection */}
           <View style={styles.inputSection}>
-            <Text style={styles.label}>Category</Text>
+            <Text style={styles.label}>კატეგორია</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
               {CATEGORIES.map((category) => (
                 <TouchableOpacity
@@ -235,10 +235,10 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
           {/* Content Input */}
           <View style={styles.inputSection}>
-            <Text style={styles.label}>Description *</Text>
+            <Text style={styles.label}>აღწერა *</Text>
             <TextInput
               style={[styles.contentInput, contentError ? styles.inputError : null]}
-              placeholder="Describe your idea in detail. What should the video cover? Why would it be helpful?"
+              placeholder="აღწერე ვიდეოს იდეა.რატომ არის საინტერესო და რაში მდგომარეობს"
               placeholderTextColor={Colors.dark.tabIconDefault}
               value={content}
               onChangeText={handleContentChange}
@@ -256,7 +256,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
           <View style={styles.infoBox}>
             <Ionicons name="information-circle-outline" size={20} color={Colors.dark.tint} />
             <Text style={styles.infoText}>
-              Your idea will be reviewed before appearing in the Ideas feed. You&apos;ll be notified once it&apos;s approved!
+              შენი იდეა იქნება განხილული და დადასტურების შემთხვევაში მიიღებ შეტყობინებას!
             </Text>
           </View>
         </ScrollView>

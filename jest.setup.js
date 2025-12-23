@@ -43,6 +43,16 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
+// Mock expo-linking
+jest.mock('expo-linking', () => ({
+  createURL: jest.fn((path) => `test://auth/${path}`),
+  getInitialURL: jest.fn(),
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn(),
+  openURL: jest.fn(),
+  canOpenURL: jest.fn(),
+}));
+
 // Mock Expo modules
 jest.mock('expo-auth-session', () => ({
   makeRedirectUri: jest.fn(() => 'test://redirect'),
@@ -127,10 +137,21 @@ jest.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',
   TouchableOpacity: 'TouchableOpacity',
+  TouchableWithoutFeedback: 'TouchableWithoutFeedback',
   Image: 'Image',
   ActivityIndicator: 'ActivityIndicator',
+  TextInput: 'TextInput',
+  Modal: 'Modal',
+  SafeAreaView: 'SafeAreaView',
+  KeyboardAvoidingView: 'KeyboardAvoidingView',
   Dimensions: {
     get: jest.fn(() => ({ width: 375, height: 812 })),
+  },
+  Alert: {
+    alert: jest.fn(),
+  },
+  Keyboard: {
+    dismiss: jest.fn(),
   },
 }));
 

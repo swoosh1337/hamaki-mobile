@@ -12,7 +12,7 @@ const log = createLogger('GameCooldown');
 // Cooldown duration in milliseconds (2 hours)
 export const GAME_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 hours
 
-export type GameType = 'nopogod' | 'flappybird';
+export type GameType = 'nopogod' | 'hammockjump';
 
 export interface GameCooldownStatus {
   gameType: GameType;
@@ -177,7 +177,7 @@ export async function recordGamePlay(
   isDemoMode: boolean = false
 ): Promise<{ success: boolean; error?: string }> {
   // Map game names if necessary or validate
-  const validGameType = gameType === 'hammock-jump' ? 'flappybird' : (gameType as GameType);
+  const validGameType = gameType === 'hammock-jump' ? 'hammockjump' : (gameType as GameType);
 
   return updateGameLastPlayed(userId, validGameType, isDemoMode);
 }
@@ -195,8 +195,8 @@ async function scheduleCooldownNotification(gameType: GameType): Promise<void> {
     }
 
     const gameNames: Record<GameType, string> = {
-      nopogod: 'Nu Pogodi',
-      flappybird: 'Flappy Bird',
+      nopogod: 'მისაღებზე',
+      hammockjump: 'Hammock Jump',
     };
 
     // Cancel any existing notifications for this game
@@ -236,7 +236,7 @@ export async function getAllGameCooldowns(
   userId: string,
   isDemoMode: boolean = false
 ): Promise<Record<GameType, GameCooldownStatus>> {
-  const games: GameType[] = ['nopogod', 'flappybird'];
+  const games: GameType[] = ['nopogod', 'hammockjump'];
   const checks = games.map((game) => checkGameCooldown(userId, game, isDemoMode));
   const results = await Promise.all(checks);
 

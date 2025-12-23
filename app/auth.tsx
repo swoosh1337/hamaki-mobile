@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   loadingText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 16,
     color: Colors.dark.text,
     marginTop: 16,
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   welcomeText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 28,
     color: Colors.dark.text, // White/light gray
     textAlign: 'center',
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   subtitle: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 16,
     color: Colors.dark.text, // White/light gray
     textAlign: 'center',
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   dividerText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.4)',
     marginHorizontal: 16,
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   errorText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 14,
     color: '#FF6B6B',
     textAlign: 'center',

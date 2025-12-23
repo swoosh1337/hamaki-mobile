@@ -102,7 +102,7 @@ export default function LeaderboardScreen() {
 
   // Determine loading state based on active tab
   const loading = activeTab === 'weekly' ? weeklyLoading : activeTab === 'main' ? mainLoading : prizesLoading;
-  
+
   // Determine error state
   const error = activeTab === 'weekly' ? weeklyError : activeTab === 'main' ? mainError : null;
   const errorMessage = error ? getUserFriendlyErrorMessage(error) : null;
@@ -198,9 +198,9 @@ export default function LeaderboardScreen() {
   };
 
   const togglePrize = (prizeId: string) => {
-    setPrizes(prev => 
-      prev.map(prize => 
-        prize.id === prizeId 
+    setPrizes(prev =>
+      prev.map(prize =>
+        prize.id === prizeId
           ? { ...prize, expanded: !prize.expanded }
           : { ...prize, expanded: false }
       )
@@ -217,13 +217,13 @@ export default function LeaderboardScreen() {
 
   const renderPrizeItem = (item: PrizeItem) => (
     <View key={item.id} style={styles.prizeCard}>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.prizeThumbnailContainer}
         onPress={() => togglePrize(item.id)}
         activeOpacity={0.8}
       >
-        <Image 
-          source={{ uri: item.thumbnail }} 
+        <Image
+          source={{ uri: item.thumbnail }}
           style={styles.prizeThumbnail}
           resizeMode="cover"
         />
@@ -264,7 +264,7 @@ export default function LeaderboardScreen() {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>LEADERBOARD</Text>
-        <NetworkError 
+        <NetworkError
           message={errorMessage}
           onRetry={() => {
             refetchWeekly();
@@ -279,9 +279,9 @@ export default function LeaderboardScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>LEADERBOARD</Text>
-      
+
       <View style={styles.tabContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.tab, activeTab === 'weekly' && styles.activeTab]}
           onPress={() => setActiveTab('weekly')}
         >
@@ -289,7 +289,7 @@ export default function LeaderboardScreen() {
             კვირის
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.tab, activeTab === 'main' && styles.activeTab]}
           onPress={() => setActiveTab('main')}
         >
@@ -297,7 +297,7 @@ export default function LeaderboardScreen() {
             მთავარი
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.tab, activeTab === 'prizes' && styles.activeTab]}
           onPress={() => setActiveTab('prizes')}
         >
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 14,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.text,
   },
   activeTabText: {
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.text,
     textAlign: 'center',
     marginTop: 40,
@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
   },
   sponsorLabelText: {
     fontSize: 14,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.text,
     fontWeight: 'bold',
   },
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   },
   expandIcon: {
     fontSize: 20,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.tint,
     fontWeight: 'bold',
   },

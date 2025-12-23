@@ -3,12 +3,12 @@ import type { Post as UserPost } from '@/types/post';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-    ActivityIndicator,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 interface PostsListProps {
@@ -69,7 +69,7 @@ export const PostsList: React.FC<PostsListProps> = ({
   const handleScroll = (event: any) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
-    
+
     if (isCloseToBottom && hasMore && !isLoading) {
       onLoadMore();
     }
@@ -97,7 +97,7 @@ export const PostsList: React.FC<PostsListProps> = ({
   return (
     <View style={styles.container} testID="posts-list-container">
       <Text style={styles.sectionTitle}>Your Posts</Text>
-      
+
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -108,7 +108,7 @@ export const PostsList: React.FC<PostsListProps> = ({
         {posts.map((post) => (
           <View key={post.id} style={styles.postCard}>
             <View style={styles.postHeader}>
-              <Text 
+              <Text
                 style={styles.postTitle}
                 testID={`post-title-${post.id}`}
               >
@@ -118,14 +118,14 @@ export const PostsList: React.FC<PostsListProps> = ({
                 {formatDate(post.created_at)}
               </Text>
             </View>
-            
-            <Text 
+
+            <Text
               style={styles.postContent}
               testID={`post-content-${post.id}`}
             >
               {truncateContent(post.content)}
             </Text>
-            
+
             <View style={styles.postFooter}>
               <TouchableOpacity
                 style={[
@@ -136,7 +136,7 @@ export const PostsList: React.FC<PostsListProps> = ({
                 onPress={() => handleUpvote(post.id)}
                 disabled={isLoading}
                 testID={`upvote-button-${post.id}`}
-                accessibilityLabel={`Upvote post ${post.title}, current count ${post.upvotes}`}
+                accessibilityLabel={`პოსტის მოწონება ${post.title}, ლაიქების რაოდენობა: ${post.upvotes}`}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: isLoading }}
               >
@@ -145,7 +145,7 @@ export const PostsList: React.FC<PostsListProps> = ({
                   size={18}
                   color={post.isUpvoted ? Colors.dark.tint : Colors.dark.tabIconDefault}
                 />
-                <Text 
+                <Text
                   style={[
                     styles.upvoteCount,
                     post.isUpvoted && styles.upvotedCount,
@@ -158,21 +158,21 @@ export const PostsList: React.FC<PostsListProps> = ({
             </View>
           </View>
         ))}
-        
+
         {/* Loading indicator */}
         {isLoading && (
           <View style={styles.loadingContainer} testID="posts-loading">
             <ActivityIndicator size="large" color={Colors.dark.tint} />
           </View>
         )}
-        
+
         {/* Load more indicator */}
         {hasMore && !isLoading && posts.length > 0 && (
           <View style={styles.loadMoreContainer} testID="load-more-indicator">
             <Text style={styles.loadMoreText}>Scroll for more posts</Text>
           </View>
         )}
-        
+
         {/* End of list message */}
         {!hasMore && posts.length > 0 && (
           <View style={styles.endOfListContainer} testID="end-of-list">

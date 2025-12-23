@@ -48,7 +48,7 @@ export default function HomeScreen() {
   const expandStartedAtRef = React.useRef<number | null>(null);
   const scrollViewRef = React.useRef<ScrollView>(null);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
-  
+
 
   const handleCarouselPostTap = async (post: Post) => {
     if (post.type === 'video' && post.metadata.videoId) {
@@ -103,7 +103,7 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Image
           source={require('@/assets/images/logo-transparent.png')}
-          style={[styles.logo, { width: 140, height: 120}]}
+          style={[styles.logo, { width: 140, height: 120 }]}
           resizeMode="contain"
         />
       </View>
@@ -111,7 +111,7 @@ export default function HomeScreen() {
 
       {/* Featured Carousel Section */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>FEATURED</Text>
+        <Text style={styles.sectionTitle}>გამორჩეული</Text>
         {hasNewContent && (
           <View style={styles.newIndicator}>
             <Text style={styles.newIndicatorText}>NEW</Text>
@@ -132,7 +132,7 @@ export default function HomeScreen() {
       )}
 
       {error && (
-        <InlineError 
+        <InlineError
           message={isNetworkError ? 'Unable to connect. Check your internet connection.' : error}
           onRetry={handleRetry}
           compact
@@ -152,7 +152,7 @@ export default function HomeScreen() {
       )}
 
       {/* Latest Posts mock */}
-      <Text style={[styles.sectionTitle, { marginLeft: 20, marginTop: 24 }]}>LATEST POSTS</Text>
+      <Text style={[styles.sectionTitle, { marginLeft: 20, marginTop: 24 }]}>ბოლო პოსტები</Text>
       <View style={styles.postsColumn}>
         {isLoading ? (
           // Show skeleton loading for posts while videos are loading
@@ -160,15 +160,15 @@ export default function HomeScreen() {
             <PostSkeleton key={`post-skeleton-${index}`} />
           ))
         ) : error ? (
-          <InlineError 
+          <InlineError
             message={isNetworkError ? 'Unable to load posts. Check your connection.' : 'Failed to load posts'}
             onRetry={handleRetry}
           />
         ) : (
           posts.map((post) => (
-            <PostCard 
-              key={post.id} 
-              post={post} 
+            <PostCard
+              key={post.id}
+              post={post}
               isExpanded={expandedPostId === post.id}
               onToggleExpand={() => handleToggleExpand(post)}
             />
@@ -240,7 +240,7 @@ function PostCard({ post, isExpanded, onToggleExpand }: { post: Post; isExpanded
             onPress={handleWatchVideo}
             activeOpacity={0.7}
           >
-            <Text style={styles.postWatchText}>Watch</Text>
+            <Text style={styles.postWatchText}>ყურება</Text>
           </TouchableOpacity>
         )}
         {/* Apply button for hiring posts */}
@@ -331,13 +331,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
   },
   xpLabel: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 16,
     color: Colors.dark.text,
     marginRight: 10,
   },
   xpValue: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 20,
     color: Colors.dark.tint,
     fontWeight: 'bold',
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     marginLeft: 20,
   },
   sectionTitle: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 16,
     color: Colors.dark.text,
     fontWeight: 'bold',
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   newIndicatorText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiEng',
     fontSize: 10,
     color: Colors.dark.background,
     fontWeight: 'bold',
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   videoTitle: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 14,
     color: Colors.dark.text,
     fontWeight: 'bold',
@@ -412,13 +412,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   newText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiEng',
     fontSize: 10,
     color: Colors.dark.background,
     fontWeight: 'bold',
   },
   videoMeta: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 12,
     color: Colors.dark.text,
     opacity: 0.7,
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     width: 80,
   },
   watchText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 12,
     color: Colors.dark.background,
     fontWeight: 'bold',
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   loadingText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 16,
     color: Colors.dark.text,
     marginTop: 15,
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   errorText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 16,
     color: '#FF6B6B',
     textAlign: 'center',
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   emptyText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 16,
     color: Colors.dark.text,
     opacity: 0.7,
@@ -494,12 +494,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   carouselBadgeText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiEng',
     fontSize: 8,
     color: Colors.dark.background,
     fontWeight: 'bold',
   },
-  
+
   // Posts Styles
   postsColumn: {
     paddingHorizontal: 12,
@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
     color: Colors.dark.tabIconDefault,
     fontSize: 12,
   },
-  
+
   // New styles for expanded posts
   postCardExpanded: {
     backgroundColor: 'rgba(196, 255, 0, 0.1)',
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   postBadgeText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiEng',
     fontSize: 8,
     color: Colors.dark.background,
     fontWeight: 'bold',
@@ -595,14 +595,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   postWatchText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     fontSize: 13,
     color: Colors.dark.background,
     fontWeight: 'bold',
   },
   postCompany: {
     fontSize: 13,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.text,
     opacity: 0.8,
     marginTop: 2,
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   postApplyText: {
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiEng',
     fontSize: 13,
     color: Colors.dark.background,
     fontWeight: 'bold',
