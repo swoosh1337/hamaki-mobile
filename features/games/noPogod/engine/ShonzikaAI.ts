@@ -57,17 +57,20 @@ export function pickRandomDirection(): 1 | -1 {
 
 /**
  * Determines the next X position for continuous walking
+ * Uses frame-based movement (not time-based) like the original engine
  */
 export function calculateNextPosition(
     currentX: number,
     direction: 1 | -1,
-    deltaTime: number,
+    _deltaTime: number, // Kept for API compatibility, but not used
     screenWidth: number
 ): { newX: number; newDirection: 1 | -1 } {
-    const speed = ANIMATION.SHONZIKA_SPEED_PX_PER_MS;
+    // Frame-based speed: pixels per frame (not per ms)
+    // Original used eased movement over 2000ms across ~300px = ~2.5px per frame at 60fps
+    const speed = 1.5; // pixels per frame
     const bounds = getMovementBounds(screenWidth);
 
-    let newX = currentX + direction * speed * deltaTime;
+    let newX = currentX + direction * speed;
     let newDirection = direction;
 
     // Bounce off edges

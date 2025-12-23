@@ -8,6 +8,7 @@
  * - Session persistence
  * - Logout
  * - Error handling
+ * - Remember Me modal flow
  */
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -25,6 +26,9 @@ const mockAuthService = {
     signOutSupabase: jest.fn(),
 };
 
+const mockFinalizeSession = jest.fn().mockResolvedValue(true);
+const mockShowRememberMeModal = false;
+
 const mockTokenManager = {
     getStoredSession: jest.fn(),
     storeSession: jest.fn(),
@@ -37,6 +41,11 @@ const mockUserService = {
     upsertUserProfile: jest.fn(),
 };
 
+const mockRememberMeService = {
+    getPreference: jest.fn(),
+    setPreference: jest.fn().mockResolvedValue(undefined),
+};
+
 // Now define the mocks using the 'mock' prefixed variables
 jest.mock('@/services/auth', () => ({
     get authService() {
@@ -44,6 +53,9 @@ jest.mock('@/services/auth', () => ({
     },
     get tokenManager() {
         return mockTokenManager;
+    },
+    get rememberMeService() {
+        return mockRememberMeService;
     },
 }));
 
@@ -60,6 +72,7 @@ jest.mock('@/services/supabase/client', () => {
         supabase: {
             auth: {
                 onAuthStateChange: mockOnAuthStateChange,
+                signOut: jest.fn(),
             },
             from: mockFrom,
         },
@@ -154,6 +167,13 @@ describe('AuthContext', () => {
         // Default: no saved session
         mockAuthService.loadSavedSession.mockResolvedValue({ success: false });
 
+        // Re-establish tokenManager mocks
+        mockTokenManager.storeSession.mockResolvedValue(undefined);
+        mockTokenManager.clearSession.mockResolvedValue(undefined);
+
+        // Re-establish rememberMeService mocks
+        mockRememberMeService.setPreference.mockResolvedValue(undefined);
+
         // Default Supabase from mock
         __mockFrom.mockReturnValue({
             select: jest.fn().mockReturnValue({
@@ -177,6 +197,14 @@ describe('AuthContext', () => {
                 userData: { id: 'google_123', email: 'test@example.com' },
                 isSubscribed: true,
                 authMethod: 'google',
+            });
+
+            // Mock rememberMeService to return true for stay signed in
+            mockRememberMeService.getPreference.mockResolvedValue({
+                email: 'test@example.com',
+                rememberMe: true,
+                expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+                lastUsed: Date.now(),
             });
 
             mockUserService.getUserProfile.mockResolvedValue(mockUser);
@@ -330,9 +358,17 @@ describe('AuthContext', () => {
 
             mockAuthService.loadSavedSession.mockResolvedValue({
                 success: true,
-                userData: { id: 'google_123' },
+                userData: { id: 'google_123', email: 'test@example.com' },
                 isSubscribed: true,
                 authMethod: 'google',
+            });
+
+            // Mock rememberMeService to return true for stay signed in
+            mockRememberMeService.getPreference.mockResolvedValue({
+                email: 'test@example.com',
+                rememberMe: true,
+                expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+                lastUsed: Date.now(),
             });
 
             mockUserService.getUserProfile.mockResolvedValue(mockUser);
@@ -367,9 +403,17 @@ describe('AuthContext', () => {
 
             mockAuthService.loadSavedSession.mockResolvedValue({
                 success: true,
-                userData: { id: 'google_123' },
+                userData: { id: 'google_123', email: 'test@example.com' },
                 isSubscribed: true,
                 authMethod: 'google',
+            });
+
+            // Mock rememberMeService to return true for stay signed in
+            mockRememberMeService.getPreference.mockResolvedValue({
+                email: 'test@example.com',
+                rememberMe: true,
+                expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+                lastUsed: Date.now(),
             });
 
             mockUserService.getUserProfile.mockResolvedValue(mockUser);
@@ -399,9 +443,17 @@ describe('AuthContext', () => {
 
             mockAuthService.loadSavedSession.mockResolvedValue({
                 success: true,
-                userData: { id: 'supabase_123' },
+                userData: { id: 'supabase_123', email: 'test@example.com' },
                 isSubscribed: false,
                 authMethod: 'magic_link',
+            });
+
+            // Mock rememberMeService to return true for stay signed in
+            mockRememberMeService.getPreference.mockResolvedValue({
+                email: 'test@example.com',
+                rememberMe: true,
+                expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+                lastUsed: Date.now(),
             });
 
             mockUserService.getUserProfile.mockResolvedValue(mockUser);
@@ -420,40 +472,105 @@ describe('AuthContext', () => {
         });
     });
 
-    describe('Demo Mode', () => {
-        it('should set demo mode state correctly', async () => {
-            const mockDemoUser = {
-                id: 'demo_123',
-                email: 'demouser@apple.com',
-                google_id: 'demo_google',
-                is_subscribed: true,
+    describe('Remember Me Modal Flow', () => {
+        it('should finalize session with remember me', async () => {
+            const mockUser = {
+                id: 'user_123',
+                email: 'test@example.com',
+                google_id: 'google_123',
             };
 
-            // Configure __mockFrom for demo user query
-            __mockFrom.mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockReturnValue({
-                        single: jest.fn().mockResolvedValue({
-                            data: mockDemoUser,
-                            error: null,
-                        }),
-                    }),
-                }),
+            // Mock successful authentication
+            mockAuthService.authenticate.mockResolvedValue({
+                success: true,
+                userData: { id: 'google_123', email: 'test@example.com' },
+                isSubscribed: true,
+                tokenData: {
+                    accessToken: 'test-token',
+                    refreshToken: 'test-refresh',
+                    expiresIn: 3600,
+                    expiresAt: Date.now() + 3600 * 1000,
+                },
             });
 
-            const { result } = renderHook(() => useAuth(), { wrapper });
+            mockUserService.upsertUserProfile.mockResolvedValue(mockUser);
+            mockUserService.getUserProfile.mockResolvedValue(mockUser);
+            mockAuthService.loadSavedSession.mockResolvedValue({
+                success: true,
+                userData: { id: 'google_123', email: 'test@example.com' },
+                isSubscribed: true,
+                authMethod: 'google',
+            });
+
+            // Mock rememberMeService
+            mockRememberMeService.getPreference.mockResolvedValue({
+                email: 'test@example.com',
+                rememberMe: true,
+                expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+                lastUsed: Date.now(),
+            });
+
+            // First sign in
+            const { result, unmount } = renderHook(() => useAuth(), { wrapper });
 
             await waitFor(() => {
                 expect(result.current.isLoading).toBe(false);
             });
 
+            // Sign in
             await act(async () => {
-                await result.current.signInDemo();
+                await result.current.signIn();
             });
 
-            expect(result.current.isDemoMode).toBe(true);
-            expect(result.current.isAuthenticated).toBe(true);
+            // Finalize session with remember me
+            await act(async () => {
+                await result.current.finalizeSession(true);
+            });
+
+            // Simulate app restart
+            unmount();
+            const { result: result2 } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => {
+                expect(result2.current.isAuthenticated).toBe(true);
+            });
         });
+    });
+
+    describe('Demo Mode', () => {
+    it('should set demo mode state correctly', async () => {
+        const mockDemoUser = {
+            id: 'demo_123',
+            email: 'demouser@apple.com',
+            google_id: 'demo_google',
+            is_subscribed: true,
+        };
+
+        // Configure __mockFrom for demo user query
+        __mockFrom.mockReturnValue({
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({
+                        data: mockDemoUser,
+                        error: null,
+                    }),
+                }),
+            }),
+        });
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+
+        await waitFor(() => {
+            expect(result.current.isLoading).toBe(false);
+        });
+
+        await act(async () => {
+            await result.current.signInDemo();
+        });
+
+        expect(result.current.isDemoMode).toBe(true);
+        expect(result.current.isAuthenticated).toBe(true);
+    });
     });
 
     describe('Error Handling', () => {

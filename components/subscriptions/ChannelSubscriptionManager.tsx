@@ -119,14 +119,14 @@ export const ChannelSubscriptionManager: React.FC = () => {
       // Show success message
       if (result.totalXPAwarded > 0) {
         Alert.alert(
-          'Subscriptions Verified!',
+          'გამოწერა დადასტურდა!',
           `Congratulations! You earned ${result.totalXPAwarded} XP from your channel subscriptions! 🎉`,
           [{ text: 'Awesome!', style: 'default' }]
         );
       } else {
         Alert.alert(
-          'Subscriptions Verified',
-          'Your subscription status has been updated. Subscribe to more channels to earn XP!'
+          'გამოწერა დადასტურდა',
+          'გამოწერა წარმატებით დადასტურდა. თქვენ მოგემატად ბონუს ქულები'
         );
       }
     } catch (error) {

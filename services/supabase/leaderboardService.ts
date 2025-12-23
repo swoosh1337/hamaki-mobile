@@ -42,6 +42,7 @@ export const leaderboardService = {
 
     /**
      * Get weekly leaderboard entries
+     * Uses FK join: leaderboard_entries.user_id → users.id
      */
     async getWeeklyLeaderboard(limit = 10): Promise<Array<{
         user_id: string;
@@ -50,23 +51,26 @@ export const leaderboardService = {
     }>> {
         try {
             const weekStartDate = getWeekStartDate();
+            log.debug('Fetching weekly leaderboard', { weekStartDate, limit });
 
             const { data, error } = await supabase
                 .from('leaderboard_entries')
                 .select(`
-          user_id,
-          points,
-          users!leaderboard_entries_user_id_fkey(full_name, avatar_url)
-        `)
+                    user_id,
+                    points,
+                    users!leaderboard_entries_user_id_fkey(full_name, avatar_url)
+                `)
                 .eq('period_type', 'weekly')
                 .eq('week_start_date', weekStartDate)
                 .order('points', { ascending: false })
                 .limit(limit);
 
             if (error) {
-                log.error('Error fetching weekly leaderboard:', error);
+                log.error('Supabase error fetching weekly leaderboard:', error);
                 return [];
             }
+
+            log.debug('Fetched weekly leaderboard entries', { count: data?.length || 0 });
 
             return (data || []).map(entry => ({
                 user_id: entry.user_id,
@@ -74,7 +78,7 @@ export const leaderboardService = {
                 user: Array.isArray(entry.users) ? entry.users[0] : entry.users,
             }));
         } catch (error) {
-            log.error('Error fetching weekly leaderboard:', error);
+            log.error('Exception fetching weekly leaderboard:', error);
             return [];
         }
     },

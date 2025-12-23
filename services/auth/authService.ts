@@ -16,6 +16,7 @@ import * as AuthSession from "expo-auth-session";
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import { Platform } from "react-native";
+import { rememberMeService } from './rememberMeService';
 import { tokenManager } from './tokenManager';
 
 const log = createLogger('Auth:Flow');
@@ -190,7 +191,14 @@ export const authService = {
                     picture: supabaseUser.user_metadata?.avatar_url,
                 };
 
-                log.info('Magic link authentication successful', { email: userData.email });
+                // Get the user's remember me preference
+                const preference = await rememberMeService.getPreference(userData.email);
+                const shouldStaySignedIn = preference?.rememberMe ?? true;
+                
+                log.info('Magic link authentication successful', { 
+                    email: userData.email, 
+                    rememberMe: shouldStaySignedIn 
+                });
 
                 return {
                     success: true,
@@ -198,6 +206,7 @@ export const authService = {
                     tokenData,
                     isSubscribed: false, // Magic link users start without subscription
                     authMethod: 'magic_link' as AuthMethod,
+                    rememberMe: shouldStaySignedIn,
                 };
             }
 
@@ -227,12 +236,17 @@ export const authService = {
                 picture: user.user_metadata?.avatar_url,
             };
 
+            // Get the user's remember me preference
+            const preference = await rememberMeService.getPreference(userData.email);
+            const shouldStaySignedIn = preference?.rememberMe ?? true;
+            
             return {
                 success: true,
                 userData,
                 tokenData,
                 isSubscribed: false,
                 authMethod: 'magic_link' as AuthMethod,
+                rememberMe: shouldStaySignedIn,
             };
         } catch (error) {
             log.error('Magic link callback error', error);
@@ -407,31 +421,17 @@ export const authService = {
             // 5. Fetch user profile from Google
             const userData = await this.fetchGoogleUserInfo(tokenData.accessToken);
 
-            // 6. Check YouTube subscription status (OPTIONAL - non-blocking)
-            let isSubscribed = false;
-            try {
-                isSubscribed = await this.verifyYouTubeSubscription(tokenData.accessToken);
-            } catch (err) {
-                log.warn('YouTube subscription check failed (non-blocking)', err);
-                // Continue without subscription status - don't block auth
-            }
-
-            // 7. Check multi-channel subscriptions (if available)
-            let allChannelSubscriptions = null;
-            try {
-                const { checkAllChannelSubscriptions } = await import('@/utils/channelSubscriptions');
-                allChannelSubscriptions = await checkAllChannelSubscriptions(tokenData.accessToken);
-            } catch (err) {
-                log.warn('Failed to check multi-channel subscriptions', err);
-            }
+            // NOTE: Subscription checks are now done in background AFTER login completes
+            // See AuthContext.performBackgroundChecks() for the background verification flow
+            // This allows the user to immediately access the app without waiting
 
             return {
                 success: true,
-                isSubscribed,
+                isSubscribed: false, // Will be verified in background
                 token: tokenData.accessToken,
                 userData,
                 tokenData,
-                allChannelSubscriptions,
+                allChannelSubscriptions: null, // Will be checked in background
                 authMethod: 'google' as AuthMethod,
             };
         } catch (error) {

@@ -24,8 +24,8 @@ interface GameItem {
 const GAMES: GameItem[] = [
   {
     id: 'no-pogodi',
-    title: 'No Pogodi!',
-    description: 'Help Miro catch good items and avoid the bad ones!',
+    title: 'მისაღებზე',
+    description: 'დააჭერინე მიროს საჭმელი და აარიდე ცუდი რაღაცეები!',
     icon: 'game-controller',
     color: '#FF6B6B',
     isAvailable: true,
@@ -33,7 +33,7 @@ const GAMES: GameItem[] = [
   {
     id: 'hammock-jump',
     title: 'Hammock Jump',
-    description: 'Jump to avoid the hammock and score points!',
+    description: 'იხტუნავე სანამ შეგიძლია!',
     icon: 'person',
     color: '#4ECDC4',
     isAvailable: true,
@@ -65,10 +65,10 @@ export default function GamesScreen() {
 
     // Check cooldown based on game
     const cooldown = gameId === 'no-pogodi' ? noPogodCooldown : hammockJumpCooldown;
-    
+
     if (cooldown.isOnCooldown) {
       Alert.alert(
-        '⏰ Cooldown Active',
+        '⏰ Cooldown-ი',
         `You can play again in ${cooldown.remainingFormatted}.\n\nYou'll get a notification when it's ready!`,
         [{ text: 'OK' }]
       );

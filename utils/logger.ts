@@ -100,7 +100,23 @@ class Logger {
     }
 
     error(message: string, error?: any, data?: any) {
-        const errorObj = error instanceof Error ? error : new Error(String(error));
+        // Handle different error types properly
+        let errorObj: Error;
+        if (error instanceof Error) {
+            errorObj = error;
+        } else if (error && typeof error === 'object') {
+            // Supabase errors and other objects with message property
+            const errorMessage = error.message || error.error || JSON.stringify(error);
+            errorObj = new Error(errorMessage);
+            // Preserve additional properties for debugging
+            if (error.code) (errorObj as any).code = error.code;
+            if (error.details) (errorObj as any).details = error.details;
+            if (error.hint) (errorObj as any).hint = error.hint;
+        } else if (error) {
+            errorObj = new Error(String(error));
+        } else {
+            errorObj = new Error('Unknown error');
+        }
         this.log(LogLevel.ERROR, message, { error: errorObj, data });
     }
 

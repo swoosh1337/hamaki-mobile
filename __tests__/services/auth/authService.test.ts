@@ -1,12 +1,17 @@
 /**
  * Auth Service Unit Tests
- * 
+ *
  * Tests for:
  * - Email Magic Link authentication
  * - Google OAuth authentication
  * - Session management
  * - Sign out
  */
+
+// Mock expo-linking BEFORE importing authService (it's used at module level)
+jest.mock('expo-linking', () => ({
+    createURL: jest.fn().mockReturnValue('hamaki://auth/callback'),
+}));
 
 import { authService } from '@/services/auth/authService';
 

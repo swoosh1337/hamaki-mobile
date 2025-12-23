@@ -28,11 +28,14 @@ const createMockAuthContext = (overrides: Partial<ReturnType<typeof useAuth>> = 
   signOut: jest.fn().mockResolvedValue(undefined),
   signInWithMagicLink: jest.fn().mockResolvedValue({ success: true }),
   signInDemo: jest.fn().mockResolvedValue(undefined),
-  updateUserProfile: jest.fn().mockResolvedValue(undefined),
+  updateUserProfile: jest.fn(),
   isDemoMode: false,
   authMethod: null,
   error: null,
   magicLinkPending: false,
+  finalizeSession: jest.fn().mockResolvedValue(true),
+  showRememberMeModal: false,
+  handleDeepLink: jest.fn().mockResolvedValue(undefined),
   ...overrides,
 });
 

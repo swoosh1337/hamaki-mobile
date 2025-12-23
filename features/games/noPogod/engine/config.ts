@@ -36,10 +36,10 @@ export const SCORING = {
 // =============================================================================
 
 export const PHYSICS = {
-    /** Base fall speed for items */
-    ITEM_FALL_SPEED: 5.0,
-    /** Fall acceleration (0 = constant speed) */
-    ITEM_FALL_ACCELERATION: 0,
+    /** Base fall speed for items (slightly faster for better gameplay) */
+    ITEM_FALL_SPEED: 3.5,
+    /** Fall acceleration (original value: 0.05 for slight speed increase over time) */
+    ITEM_FALL_ACCELERATION: 0.05,
 } as const;
 
 // =============================================================================
@@ -92,8 +92,8 @@ export const ANIMATION = {
     SHONZIKA_MOVE_INTERVAL_MIN: 100,
     /** Maximum time between movements */
     SHONZIKA_MOVE_INTERVAL_MAX: 300,
-    /** Shonzika movement speed (pixels per ms) */
-    SHONZIKA_SPEED_PX_PER_MS: 0.24,
+    /** Shonzika movement speed (pixels per ms) - reduced from 0.24 for smoother, more deliberate movement */
+    SHONZIKA_SPEED_PX_PER_MS: 0.12,
     /** Character half-width for boundary calculation */
     SHONZIKA_CHARACTER_HALF_WIDTH: 75,
     /** Edge padding for Shonzika */

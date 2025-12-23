@@ -22,6 +22,7 @@ import { NoPogodEngine } from '@/features/games/noPogod';
 import { NOPOGOD_GAME_ASSETS } from '@/features/games/noPogod/utils/assets';
 import { ResponsiveScalingManager } from '@/features/games/noPogod/utils/responsiveScaling';
 import { NoPogodSpriteRenderer } from '@/features/games/noPogod/utils/spriteRenderer';
+import { useGameCooldown } from '@/hooks/useGameCooldown';
 import { userService } from '@/services/supabase';
 import { leaderboardService } from '@/services/supabase/leaderboardService';
 import { createLogger } from '@/utils/logger';
@@ -54,6 +55,19 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const [roundsPlayed, setRoundsPlayed] = useState(0);
   const [showCooldownScreen, setShowCooldownScreen] = useState(false);
   const MAX_ROUNDS = 3; // Maximum rounds before cooldown
+  const COOLDOWN_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+  // Game cooldown hook - persists across app restarts
+  const {
+    canPlay: canPlayFromCooldown,
+    remainingFormatted: cooldownRemainingFormatted,
+    isOnCooldown,
+    startCooldown,
+  } = useGameCooldown({
+    gameId: 'nopogod',
+    cooldownMs: COOLDOWN_DURATION_MS,
+    persist: true,
+  });
 
   // Touch feedback state
   const [activeTouchZone, setActiveTouchZone] = useState<'LEFT' | 'RIGHT' | null>(null);
@@ -61,6 +75,13 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const gamePhaseRef = useRef<string>('MENU');
   const isTouchingRef = useRef(false);
   const touchDirectionRef = useRef<'LEFT' | 'RIGHT' | null>(null);
+
+  // Show cooldown screen if on cooldown when modal opens
+  useEffect(() => {
+    if (visible && isOnCooldown && !isDemoMode) {
+      setShowCooldownScreen(true);
+    }
+  }, [visible, isOnCooldown, isDemoMode]);
 
 
 
@@ -323,18 +344,17 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         if (!isDemoMode && newRoundsPlayed >= MAX_ROUNDS) {
           log.info(`Max rounds reached (${MAX_ROUNDS}). Starting cooldown...`);
 
-          // Update game cooldown (start 2-hour cooldown)
+          // Start the cooldown using the hook (persists to AsyncStorage)
           try {
-            const { updateGameLastPlayed } = await import('@/utils/gameCooldowns');
-            await updateGameLastPlayed(userProfile.id, 'nopogod', isDemoMode);
-            log.info('Game cooldown started');
+            await startCooldown();
+            log.info('Game cooldown started via hook');
 
             // Show cooldown screen after a short delay
             setTimeout(() => {
               setShowCooldownScreen(true);
             }, 2000); // 2 second delay to let user see final score
           } catch (error) {
-            log.error('Error updating game cooldown:', error);
+            log.error('Error starting game cooldown:', error);
           }
         }
       }
@@ -344,7 +364,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     awardXP().catch((error) => {
       log.error('Critical error in awardXP:', error);
     });
-  }, [gameState?.phase, gameState?.score, xpAwarded, userProfile, updateUserProfile, isDemoMode, roundsPlayed]);
+  }, [gameState?.phase, gameState?.score, xpAwarded, userProfile, updateUserProfile, isDemoMode, roundsPlayed, startCooldown]);
 
   // Cleanup on close
   useEffect(() => {
@@ -501,18 +521,24 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       <View style={styles.cooldownScreenContainer}>
         <View style={styles.cooldownContent}>
           <Text style={styles.cooldownIcon}>⏰</Text>
-          <Text style={styles.cooldownTitle}>Cooldown Active</Text>
+          <Text style={styles.cooldownTitle}>Cooldown-ი დაგედო</Text>
           <Text style={styles.cooldownMessage}>
-            You&apos;ve played {MAX_ROUNDS} rounds!
+            შენ ითამაშე {MAX_ROUNDS} ხელი!
           </Text>
+
+          {/* Show actual remaining time from the cooldown hook */}
+          <Text style={styles.cooldownTimer}>
+            {cooldownRemainingFormatted}
+          </Text>
+
           <Text style={styles.cooldownSubtext}>
-            Come back in 2 hours to play again.{'\n'}
-            You&apos;ll get a notification when it&apos;s ready!
+            დარჩენის მოლოდინ{'\n'}
+            შეტყობინება მოგივა
           </Text>
 
           <View style={styles.cooldownStats}>
             <Text style={styles.cooldownStatsText}>
-              Rounds Played: {roundsPlayed}/{MAX_ROUNDS}
+              ხელი ნათამაშები: {MAX_ROUNDS}/{MAX_ROUNDS}
             </Text>
           </View>
 
@@ -520,12 +546,12 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
             style={styles.cooldownButton}
             onPress={() => {
               setShowCooldownScreen(false);
-              setRoundsPlayed(0);
+              // Don't reset roundsPlayed - the cooldown state is managed by the hook
               onClose();
             }}
             activeOpacity={0.8}
           >
-            <Text style={styles.cooldownButtonText}>BACK TO GAMES</Text>
+            <Text style={styles.cooldownButtonText}>დაბრუნება</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -929,6 +955,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
     fontWeight: '600',
+  },
+  cooldownTimer: {
+    fontSize: 48,
+    fontFamily: 'SpaceMono',
+    color: '#FFA500',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontWeight: '700',
   },
   cooldownSubtext: {
     fontSize: 16,

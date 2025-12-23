@@ -11,17 +11,19 @@
  * YouTube subscription is OPTIONAL and non-blocking.
  */
 
-import { authService, tokenManager } from '@/services/auth';
+import { authService, rememberMeService, tokenManager } from '@/services/auth';
 import { supabase } from '@/services/supabase/client';
 import { userService } from '@/services/supabase/userService';
 import type { AuthMethod, AuthResult, MagicLinkResult } from '@/types';
 import type { UserProfile } from '@/types/user';
 import { analytics } from '@/utils/analytics';
+import { checkAllChannelSubscriptions, updateChannelSubscriptionsAndAwardXP } from '@/utils/channelSubscriptions';
 import { createLogger } from '@/utils/logger';
+import { checkAndAwardVideoLikes } from '@/utils/videoLikes';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 import { RememberMeModal } from '../components/ui/RememberMeModal';
-import { backgroundVideoCheck, initializeNotifications } from '../utils/notifications';
+import { backgroundVideoCheck, initializeNotifications, sendSubscriptionVerificationNotification } from '../utils/notifications';
 
 const log = createLogger('Auth');
 
@@ -39,6 +41,9 @@ interface AuthContextType {
   updateUserProfile: (updates: Partial<UserProfile>) => void;
   isDemoMode: boolean;
   magicLinkPending: boolean;
+  finalizeSession: (rememberMe: boolean) => Promise<boolean>;
+  showRememberMeModal: boolean;
+  handleDeepLink: (url: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -55,6 +60,9 @@ const AuthContext = createContext<AuthContextType>({
   updateUserProfile: () => { },
   isDemoMode: false,
   magicLinkPending: false,
+  finalizeSession: async () => false,
+  showRememberMeModal: false,
+  handleDeepLink: async () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -93,10 +101,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   /**
    * Complete authentication after successful auth (Google or Magic Link)
+   * This creates a temporary session and shows the Remember Me modal
    */
   const completeAuthentication = useCallback(async (
-    result: AuthResult,
-    rememberMe: boolean = true
+    result: AuthResult
   ): Promise<boolean> => {
     try {
       if (!result.userData) {
@@ -140,75 +148,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       let updatedUser = supabaseUser;
 
-      // For Google OAuth users, check channel subscriptions and award XP
-      if (method === 'google' && result.allChannelSubscriptions) {
-        try {
-          const { updateChannelSubscriptionsAndAwardXP } = await import('../utils/channelSubscriptions');
-          const xpResult = await updateChannelSubscriptionsAndAwardXP(
-            supabaseUser.google_id,
-            result.allChannelSubscriptions
-          );
-
-          if (xpResult.totalXPAwarded > 0) {
-            log.info('Awarded XP for channel subscriptions on sign-in', { xp: xpResult.totalXPAwarded });
-            updatedUser = xpResult.updatedUser;
-          }
-        } catch (error) {
-          log.error('Failed to process channel subscriptions:', error);
-        }
-      }
-
-      // Check video likes and award XP (Google OAuth only)
-      if (method === 'google') {
-        try {
-          log.debug('Checking video likes on sign-in...');
-          const { checkAndAwardVideoLikes } = await import('../utils/videoLikes');
-
-          const accessToken = await tokenManager.getValidAccessToken();
-          if (accessToken) {
-            const likesResult = await checkAndAwardVideoLikes(accessToken, supabaseUser.id);
-
-            if (likesResult.xpAwarded > 0) {
-              log.info('Awarded XP for video likes on sign-in', { xp: likesResult.xpAwarded });
-              const refreshedUser = await userService.getUserProfile(supabaseUser.google_id);
-              if (refreshedUser) {
-                updatedUser = refreshedUser;
-              }
-            }
-          }
-        } catch (error) {
-          log.error('Failed to check video likes on sign-in:', error);
-        }
-      }
-
-      // Update state
-      setUserProfile(updatedUser);
-      setIsAuthenticated(true);
-      setIsSubscribed(result.isSubscribed || false);
-      setIsTemporarySession(!rememberMe);
-      setAuthMethod(method);
-      log.info('User authenticated successfully', {
-        userId: updatedUser.id,
-        method,
-        email: updatedUser.email
-      });
-
-      // Set analytics user id
-      analytics.setUserId(updatedUser.google_id);
-
-      // Store session
+      // Store temporary session (will be updated after Remember Me choice)
       if (result.tokenData) {
         await tokenManager.storeSession(
           result.tokenData,
           result.userData,
           result.isSubscribed || false,
-          rememberMe,
+          false, // Start with temporary session
           method
         );
       }
 
-      // Initialize notifications for newly authenticated users
-      await initializeNotifications();
+      // Show Remember Me modal
+      setPendingAuthResult(result);
+      setShowRememberMeModal(true);
 
       return true;
     } catch (err) {
@@ -216,6 +169,152 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       log.error('Error completing authentication:', err);
       setError(errorMessage);
       return false;
+    }
+  }, []);
+
+  /**
+   * Finalize session with Remember Me preference
+   */
+  const finalizeSession = useCallback(async (rememberMe: boolean): Promise<boolean> => {
+    try {
+      if (!pendingAuthResult || !pendingAuthResult.userData?.email) {
+        log.error('No pending auth result to finalize');
+        return false;
+      }
+
+      // Save the user's preference
+      await rememberMeService.setPreference(pendingAuthResult.userData.email, rememberMe);
+
+      // Update session with correct expiry
+      if (pendingAuthResult.tokenData) {
+        await tokenManager.storeSession(
+          pendingAuthResult.tokenData,
+          pendingAuthResult.userData,
+          pendingAuthResult.isSubscribed || false,
+          rememberMe,
+          pendingAuthResult.authMethod || 'google'
+        );
+      }
+
+      // Get user profile and update context
+      const supabaseUser = await userService.getUserProfile(
+        pendingAuthResult.authMethod === 'magic_link' 
+          ? pendingAuthResult.userData.id 
+          : pendingAuthResult.userData.id
+      );
+
+      if (supabaseUser) {
+        setUserProfile(supabaseUser);
+        setIsAuthenticated(true);
+        setIsSubscribed(supabaseUser.youtube_subscribed || false);
+        setAuthMethod(pendingAuthResult.authMethod || 'google');
+        setIsTemporarySession(!rememberMe);
+
+        // Set analytics user id
+        analytics.setUserId(supabaseUser.google_id);
+
+        // Initialize notifications (non-blocking - don't delay user)
+        initializeNotifications().catch(error => {
+          log.warn('Failed to initialize notifications (non-blocking)', error);
+        });
+
+        // Perform background checks for Google OAuth users (non-blocking)
+        if (pendingAuthResult.authMethod === 'google') {
+          // Don't await these - let them run in background
+          // Subscription verification happens here, NOT during login
+          performBackgroundChecks(supabaseUser.google_id, pendingAuthResult.userData?.id)
+            .catch(error => {
+              log.warn('Background checks failed (non-blocking)', error);
+            });
+        }
+
+        log.info('Session finalized with Remember Me preference', {
+          email: pendingAuthResult.userData.email,
+          rememberMe,
+          method: pendingAuthResult.authMethod
+        });
+      }
+
+      // Clear pending state
+      setPendingAuthResult(null);
+      setShowRememberMeModal(false);
+
+      return true;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to finalize session';
+      log.error('Error finalizing session:', err);
+      setError(errorMessage);
+      return false;
+    }
+  }, [pendingAuthResult]);
+
+  /**
+   * Perform background subscription and XP checks
+   * This runs AFTER login completes to avoid blocking the user
+   */
+  const performBackgroundChecks = useCallback(async (
+    googleId: string,
+    googleUserId?: string
+  ) => {
+    try {
+      log.info('Starting background subscription verification...');
+
+      // Get access token for YouTube API calls
+      const accessToken = await tokenManager.getValidAccessToken();
+      if (!accessToken) {
+        log.warn('No valid access token for background checks');
+        return;
+      }
+
+      // Check channel subscriptions using the token
+      let allChannelSubscriptions: Record<string, boolean> | null = null;
+      try {
+        allChannelSubscriptions = await checkAllChannelSubscriptions(accessToken);
+        log.info('Background: Channel subscriptions checked', { subscriptions: allChannelSubscriptions });
+      } catch (err) {
+        log.warn('Failed to check channel subscriptions in background', err);
+      }
+
+      // Award XP for channel subscriptions
+      if (allChannelSubscriptions) {
+        const xpResult = await updateChannelSubscriptionsAndAwardXP(googleId, allChannelSubscriptions);
+
+        // Send notification for subscription verification results
+        if (xpResult.totalXPAwarded > 0) {
+          log.info('Background: Awarded XP for channel subscriptions', { xp: xpResult.totalXPAwarded });
+
+          // Send notification that subscription was verified
+          await sendSubscriptionVerificationNotification(true, 'HamaKi');
+
+          // Refresh user profile to get updated XP
+          const updatedProfile = await userService.getUserProfile(googleId);
+          if (updatedProfile) {
+            setUserProfile(updatedProfile);
+          }
+        } else {
+          // Send notification that subscription was not found
+          await sendSubscriptionVerificationNotification(false, 'HamaKi');
+        }
+      }
+
+      // Check video likes and award XP
+      if (googleUserId) {
+        const xpResult = await checkAndAwardVideoLikes(googleId, googleUserId);
+
+        if (xpResult.xpAwarded > 0) {
+          log.info('Background: Awarded XP for video likes', { xp: xpResult.xpAwarded });
+
+          // Refresh user profile to get updated XP
+          const updatedProfile = await userService.getUserProfile(googleId);
+          if (updatedProfile) {
+            setUserProfile(updatedProfile);
+          }
+        }
+      }
+
+      log.info('Background subscription verification completed');
+    } catch (error) {
+      log.error('Error in background checks:', error);
     }
   }, []);
 
@@ -261,7 +360,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (result.success) {
           log.info('Authentication successful, completing sign-in...');
-          await completeAuthentication(result, true);
+          await completeAuthentication(result);
         } else {
           log.error('Magic link authentication failed:', result.error);
           setError(result.error || 'Magic link authentication failed');
@@ -327,7 +426,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             authMethod: 'magic_link',
           };
 
-          await completeAuthentication(result, true);
+          await completeAuthentication(result);
           clearMagicLinkTimeout();
           setMagicLinkPending(false);
           setIsLoading(false);
@@ -353,6 +452,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const persistedResult = await authService.loadSavedSession();
 
         if (persistedResult.success && persistedResult.userData) {
+          // Check if user chose to stay signed in
+          const preference = await rememberMeService.getPreference(persistedResult.userData.email);
+          
+          if (!preference || !preference.rememberMe) {
+            log.info('User chose not to stay signed in, clearing session', {
+              email: persistedResult.userData.email,
+              rememberMe: preference?.rememberMe ?? false
+            });
+            await tokenManager.clearSession();
+            return;
+          }
+
           // Load user from Supabase to get latest profile data
           const supabaseUser = await userService.getUserProfile(persistedResult.userData.id);
 
@@ -361,9 +472,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsAuthenticated(true);
             setIsSubscribed(persistedResult.isSubscribed || false);
             setAuthMethod(persistedResult.authMethod || 'google');
-            log.info('Successfully loaded persisted session', {
+            log.info('Successfully auto-signed in user', {
               email: persistedResult.userData.email,
-              method: persistedResult.authMethod
+              method: persistedResult.authMethod,
+              rememberMe: preference.rememberMe
             });
 
             // Initialize notifications for authenticated users
@@ -470,10 +582,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (result.success && result.userData) {
         // Always complete authentication - no subscription gating
-        // Show Remember Me modal for better UX
-        setPendingAuthResult(result);
-        setShowRememberMeModal(true);
-        setIsLoading(false);
+      // Show Remember Me modal for better UX
+      setPendingAuthResult(result);
+      setShowRememberMeModal(true);
+      setIsLoading(false);
 
         return { success: true, userData: result.userData, isSubscribed: result.isSubscribed };
       } else {
@@ -609,25 +721,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   /**
    * Handle Remember Me modal choice
+   * NOTE: We don't set isLoading here - user should proceed to app immediately
+   * Background checks happen silently after authentication
    */
   const handleRememberMeChoice = async (rememberMe: boolean) => {
-    setIsLoading(true);
     setShowRememberMeModal(false);
 
     if (!pendingAuthResult) {
       setError('No pending authentication result');
-      setIsLoading(false);
       return;
     }
 
-    const success = await completeAuthentication(pendingAuthResult, rememberMe);
+    const success = await finalizeSession(rememberMe);
 
     if (!success) {
-      // Error already set in completeAuthentication
+      // Error already set in finalizeSession
     }
 
     setPendingAuthResult(null);
-    setIsLoading(false);
   };
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {
@@ -650,6 +761,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateUserProfile,
         isDemoMode,
         magicLinkPending,
+        finalizeSession,
+        showRememberMeModal,
+        handleDeepLink,
       }}
     >
       {children}

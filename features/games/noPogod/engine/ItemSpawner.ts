@@ -126,17 +126,19 @@ export function spawnItem(
 
 /**
  * Updates item positions based on physics
+ * Uses frame-based movement like the original engine (not time-based)
  */
 export function updateItemPositions(
     items: FallingItem[],
-    deltaTime: number
+    _deltaTime: number // Kept for API compatibility, but not used
 ): FallingItem[] {
     return items.map(item => ({
         ...item,
-        x: item.x + item.velocityX * deltaTime,
-        y: item.y + item.velocityY * deltaTime,
-        // Apply acceleration if configured
-        velocityY: item.velocityY + PHYSICS.ITEM_FALL_ACCELERATION * deltaTime,
+        // Frame-based movement: velocity is in pixels per frame
+        x: item.x + item.velocityX,
+        y: item.y + item.velocityY,
+        // Apply acceleration per frame (not per ms)
+        velocityY: item.velocityY + PHYSICS.ITEM_FALL_ACCELERATION,
     }));
 }
 

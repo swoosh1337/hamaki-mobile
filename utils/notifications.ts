@@ -178,6 +178,42 @@ export async function shouldCheckForVideos(): Promise<boolean> {
 }
 
 /**
+ * Send subscription verification result notification
+ */
+export async function sendSubscriptionVerificationNotification(
+  isSubscribed: boolean,
+  channelName: string = 'YouTube'
+): Promise<void> {
+  try {
+    const title = isSubscribed ? '✅ გამოწერა დადასტურდა' : '❌ გამოწერა ვერ მოიძებნა';
+    const body = isSubscribed 
+      ? `${channelName} გამოწერა წარმატებით დადასტურდა. დამატებითი XP დაერიგისტრირდა!`
+      : `${channelName} გამოწერა ვერ მოიძებნა. შეგიძლიათ ხელით შეამოწმოთ პარამეტრებში.`;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: {
+          type: 'subscription_verification',
+          isSubscribed,
+          channelName,
+        },
+        sound: 'default',
+      },
+      trigger: null, // Send immediately
+    });
+
+    log.info('Subscription verification notification sent', { 
+      isSubscribed, 
+      channelName 
+    });
+  } catch (error) {
+    log.error('Error sending subscription verification notification:', error);
+  }
+}
+
+/**
  * Initialize notification system
  * Note: Push notifications require proper Apple Developer setup for iOS
  * Will gracefully fail in development/Expo Go builds

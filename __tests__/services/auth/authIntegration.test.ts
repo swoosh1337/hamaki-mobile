@@ -1,12 +1,17 @@
 /**
  * Auth Integration Tests
- * 
+ *
  * Tests for critical edge cases and integration flows:
  * - Magic link → deep link → authenticated
  * - Session refresh on app resume
  * - Invalid refresh token handling
  * - Edge cases (different device, 30+ days inactivity, etc.)
  */
+
+// Mock expo-linking BEFORE importing auth services (used at module level)
+jest.mock('expo-linking', () => ({
+    createURL: jest.fn().mockReturnValue('hamaki://auth/callback'),
+}));
 
 import { authService, tokenManager } from '@/services/auth';
 

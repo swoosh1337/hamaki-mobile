@@ -282,6 +282,7 @@ function AuthScreen() {
         error={magicLinkError}
         success={magicLinkSuccess}
       />
+
     </SafeAreaView>
   );
 }

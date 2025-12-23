@@ -65,6 +65,7 @@ export interface AuthResult {
     tokenData?: TokenData;
     allChannelSubscriptions?: Record<string, boolean> | null;
     authMethod?: AuthMethod;
+    rememberMe?: boolean;
 }
 
 /**

@@ -37,7 +37,7 @@ export const RememberMeModal: React.FC<RememberMeModalProps> = ({
     >
       <Pressable style={styles.overlay} onPress={() => { }}>
         <View style={styles.modalContainer}>
-          <View style={styles.modal}>
+          <View style={styles.modal} testID="remember-me-modal">
             {/* Icon */}
             <View style={styles.iconContainer}>
               <Ionicons
@@ -48,27 +48,27 @@ export const RememberMeModal: React.FC<RememberMeModalProps> = ({
             </View>
 
             {/* Title */}
-            <Text style={styles.title}>Stay Signed In?</Text>
+            <Text style={styles.title}>დარჩი აქტიური</Text>
 
             {/* Subtitle */}
             <Text style={styles.subtitle}>
-              {userName ? `Welcome, ${userName}!` : 'Welcome to HamaKi!'}
+              {userName ? `მოგესალმებით, ${userName}!` : 'Welcome to HamaKi!'}
             </Text>
 
             {/* Description */}
             <Text style={styles.description}>
-              Would you like to stay signed in for future visits? You can change this anytime in settings.
+              გსურთ დარჩეთ შესული ანგარიშში მომავალი ვიზიტებისთვის? ამის შეცვლა ნებისმიერ დროს შეგიძლიათ პარამეტრებში.
             </Text>
 
             {/* Remember Me Toggle */}
             <View style={styles.toggleContainer}>
               <View style={styles.toggleRow}>
                 <View style={styles.toggleTextContainer}>
-                  <Text style={styles.toggleTitle}>Keep me signed in</Text>
+                  <Text style={styles.toggleTitle}>დამტოვე აქტიური</Text>
                   <Text style={styles.toggleDescription}>
                     {rememberMe
-                      ? 'You\'ll stay signed in for 30 days'
-                      : 'Sign in each time you open the app'
+                      ? 'ანგარიში დარჩება აქტიური 30 დღის განმავლობაში '
+                      : 'დალოგინდი ყოველ ჯერზე'
                     }
                   </Text>
                 </View>

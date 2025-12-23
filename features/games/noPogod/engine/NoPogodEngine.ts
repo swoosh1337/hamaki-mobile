@@ -140,7 +140,9 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
 
         // Note: Game end conditions are checked by base class after onGameUpdate
 
-        // Sync items to state
+        // IMPORTANT: Sync base class state to gameState for UI
+        this.gameState.timeRemaining = this.getTimeRemainingMs();
+        this.gameState.lives = this.getLives();
         this.gameState.items = this.items;
     }
 
@@ -327,7 +329,8 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
         this.gameState.player = PlayerController.updatePlayerPosition(
             this.gameState.player,
             currentTime,
-            deltaTime
+            deltaTime,
+            this.gameState.screenWidth
         );
 
         // Update speed boost

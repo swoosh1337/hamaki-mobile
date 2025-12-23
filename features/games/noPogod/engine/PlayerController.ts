@@ -77,21 +77,26 @@ export function movePlayer(
 }
 
 /**
- * Starts continuous movement in a direction
+ * Starts continuous movement in a directin s
  */
 export function startContinuousMovement(
     state: PlayerState,
     direction: MovementDirection,
-    screenWidth: number,
-    currentTime: number
+    _screenWidth: number,
+    _currentTime: number
 ): PlayerState {
-    const newPosition: PlayerPosition = direction === 'LEFT' ? 'LEFT' : 'RIGHT';
-
-    if (state.position === newPosition && state.isMoving) {
+    // If already moving in this direction, do nothing
+    if (state.position === direction && state.isMoving) {
         return state;
     }
 
-    return movePlayer(state, newPosition, screenWidth, currentTime);
+    // Just set the direction and start moving - no target needed for continuous movement
+    return {
+        ...state,
+        position: direction,
+        isMoving: true,
+        sprite: 'MOVING',
+    };
 }
 
 /**
@@ -106,49 +111,60 @@ export function stopContinuousMovement(state: PlayerState): PlayerState {
         ...state,
         isMoving: false,
         sprite: 'IDLE',
+        animationProgress: 1,
     };
 }
 
 /**
- * Updates player position based on animation progress
+ * Updates player position based on continuous movement (frame-based like original)
+ * Original behavior: moves in direction of `position` until edge or button released
+ * Uses 4px per frame (8px when boosted)
  */
 export function updatePlayerPosition(
     state: PlayerState,
-    currentTime: number,
-    deltaTime: number
+    _currentTime: number,
+    _deltaTime: number,
+    screenWidth?: number
 ): PlayerState {
     if (!state.isMoving) {
         return state;
     }
 
-    // Calculate movement duration based on speed boost
-    const moveDuration = state.speedBoostActive
-        ? ANIMATION.PLAYER_MOVE_DURATION_BOOSTED
-        : ANIMATION.PLAYER_MOVE_DURATION;
+    // Frame-based movement: 4px normal, 8px boosted (same as original)
+    const moveSpeed = state.speedBoostActive ? 8 : 4;
 
-    // Calculate animation progress
-    const elapsed = currentTime - state.movementStartTime;
-    const progress = Math.min(1, elapsed / moveDuration);
+    // Calculate bounds
+    const characterHalfWidth = 75; // Character is ~150px wide
+    const edgePadding = 10;
+    const minX = characterHalfWidth + edgePadding;
+    const maxX = (screenWidth || 400) - characterHalfWidth - edgePadding;
 
-    // Ease-out interpolation for smooth movement
-    const easeProgress = easeOutQuad(progress);
-    const newX = state.startX + (state.targetX - state.startX) * easeProgress;
+    let newX = state.x;
 
-    // Check if movement is complete
-    if (progress >= 1) {
-        return {
-            ...state,
-            x: state.targetX,
-            isMoving: false,
-            sprite: 'IDLE',
-            animationProgress: 1,
-        };
+    // Move based on position direction (LEFT or RIGHT)
+    // Original behavior: keep moving while button is held
+    if (state.position === 'LEFT') {
+        newX = state.x - moveSpeed;
+        // Clamp to left edge
+        if (newX < minX) {
+            newX = minX;
+        }
+    } else if (state.position === 'RIGHT') {
+        newX = state.x + moveSpeed;
+        // Clamp to right edge
+        if (newX > maxX) {
+            newX = maxX;
+        }
     }
+    // If position is CENTER, don't move (should not happen in continuous mode)
+
+    // Update animation progress for walking cycle (0.05 per frame like original)
+    const newProgress = (state.animationProgress + 0.05) % 1.0;
 
     return {
         ...state,
         x: newX,
-        animationProgress: progress,
+        animationProgress: newProgress,
     };
 }
 
