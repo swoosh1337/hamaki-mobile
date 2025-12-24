@@ -37,6 +37,13 @@ export const ChannelSubscriptionManager: React.FC = () => {
     earnedSubscriptionXP,
   } = useYouTubeVerification();
 
+  // Debug: Log subscription statuses to see xpAwarded values
+  console.log('[ChannelSubscriptionManager] statuses:',
+    subscriptionStatuses.map(s => ({ key: s.channelKey, xpAwarded: s.xpAwarded, isSubscribed: s.isSubscribed })));
+  console.log('[ChannelSubscriptionManager] all xpAwarded:',
+    subscriptionStatuses.every(s => s.xpAwarded),
+    'length:', subscriptionStatuses.length);
+
   const handleSubscribe = async (channelId: string, channelName: string) => {
     try {
       const url = `https://www.youtube.com/channel/${channelId}?sub_confirmation=1`;
@@ -74,15 +81,15 @@ export const ChannelSubscriptionManager: React.FC = () => {
 
       // Show success message
       Alert.alert(
-        'Verification Complete',
-        `Subscriptions verified successfully!`,
+        'ვერიფიკაცია დასრულდა',
+        `ვერიფიკაცია წარმატებით დასრულდა!`,
         [{ text: 'OK' }]
       );
     } catch (error) {
       log.error('Error verifying subscriptions', error);
       Alert.alert(
-        'Verification Failed',
-        'Failed to verify subscriptions. Please try again later.'
+        'ვერიფიკაცია ვერ მოხერხდა',
+        'სამწუხაროდ ვერიფიკაცია ვერ მოხერხდა. გთხოვთ სცადოთ თავიდან.'
       );
     }
   };
@@ -104,7 +111,7 @@ export const ChannelSubscriptionManager: React.FC = () => {
               {status.xpAwarded && (
                 <View style={styles.awardedBadge}>
                   <Ionicons name="star" size={12} color={Colors.dark.background} />
-                  <Text style={styles.awardedText}>XP Claimed</Text>
+                  <Text style={styles.awardedText}>XP მიღებულია</Text>
                 </View>
               )}
             </View>
@@ -119,7 +126,7 @@ export const ChannelSubscriptionManager: React.FC = () => {
           {status.isSubscribed ? (
             <View style={styles.subscribedIndicator}>
               <Ionicons name="checkmark" size={16} color={Colors.dark.tint} />
-              <Text style={styles.subscribedText}>Subscribed</Text>
+              <Text style={styles.subscribedText}>გამოწერილია</Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -140,7 +147,7 @@ export const ChannelSubscriptionManager: React.FC = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.dark.tint} />
-        <Text style={styles.loadingText}>Loading subscriptions...</Text>
+        <Text style={styles.loadingText}>მიმდინარეობის შემოწმება...</Text>
       </View>
     );
   }
@@ -154,23 +161,23 @@ export const ChannelSubscriptionManager: React.FC = () => {
       <View style={styles.statsCard}>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{subscribedCount}/{totalChannels}</Text>
-          <Text style={styles.statLabel}>Channels</Text>
+          <Text style={styles.statLabel}>არხი</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{earnedSubscriptionXP}</Text>
-          <Text style={styles.statLabel}>XP Earned</Text>
+          <Text style={styles.statLabel}>XP მიღებული</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{totalSubscriptionXP}</Text>
-          <Text style={styles.statLabel}>Total XP</Text>
+          <Text style={styles.statLabel}>ჯამური XP</Text>
         </View>
       </View>
 
       {/* Channel List */}
       <ScrollView style={styles.channelList} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>YouTube Channels</Text>
+        <Text style={styles.sectionTitle}>YouTube არხები</Text>
         <Text style={styles.sectionDescription}>
           გამოიწერე ჩვენი არხები და დააგროვე დამატებით XP
         </Text>
@@ -188,28 +195,36 @@ export const ChannelSubscriptionManager: React.FC = () => {
         <View style={styles.infoBanner}>
           <Ionicons name="information-circle-outline" size={20} color={Colors.dark.tint} />
           <Text style={styles.infoBannerText}>
-            გამოიწერე ჩვენი არხები და დააგროვე დამატებით XP
+            თუ არხი გამოწერილი გაქვს და ვერიფიკაცია ვერ მოხერხდა, მაშინ თავიდან გამოიწერე არხი და სცადე ვერიფიკაცია ხელახლა
           </Text>
         </View>
       </ScrollView>
 
       {/* Verify Button */}
       <View style={styles.verifySection}>
-        <TouchableOpacity
-          style={[styles.verifyButton, isLoadingSubscriptions && styles.verifyButtonDisabled]}
-          onPress={handleVerifySubscriptions}
-          disabled={isLoadingSubscriptions}
-          activeOpacity={0.7}
-        >
-          {isLoadingSubscriptions ? (
-            <ActivityIndicator size="small" color={Colors.dark.background} />
-          ) : (
-            <>
-              <Ionicons name="shield-checkmark" size={20} color={Colors.dark.background} />
-              <Text style={styles.verifyButtonText}>დაადასტურე გამოწერა</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {/* Check if all XP has been awarded (must have items and all awarded) */}
+        {subscriptionStatuses.length > 0 && subscriptionStatuses.every(s => s.xpAwarded) ? (
+          <View style={styles.allVerifiedButton}>
+            <Ionicons name="checkmark-circle" size={20} color={Colors.dark.tint} />
+            <Text style={styles.allVerifiedButtonText}>ყველა არხი გამოწერილია</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.verifyButton, isLoadingSubscriptions && styles.verifyButtonDisabled]}
+            onPress={handleVerifySubscriptions}
+            disabled={isLoadingSubscriptions}
+            activeOpacity={0.7}
+          >
+            {isLoadingSubscriptions ? (
+              <ActivityIndicator size="small" color={Colors.dark.background} />
+            ) : (
+              <>
+                <Ionicons name="shield-checkmark" size={20} color={Colors.dark.background} />
+                <Text style={styles.verifyButtonText}>დაადასტურე გამოწერა</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -423,6 +438,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'SpaceMono',
     color: Colors.dark.background,
+    fontWeight: '700',
+  },
+  allVerifiedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(196, 255, 0, 0.15)',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.dark.tint,
+  },
+  allVerifiedButtonText: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.tint,
     fontWeight: '700',
   },
 });

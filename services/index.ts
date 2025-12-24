@@ -20,10 +20,7 @@ export {
 } from './auth';
 
 // YouTube services
-export {
-    youtubeService,
-    type YouTubeVideo
-} from './youtube';
+export * from './youtube';
 
 // Re-export types for convenience
 export type {

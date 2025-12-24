@@ -1,4 +1,5 @@
-import { youtubeService, type YouTubeVideo } from '@/services/youtube';
+import { channelStateService } from '@/services/supabase';
+import type { YouTubeChannelState } from '@/types/youtube';
 import { createLogger } from '@/utils/logger';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
@@ -12,7 +13,7 @@ const log = createLogger('Video');
 const VIDEO_FETCH_LIMIT = 3;
 
 interface VideoContextType {
-  videos: YouTubeVideo[];
+  videos: YouTubeChannelState[];
   isLoading: boolean;
   error: string | null;
   refreshVideos: () => Promise<void>;
@@ -33,7 +34,7 @@ export const useVideos = () => useContext(VideoContext);
 
 export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isSubscribed } = useAuth();
-  const [videos, setVideos] = useState<YouTubeVideo[]>([]);
+  const [videos, setVideos] = useState<YouTubeChannelState[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasNewVideos, setHasNewVideos] = useState(false);
@@ -51,9 +52,10 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setIsLoading(true);
       setError(null);
       setIsNetworkError(false);
-      const fetchedVideos = await youtubeService.fetchHamakiVideos(VIDEO_FETCH_LIMIT);
-      setVideos(fetchedVideos);
-      log.info(`Loaded ${fetchedVideos.length} videos`);
+      // Fetch videos from database (synced by server)
+      const channelStates = await channelStateService.getAll();
+      setVideos(channelStates);
+      log.info(`Loaded ${channelStates.length} videos from database`);
     } catch (err) {
       log.error('Failed to load videos:', err);
       const isNetwork = checkNetworkError(err);
@@ -79,8 +81,8 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const newVideos = await checkForNewVideos();
 
       if (newVideos.length > 0) {
-        // Update video list with new videos
-        const updatedVideos = await youtubeService.fetchHamakiVideos(3);
+        // Update video list from database
+        const updatedVideos = await channelStateService.getAll();
         setVideos(updatedVideos);
         setHasNewVideos(true);
         log.info('Updated feed with new videos', { count: newVideos.length });

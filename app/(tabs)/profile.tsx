@@ -9,6 +9,7 @@ import { ProfilePostSkeleton } from '@/components/ui/SkeletonLoader';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
+import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
 import { postService } from '@/services/supabase/postService';
 import type { Post as UserPost } from '@/types/post';
 import type { XPStats } from '@/types/user';
@@ -31,6 +32,9 @@ export default function ProfileScreen() {
     googleId: userProfile?.google_id,
     autoFetch: true,
   });
+
+  // Get pending XP count for settings badge
+  const { pendingActionCount: pendingXPCount } = useYouTubeVerification();
 
   // UI state management
   const [selectedAvatar, setSelectedAvatar] = useState<string>('avatar-1');
@@ -213,17 +217,16 @@ export default function ProfileScreen() {
       if (success) {
         setIsEditingName(false);
         updateUserProfile({ full_name: editedName.trim() });
-        Alert.alert('Success', 'Name updated successfully!');
-        // Note: In a real app, you'd want to update the AuthContext to reflect this change
+        Alert.alert('Success', 'სახელი წარმატებით შეიცვალა!');
       } else {
-        Alert.alert('Error', 'Failed to update name. Please try again.');
+        Alert.alert('Error', 'სახელის ცვლილება ვერ მოხერხდა');
       }
     } catch (error) {
       log.error('Error updating name', error);
       if (error instanceof Error) {
         Alert.alert('Error', error.message);
       } else {
-        Alert.alert('Error', 'Failed to update name. Please try again.');
+        Alert.alert('Error', 'სახელის ცვლილება ვერ მოხერხდა. გთხოვთ ახლიდან სცადოთ.');
       }
     } finally {
       setIsUsernameLoading(false);
@@ -257,6 +260,11 @@ export default function ProfileScreen() {
         onPress={() => setShowSettingsModal(true)}
       >
         <Ionicons name="settings-outline" size={24} color={Colors.dark.text} />
+        {pendingXPCount > 0 && (
+          <View style={styles.settingsBadge}>
+            <Text style={styles.settingsBadgeText}>{pendingXPCount}</Text>
+          </View>
+        )}
       </TouchableOpacity>
 
       {/* Demo Mode Indicator */}
@@ -325,14 +333,14 @@ export default function ProfileScreen() {
                   onPress={handleCancelEdit}
                   disabled={isUsernameLoading}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                  <Text style={styles.cancelButtonText}>გაუქმება</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.saveButton}
                   onPress={handleSaveName}
                   disabled={isUsernameLoading}
                 >
-                  <Text style={styles.saveButtonText}>Save</Text>
+                  <Text style={styles.saveButtonText}>შენახვა</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -436,6 +444,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  settingsBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  settingsBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   demoModeIndicator: {
     position: 'absolute',
     top: 60,
@@ -508,7 +533,7 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 24,
-    fontFamily: 'HamakiEng',
+    fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
     fontWeight: 'bold',
     marginRight: 8,
@@ -527,6 +552,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 18,
+    fontFamily: 'SpaceMono',
     color: Colors.dark.text,
     borderWidth: 2,
     borderColor: Colors.dark.tint,
@@ -562,7 +588,7 @@ const styles = StyleSheet.create({
   },
   email: {
     fontSize: 16,
-    fontFamily: 'HamakiEng',
+    fontFamily: 'SpaceMono',
     color: Colors.dark.text,
     opacity: 0.7,
     textAlign: 'center',

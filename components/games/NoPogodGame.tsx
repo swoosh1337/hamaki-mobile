@@ -483,14 +483,14 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
           </View>
         )}
 
-        <Text style={styles.finalScore}>Final Score: {gameState.score}</Text>
+        <Text style={styles.finalScore}>საბოლოო ქულა: {gameState.score}</Text>
 
         {highScore > 0 && !isNewHighScore && (
-          <Text style={styles.highScoreDisplay}>High Score: {highScore}</Text>
+          <Text style={styles.highScoreDisplay}>მაქსიმალური ქულა: {highScore}</Text>
         )}
 
         {xpEarned > 0 && (
-          <Text style={styles.xpEarned}>+{xpEarned} XP Earned! ⭐</Text>
+          <Text style={styles.xpEarned}>+{xpEarned} XP მიღებულია! ⭐</Text>
         )}
 
         {/* Show rounds info for non-demo users */}
@@ -504,11 +504,11 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
           {/* Only show Try Again if under max rounds or in demo mode */}
           {(isDemoMode || roundsPlayed < MAX_ROUNDS) && (
             <TouchableOpacity style={styles.startButton} onPress={restartGame} activeOpacity={0.8}>
-              <Text style={styles.buttonText}>TRY AGAIN</Text>
+              <Text style={styles.buttonText}>ახლიდან ცდა</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.exitButton} onPress={exitGame} activeOpacity={0.8}>
-            <Text style={styles.buttonText}>EXIT</Text>
+            <Text style={styles.buttonText}>გამოსვლა</Text>
           </TouchableOpacity>
         </View>
       </View>

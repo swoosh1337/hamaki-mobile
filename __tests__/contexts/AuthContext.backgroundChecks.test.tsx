@@ -12,7 +12,8 @@ jest.mock('@/utils/notifications', () => ({
   ...jest.requireActual('@/utils/notifications'),
   sendSubscriptionVerificationNotification: jest.fn().mockResolvedValue(undefined),
   initializeNotifications: jest.fn().mockResolvedValue(undefined),
-  backgroundVideoCheck: jest.fn().mockResolvedValue(undefined),
+  registerForPushNotificationsAsync: jest.fn().mockResolvedValue('test-push-token'),
+  savePushTokenToDatabase: jest.fn().mockResolvedValue(undefined),
 }));
 
 // Mock RememberMeModal component
@@ -69,7 +70,7 @@ jest.mock('@/utils/analytics', () => ({
 
 // Import mocked modules
 import { verifyAndAwardSubscriptionXP } from '@/services/youtube/subscriptionService';
-import { backgroundVideoCheck, initializeNotifications } from '@/utils/notifications';
+import { initializeNotifications, registerForPushNotificationsAsync, savePushTokenToDatabase } from '@/utils/notifications';
 
 // Define mock implementations
 const mockAuthService = {
@@ -178,7 +179,8 @@ describe('AuthContext Background Checks', () => {
 
     // Re-establish notification mocks
     (initializeNotifications as jest.Mock).mockResolvedValue(undefined);
-    (backgroundVideoCheck as jest.Mock).mockResolvedValue(undefined);
+    (registerForPushNotificationsAsync as jest.Mock).mockResolvedValue('test-push-token');
+    (savePushTokenToDatabase as jest.Mock).mockResolvedValue(undefined);
     (sendSubscriptionVerificationNotification as jest.Mock).mockResolvedValue(undefined);
 
     // Re-establish subscription service mock (default: subscribed, no XP)

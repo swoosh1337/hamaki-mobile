@@ -318,6 +318,36 @@ export const userService = {
             return null;
         }
     },
+
+    /**
+     * Delete user account and all associated data
+     * Required for Apple App Store compliance
+     * 
+     * @param googleId - User's Google ID
+     * @returns true if deletion was successful, false otherwise
+     */
+    async deleteUserAccount(googleId: string): Promise<boolean> {
+        try {
+            log.info('Deleting user account:', googleId);
+
+            // Delete user profile (cascade will handle related data if configured)
+            const { error } = await supabase
+                .from('users')
+                .delete()
+                .eq('google_id', googleId);
+
+            if (error) {
+                log.error('Error deleting user account:', error);
+                return false;
+            }
+
+            log.info('User account deleted successfully:', googleId);
+            return true;
+        } catch (error) {
+            log.error('Exception deleting user account:', error);
+            return false;
+        }
+    },
 };
 
 /**

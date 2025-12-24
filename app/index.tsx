@@ -15,7 +15,7 @@ export default function Index() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.loadingContainer}>
           <AnimatedMiroLoader size={140} />
-          <Text style={styles.loadingText}>იტვირთება...</Text>
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </>
     );

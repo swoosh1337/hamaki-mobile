@@ -22,7 +22,7 @@ import { createLogger } from '@/utils/logger';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 import { RememberMeModal } from '../components/ui/RememberMeModal';
-import { backgroundVideoCheck, initializeNotifications, sendSubscriptionVerificationNotification } from '../utils/notifications';
+import { initializeNotifications, registerForPushNotificationsAsync, savePushTokenToDatabase, sendSubscriptionVerificationNotification } from '../utils/notifications';
 
 const log = createLogger('Auth');
 
@@ -215,6 +215,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Initialize notifications (non-blocking - don't delay user)
         initializeNotifications().catch(error => {
           log.warn('Failed to initialize notifications (non-blocking)', error);
+        });
+
+        // Register and save push token for server-sent notifications
+        registerForPushNotificationsAsync().then(async (token) => {
+          if (token && supabaseUser.id) {
+            await savePushTokenToDatabase(supabaseUser.id, token);
+          }
+        }).catch(error => {
+          log.warn('Failed to save push token (non-blocking)', error);
         });
 
         // Perform background checks for Google OAuth users (non-blocking)
@@ -517,10 +526,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             log.warn('Background verification failed (non-blocking)', err);
           }
 
-          // Check for new videos and send notifications
-          if (isSubscribed) {
-            await backgroundVideoCheck();
-          }
+          // Note: Background video polling removed - notifications now sent server-side
+          // when sync-youtube-videos Edge Function finds new videos
         }
 
         // NOTE: Background XP checks removed to save YouTube API quota

@@ -1,7 +1,13 @@
 /**
  * YouTube Services
+ *
+ * Exports all YouTube-related services.
  * 
- * Exports all YouTube-related services and types.
+ * NOTE: youtubeService.ts was removed - video data now comes from
+ * channelStateService (database) not YouTube API.
  */
 
-export { youtubeService, type YouTubeVideo } from './youtubeService';
+export * from './subscriptionService';
+export { verificationCacheService } from './verificationCacheService';
+export * from './videoLikeService';
+

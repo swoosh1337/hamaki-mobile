@@ -89,7 +89,7 @@ export const GameCanvas = React.memo(({
   // Load Skia images
   const backgroundImage = useImage(assets.background || null);
   const playerImage = useImage(assets.player || null);
-  
+
   // Load item images
   const eggImage = useImage(NOPOGOD_GAME_ASSETS.items.egg);
   const tomatoImage = useImage(NOPOGOD_GAME_ASSETS.items.tomato);
@@ -156,10 +156,10 @@ export const GameCanvas = React.memo(({
         <Text style={styles.pausedTitle}>Game Paused</Text>
         <View style={styles.pausedButtons}>
           <Pressable style={styles.resumeButton} onPress={handleResumeGame}>
-            <Text style={styles.buttonText}>RESUME</Text>
+            <Text style={styles.buttonText}>გაგრძელება</Text>
           </Pressable>
           <Pressable style={styles.exitButton} onPress={onExitGame}>
-            <Text style={styles.buttonText}>EXIT</Text>
+            <Text style={styles.buttonText}>გამოსვლა</Text>
           </Pressable>
         </View>
       </View>
@@ -172,26 +172,26 @@ export const GameCanvas = React.memo(({
     return (
       <View style={styles.gameOverContainer}>
         <Text style={styles.gameOverTitle}>Game Over</Text>
-        
+
         {isNewHighScore && (
           <View style={styles.highScoreBanner}>
-            <Text style={styles.highScoreText}>🏆 NEW HIGH SCORE! 🏆</Text>
-            <Text style={styles.highScoreCongrats}>Congratulations!</Text>
+            <Text style={styles.highScoreText}>🏆 ახალი მაქსიმალური ქულა! 🏆</Text>
+            <Text style={styles.highScoreCongrats}>გილოცავთ!</Text>
           </View>
         )}
 
-        <Text style={styles.finalScore}>Final Score: {gameState.score}</Text>
+        <Text style={styles.finalScore}>საბოლოო ქულა: {gameState.score}</Text>
 
         {highScore > 0 && !isNewHighScore && (
-          <Text style={styles.highScoreDisplay}>High Score: {highScore}</Text>
+          <Text style={styles.highScoreDisplay}>მაქსიმალური ქულა: {highScore}</Text>
         )}
 
         <View style={styles.gameOverButtons}>
           <Pressable style={styles.startButton} onPress={onStartGame}>
-            <Text style={styles.buttonText}>TRY AGAIN</Text>
+            <Text style={styles.buttonText}>ახლიდან ცდა</Text>
           </Pressable>
           <Pressable style={styles.exitButton} onPress={onExitGame}>
-            <Text style={styles.buttonText}>EXIT</Text>
+            <Text style={styles.buttonText}>გამოსვლა</Text>
           </Pressable>
         </View>
       </View>
@@ -239,13 +239,13 @@ export const GameCanvas = React.memo(({
             <Group>
               {gameState.items.map(item => {
                 if (item.collected) return null;
-                
+
                 let img = eggImage;
                 if (item.type === 'tomato') img = tomatoImage;
                 if (item.type === 'pepper') img = pepperImage;
-                
+
                 if (!img) return null;
-                
+
                 return (
                   <Image
                     key={item.id}

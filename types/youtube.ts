@@ -59,6 +59,26 @@ export const VIDEO_LIKE_XP: Record<ChannelKey, number> = {
 };
 
 // ============================================================================
+// Server-Side Channel State (from youtube_channel_state table)
+// ============================================================================
+
+/**
+ * Channel state synced by server-side Edge Function
+ * This is the single source of truth for latest videos
+ */
+export interface YouTubeChannelState {
+    channel_id: string;
+    channel_key: ChannelKey;
+    channel_name: string;
+    latest_video_id: string | null;
+    latest_video_title: string | null;
+    latest_video_thumbnail: string | null;
+    latest_video_published_at: string | null;
+    last_checked_at: string;
+    created_at: string;
+}
+
+// ============================================================================
 // Verification Status Types
 // ============================================================================
 

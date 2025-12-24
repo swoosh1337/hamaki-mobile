@@ -1,25 +1,20 @@
 /**
  * Subscription Service Tests
  *
- * Tests subscription verification and XP awarding logic
+ * Tests subscription verification via Edge Function
+ * 
+ * NOTE: Service now calls Edge Function, not YouTube API directly
+ * Subscriptions are GATES - verified once, never auto-rechecked
  */
 
-// Mock dependencies
-jest.mock('@/services/supabase/client', () => ({
-    supabase: {
-        from: jest.fn(() => ({
-            select: jest.fn(() => ({
-                eq: jest.fn(() => ({
-                    single: jest.fn(),
-                })),
-            })),
-            update: jest.fn(() => ({
-                eq: jest.fn(),
-            })),
-        })),
-    },
+// Mock AsyncStorage
+jest.mock('@react-native-async-storage/async-storage', () => ({
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
 }));
 
+// Mock logger
 jest.mock('@/utils/logger', () => ({
     createLogger: () => ({
         debug: jest.fn(),
@@ -29,353 +24,205 @@ jest.mock('@/utils/logger', () => ({
     }),
 }));
 
-jest.mock('@/services/youtube/verificationCacheService', () => ({
-    verificationCacheService: {
-        getCache: jest.fn().mockResolvedValue({
-            subscriptions: { statuses: {}, lastFullCheck: 0 },
-            videos: { videos: {} },
-            lastUpdated: 0,
-        }),
-        saveCache: jest.fn(),
-        needsFullSubscriptionCheck: jest.fn().mockResolvedValue(true),
-        updateAllSubscriptionStatuses: jest.fn(),
+// Mock Supabase and leaderboardService
+const mockFrom = jest.fn();
+const mockUpdateLeaderboardPoints = jest.fn();
+jest.mock('@/services/supabase', () => ({
+    supabase: {
+        from: (...args: any[]) => mockFrom(...args),
+        functions: {
+            invoke: jest.fn(),
+        },
+    },
+    leaderboardService: {
+        updateLeaderboardPoints: (...args: any[]) => mockUpdateLeaderboardPoints(...args),
     },
 }));
 
-// Mock fetch globally
-global.fetch = jest.fn();
-
-import { supabase } from '@/services/supabase/client';
+import { supabase } from '@/services/supabase';
 import {
-    checkAllChannelSubscriptions,
     getEarnedSubscriptionXP,
+    getSubscriptionStatuses,
     getTotalPossibleSubscriptionXP,
-    verifyAndAwardSubscriptionXP
+    verifyAndAwardSubscriptionXP,
 } from '@/services/youtube/subscriptionService';
+import type { SubscriptionStatus } from '@/types/youtube';
+
+const mockInvoke = supabase.functions.invoke as jest.Mock;
 
 describe('subscriptionService', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-    });
-
-    describe('checkAllChannelSubscriptions', () => {
-        it('should check all 4 channels and return subscription status', async () => {
-            // Mock YouTube API responses
-            (global.fetch as jest.Mock).mockResolvedValue({
-                ok: true,
-                json: () => Promise.resolve({
-                    items: [
-                        { snippet: { resourceId: { channelId: 'test-hamaki-id' } } },
-                    ],
-                }),
-            });
-
-            const result = await checkAllChannelSubscriptions('test-access-token');
-
-            expect(result).toHaveProperty('hamaki');
-            expect(result).toHaveProperty('miro');
-            expect(result).toHaveProperty('bastos');
-            expect(result).toHaveProperty('koro');
-            expect(global.fetch).toHaveBeenCalled();
-        });
-
-        it('should return false for channels when API call fails', async () => {
-            (global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'));
-
-            const result = await checkAllChannelSubscriptions('test-access-token');
-
-            expect(result.hamaki).toBe(false);
-            expect(result.miro).toBe(false);
-        });
-    });
-
-    describe('verifyAndAwardSubscriptionXP', () => {
-        it('should award XP only for subscribed channels not already awarded', async () => {
-            // Mock API returns subscribed
-            (global.fetch as jest.Mock).mockResolvedValue({
-                ok: true,
-                json: () => Promise.resolve({
-                    items: [{ snippet: { resourceId: { channelId: 'test-channel' } } }],
-                }),
-            });
-
-            // Mock DB returns user with no XP awarded yet
-            const mockSupabase = supabase as jest.Mocked<typeof supabase>;
-            (mockSupabase.from as jest.Mock).mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockReturnValue({
-                        single: jest.fn().mockResolvedValue({
-                            data: {
-                                subscription_xp_awarded: { hamaki: false, miro: false, bastos: false, koro: false },
-                                xp_points: 0,
-                            },
-                            error: null,
-                        }),
-                    }),
-                }),
-                update: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ error: null }),
-                }),
-            });
-
-            const result = await verifyAndAwardSubscriptionXP(
-                'test-token',
-                'user-id',
-                'google-id',
-                true
-            );
-
-            expect(result.success).toBe(true);
-            expect(result.statuses).toHaveLength(4);
-        });
-
-        it('should NOT award duplicate XP for already-awarded channels', async () => {
-            (global.fetch as jest.Mock).mockResolvedValue({
-                ok: true,
-                json: () => Promise.resolve({
-                    items: [{ snippet: { resourceId: { channelId: 'test-channel' } } }],
-                }),
-            });
-
-            const mockSupabase = supabase as jest.Mocked<typeof supabase>;
-            (mockSupabase.from as jest.Mock).mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockReturnValue({
-                        single: jest.fn().mockResolvedValue({
-                            data: {
-                                // Already awarded XP for all channels
-                                subscription_xp_awarded: { hamaki: true, miro: true, bastos: true, koro: true },
-                                xp_points: 3100,
-                            },
-                            error: null,
-                        }),
-                    }),
-                }),
-                update: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ error: null }),
-                }),
-            });
-
-            const result = await verifyAndAwardSubscriptionXP(
-                'test-token',
-                'user-id',
-                'google-id',
-                true
-            );
-
-            // No new XP should be awarded
-            expect(result.totalXPAwarded).toBe(0);
-        });
+        mockUpdateLeaderboardPoints.mockResolvedValue(true);
     });
 
     describe('getTotalPossibleSubscriptionXP', () => {
-        it('should return sum of all channel XP rewards', () => {
-            const total = getTotalPossibleSubscriptionXP();
-
-            // 1000 (hamaki) + 700 (miro) + 700 (bastos) + 700 (koro) = 3100
-            expect(total).toBe(3100);
+        it('should return sum of all subscription XP rewards', () => {
+            // hamaki: 1000, miro: 700, bastos: 700, koro: 700 = 3100
+            expect(getTotalPossibleSubscriptionXP()).toBe(3100);
         });
     });
 
     describe('getEarnedSubscriptionXP', () => {
-        it('should return sum of XP for awarded channels', () => {
-            const statuses = [
-                { channelKey: 'hamaki', xpAwarded: true, xpReward: 1000 },
-                { channelKey: 'miro', xpAwarded: true, xpReward: 700 },
-                { channelKey: 'bastos', xpAwarded: false, xpReward: 700 },
-                { channelKey: 'koro', xpAwarded: false, xpReward: 700 },
-            ] as any;
+        it('should calculate XP from awarded statuses', () => {
+            const statuses: SubscriptionStatus[] = [
+                {
+                    channelKey: 'hamaki',
+                    channelId: 'UC123',
+                    channelName: 'HamaKi',
+                    isSubscribed: true,
+                    xpReward: 1000,
+                    xpAwarded: true,
+                    lastChecked: Date.now(),
+                },
+                {
+                    channelKey: 'miro',
+                    channelId: 'UC456',
+                    channelName: 'Miro',
+                    isSubscribed: true,
+                    xpReward: 700,
+                    xpAwarded: false, // Not yet awarded
+                    lastChecked: Date.now(),
+                },
+            ];
 
-            const earned = getEarnedSubscriptionXP(statuses);
-
-            expect(earned).toBe(1700); // Only hamaki + miro
-        });
-
-        it('should return 0 if no channels awarded', () => {
-            const statuses = [
-                { channelKey: 'hamaki', xpAwarded: false, xpReward: 1000 },
-            ] as any;
-
-            const earned = getEarnedSubscriptionXP(statuses);
-
-            expect(earned).toBe(0);
-        });
-    });
-
-    describe('Edge Cases - Subscribe/Unsubscribe/Subscribe Deduplication', () => {
-        it('should NOT award duplicate XP if user unsubscribes and resubscribes', async () => {
-            // Scenario: User subscribed → got XP → unsubscribed → subscribed again
-            // Expected: No new XP (xpAwarded flag stays true even after unsub)
-
-            (global.fetch as jest.Mock).mockResolvedValue({
-                ok: true,
-                json: () => Promise.resolve({
-                    // User is currently subscribed (resubscribed)
-                    items: [{ snippet: { resourceId: { channelId: 'hamaki-channel' } } }],
-                }),
-            });
-
-            const mockSupabase = supabase as jest.Mocked<typeof supabase>;
-            (mockSupabase.from as jest.Mock).mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockReturnValue({
-                        single: jest.fn().mockResolvedValue({
-                            data: {
-                                // XP was already awarded when they first subscribed
-                                // This flag should NEVER be reset, even if they unsubscribed
-                                subscription_xp_awarded: { hamaki: true, miro: false, bastos: false, koro: false },
-                                xp_points: 1000,
-                            },
-                            error: null,
-                        }),
-                    }),
-                }),
-                update: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ error: null }),
-                }),
-            });
-
-            const result = await verifyAndAwardSubscriptionXP(
-                'test-token',
-                'user-id',
-                'google-id',
-                true
-            );
-
-            // HamaKi XP should NOT be awarded again
-            expect(result.totalXPAwarded).toBe(0);
-
-            // Status should show subscription verified but XP already claimed
-            const hamakiStatus = result.statuses.find(s => s.channelKey === 'hamaki');
-            expect(hamakiStatus?.xpAwarded).toBe(true);
-        });
-
-        it('should handle mixed state: some channels awarded, some not', async () => {
-            // Scenario: User subscribed to HamaKi (XP awarded), now subscribes to Miro
-            // Expected: Only Miro XP awarded, not HamaKi
-
-            (global.fetch as jest.Mock).mockResolvedValue({
-                ok: true,
-                json: () => Promise.resolve({
-                    items: [{ snippet: { resourceId: { channelId: 'some-channel' } } }],
-                }),
-            });
-
-            const mockSupabase = supabase as jest.Mocked<typeof supabase>;
-            (mockSupabase.from as jest.Mock).mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockReturnValue({
-                        single: jest.fn().mockResolvedValue({
-                            data: {
-                                subscription_xp_awarded: {
-                                    hamaki: true,  // Already awarded
-                                    miro: false,   // Not yet awarded (new sub)
-                                    bastos: false,
-                                    koro: false
-                                },
-                                xp_points: 1000,
-                            },
-                            error: null,
-                        }),
-                    }),
-                }),
-                update: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ error: null }),
-                }),
-            });
-
-            const result = await verifyAndAwardSubscriptionXP(
-                'test-token',
-                'user-id',
-                'google-id',
-                true
-            );
-
-            // Should have results
-            expect(result.success).toBe(true);
-            expect(result.statuses).toHaveLength(4);
+            expect(getEarnedSubscriptionXP(statuses)).toBe(1000);
         });
     });
 
-    describe('Edge Cases - API Errors', () => {
-        it('should not revoke existing XP when API fails', async () => {
-            // Scenario: User has XP, API fails
-            // Expected: Keep existing XP, no revocation
-
-            (global.fetch as jest.Mock).mockRejectedValue(new Error('API quota exceeded'));
-
-            const mockSupabase = supabase as jest.Mocked<typeof supabase>;
-            (mockSupabase.from as jest.Mock).mockReturnValue({
+    describe('getSubscriptionStatuses', () => {
+        it('should return statuses from database', async () => {
+            mockFrom.mockReturnValue({
                 select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockReturnValue({
-                        single: jest.fn().mockResolvedValue({
-                            data: {
-                                subscription_xp_awarded: { hamaki: true, miro: true, bastos: false, koro: false },
-                                xp_points: 1700,
-                            },
-                            error: null,
-                        }),
+                    eq: jest.fn().mockResolvedValue({
+                        data: [{
+                            channel_key: 'hamaki',
+                            subscribed: true,
+                            xp_awarded: true,
+                            verified_at: '2024-01-01T00:00:00Z',
+                        }],
+                        error: null,
                     }),
                 }),
             });
 
-            const result = await verifyAndAwardSubscriptionXP(
-                'test-token',
-                'user-id',
-                'google-id',
-                true
-            );
+            const statuses = await getSubscriptionStatuses('user-123');
 
-            // Should still succeed (graceful degradation)
-            expect(result.success).toBe(true);
-            // No XP should be deducted
-            expect(result.totalXPAwarded).toBe(0);
+            expect(statuses).toHaveLength(4); // All 4 channels
+            expect(statuses.find(s => s.channelKey === 'hamaki')?.isSubscribed).toBe(true);
         });
 
-        it('should continue checking other channels if one fails', async () => {
-            // Some API calls fail, others succeed
-            let callCount = 0;
-            (global.fetch as jest.Mock).mockImplementation(() => {
-                callCount++;
-                if (callCount === 1) {
-                    return Promise.reject(new Error('First channel error'));
-                }
-                return Promise.resolve({
-                    ok: true,
-                    json: () => Promise.resolve({
-                        items: [{ snippet: { resourceId: { channelId: 'channel-id' } } }],
-                    }),
-                });
+        it('should return unverified statuses on error', async () => {
+            mockFrom.mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockRejectedValue(new Error('DB Error')),
+                }),
             });
 
-            const mockSupabase = supabase as jest.Mocked<typeof supabase>;
-            (mockSupabase.from as jest.Mock).mockReturnValue({
-                select: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockReturnValue({
-                        single: jest.fn().mockResolvedValue({
-                            data: {
-                                subscription_xp_awarded: { hamaki: false, miro: false, bastos: false, koro: false },
-                                xp_points: 0,
-                            },
-                            error: null,
-                        }),
-                    }),
-                }),
-                update: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ error: null }),
-                }),
+            const statuses = await getSubscriptionStatuses('user-123');
+
+            expect(statuses).toHaveLength(4);
+            expect(statuses.every(s => !s.isSubscribed)).toBe(true);
+        });
+    });
+
+    describe('verifyAndAwardSubscriptionXP', () => {
+        it('should call Edge Function and return results', async () => {
+            mockInvoke.mockResolvedValue({
+                data: {
+                    success: true,
+                    results: [
+                        { channelKey: 'hamaki', subscribed: true, xpAwarded: 1000, alreadyVerified: false },
+                        { channelKey: 'miro', subscribed: true, xpAwarded: 700, alreadyVerified: false },
+                    ],
+                    totalXPAwarded: 1700,
+                },
+                error: null,
             });
 
             const result = await verifyAndAwardSubscriptionXP(
                 'test-token',
-                'user-id',
-                'google-id',
-                true
+                'user-123',
+                'google-123'
             );
 
             expect(result.success).toBe(true);
-            // Should have all 4 status entries even if some failed
-            expect(result.statuses).toHaveLength(4);
+            expect(result.totalXPAwarded).toBe(1700);
+            expect(mockInvoke).toHaveBeenCalledWith('verify-subscriptions', expect.any(Object));
+        });
+
+        it('should update leaderboard when XP is awarded', async () => {
+            mockInvoke.mockResolvedValue({
+                data: {
+                    success: true,
+                    results: [
+                        { channelKey: 'hamaki', subscribed: true, xpAwarded: 1000, alreadyVerified: false },
+                    ],
+                    totalXPAwarded: 1000,
+                },
+                error: null,
+            });
+
+            await verifyAndAwardSubscriptionXP('test-token', 'user-123', 'google-123');
+
+            expect(mockUpdateLeaderboardPoints).toHaveBeenCalledWith('user-123', 1000);
+        });
+
+        it('should not update leaderboard when no XP is awarded', async () => {
+            mockInvoke.mockResolvedValue({
+                data: {
+                    success: true,
+                    results: [
+                        { channelKey: 'hamaki', subscribed: true, xpAwarded: 0, alreadyVerified: true },
+                    ],
+                    totalXPAwarded: 0,
+                },
+                error: null,
+            });
+
+            await verifyAndAwardSubscriptionXP('test-token', 'user-123', 'google-123');
+
+            expect(mockUpdateLeaderboardPoints).not.toHaveBeenCalled();
+        });
+
+        it('should handle Edge Function errors', async () => {
+            mockInvoke.mockResolvedValue({
+                data: null,
+                error: { message: 'Function error' },
+            });
+
+            const result = await verifyAndAwardSubscriptionXP(
+                'test-token',
+                'user-123',
+                'google-123'
+            );
+
+            expect(result.success).toBe(false);
+            expect(result.errors).toContain('Function error');
+        });
+
+        it('should return alreadyVerified=true for previously verified channels', async () => {
+            mockInvoke.mockResolvedValue({
+                data: {
+                    success: true,
+                    results: [
+                        { channelKey: 'hamaki', subscribed: true, xpAwarded: 0, alreadyVerified: true },
+                    ],
+                    totalXPAwarded: 0,
+                },
+                error: null,
+            });
+
+            const result = await verifyAndAwardSubscriptionXP(
+                'test-token',
+                'user-123',
+                'google-123'
+            );
+
+            expect(result.success).toBe(true);
+            expect(result.totalXPAwarded).toBe(0); // No new XP (already verified)
+            // XP awarded should be true because alreadyVerified is true
+            expect(result.statuses.find(s => s.channelKey === 'hamaki')?.xpAwarded).toBe(true);
         });
     });
 });

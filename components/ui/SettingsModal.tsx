@@ -62,6 +62,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     );
   };
 
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      'ანგარიშის წაშლა',
+      'დარწმუნებული ხართ, რომ გსურთ ანგარიშის წაშლა? ეს მოქმედება შეუქცევადია და წაიშლება ყველა თქვენი მონაცემი, მათ შორის XP ქულები და პოსტები.',
+      [
+        { text: 'გაუქმება', style: 'cancel' },
+        {
+          text: 'წაშლა',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (!userProfile?.google_id) {
+                Alert.alert('შეცდომა', 'მომხმარებლის პროფილი ვერ მოიძებნა');
+                return;
+              }
+
+              // Import userService dynamically to avoid circular dependencies
+              const { userService } = await import('@/services/supabase/userService');
+              const success = await userService.deleteUserAccount(userProfile.google_id);
+
+              if (success) {
+                onClose();
+                await signOut();
+                router.replace('/auth');
+                Alert.alert('წარმატება', 'თქვენი ანგარიში წარმატებით წაიშალა');
+              } else {
+                Alert.alert('შეცდომა', 'ანგარიშის წაშლა ვერ მოხერხდა. გთხოვთ სცადოთ მოგვიანებით.');
+              }
+            } catch (error) {
+              Alert.alert('შეცდომა', 'ანგარიშის წაშლა ვერ მოხერხდა. გთხოვთ სცადოთ მოგვიანებით.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <Modal
       visible={visible}
@@ -86,14 +123,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <View style={styles.content}>
           {/* Account Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account</Text>
+            <Text style={styles.sectionTitle}>პროფილი</Text>
             <View style={styles.accountInfo}>
               <View style={styles.accountRow}>
-                <Text style={styles.label}>Email:</Text>
+                <Text style={styles.label}>ელფოსტა:</Text>
                 <Text style={styles.value}>{userProfile?.email}</Text>
               </View>
               <View style={styles.accountRow}>
-                <Text style={styles.label}>Name:</Text>
+                <Text style={styles.label}>სახელი:</Text>
                 <Text style={styles.value}>{userProfile?.full_name}</Text>
               </View>
               {isDemoMode && (
@@ -110,78 +147,99 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Earn XP Section */}
           {!isDemoMode && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Earn More XP</Text>
+              <Text style={styles.sectionTitle}>დააგროვე მეტი XP</Text>
 
-              {/* Channel Subscriptions */}
-              <TouchableOpacity
-                style={styles.subscriptionsCard}
-                onPress={() => setShowSubscriptions(true)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.subscriptionsCardContent}>
-                  <View style={styles.subscriptionsIcon}>
-                    <Ionicons name="logo-youtube" size={24} color="#FF0000" />
-                    {/* Badge for pending subscriptions */}
-                    {authMethod === 'google' && pendingSubscriptions > 0 && (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{pendingSubscriptions}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.subscriptionsText}>
-                    <Text style={styles.subscriptionsTitle}>Channel Subscriptions</Text>
-                    <Text style={styles.subscriptionsDescription}>
-                      Get up to 3,100 XP by subscribing to 4 channels
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={24} color={Colors.dark.tint} />
+              {/* Magic Link users can't verify YouTube */}
+              {authMethod !== 'google' ? (
+                <View style={styles.magicLinkNotice}>
+                  <Ionicons name="information-circle-outline" size={24} color={Colors.dark.tabIconDefault} />
+                  <Text style={styles.magicLinkNoticeText}>
+                    YouTube ვერიფიკაციისთვის საჭიროა Google ანგარიშით შესვლა.
+                    გამოდით და შედით Google-ით XP-ს მისაღებად.
+                  </Text>
                 </View>
-              </TouchableOpacity>
+              ) : (
+                <>
+                  {/* Channel Subscriptions */}
+                  <TouchableOpacity
+                    style={styles.subscriptionsCard}
+                    onPress={() => setShowSubscriptions(true)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.subscriptionsCardContent}>
+                      <View style={styles.subscriptionsIcon}>
+                        <Ionicons name="logo-youtube" size={24} color="#FF0000" />
+                        {/* Badge for pending subscriptions */}
+                        {pendingSubscriptions > 0 && (
+                          <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{pendingSubscriptions}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.subscriptionsText}>
+                        <Text style={styles.subscriptionsTitle}>არხის გამოწერა</Text>
+                        <Text style={styles.subscriptionsDescription}>
+                          მიიღე 3,100 XP-მდე ყველა არხის გამოწერით
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={24} color={Colors.dark.tint} />
+                    </View>
+                  </TouchableOpacity>
 
-              {/* Video Likes */}
-              <TouchableOpacity
-                style={[styles.subscriptionsCard, { marginTop: 12 }]}
-                onPress={() => setShowVideoLikes(true)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.subscriptionsCardContent}>
-                  <View style={styles.subscriptionsIcon}>
-                    <Ionicons name="thumbs-up" size={24} color={Colors.dark.tint} />
-                    {/* Badge for pending video likes */}
-                    {authMethod === 'google' && pendingVideoLikes > 0 && (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{pendingVideoLikes}</Text>
+                  {/* Video Likes */}
+                  <TouchableOpacity
+                    style={[styles.subscriptionsCard, { marginTop: 12 }]}
+                    onPress={() => setShowVideoLikes(true)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.subscriptionsCardContent}>
+                      <View style={styles.subscriptionsIcon}>
+                        <Ionicons name="thumbs-up" size={24} color={Colors.dark.tint} />
+                        {/* Badge for pending video likes */}
+                        {pendingVideoLikes > 0 && (
+                          <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{pendingVideoLikes}</Text>
+                          </View>
+                        )}
                       </View>
-                    )}
-                  </View>
-                  <View style={styles.subscriptionsText}>
-                    <Text style={styles.subscriptionsTitle}>Like Latest Videos</Text>
-                    <Text style={styles.subscriptionsDescription}>
-                      Get up to 500 XP by liking latest videos
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={24} color={Colors.dark.tint} />
-                </View>
-              </TouchableOpacity>
+                      <View style={styles.subscriptionsText}>
+                        <Text style={styles.subscriptionsTitle}>დაალაიქე უახლესი ვიდეოები</Text>
+                        <Text style={styles.subscriptionsDescription}>
+                          დააგროვე 500 XP-მდე ბოლო ვიდეობის დალაიქებით
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={24} color={Colors.dark.tint} />
+                    </View>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           )}
 
           {/* About Section */}
-          <View style={styles.section}>
+          {/* <View style={styles.section}>
             <Text style={styles.sectionTitle}>About</Text>
-            <Text style={styles.description}>
+            <Text style={styles.description}> 
               Hamaki v1.0.0{'\n'}
               {isDemoMode
                 ? 'Demo Mode - For Apple Review' + '\n\n' + 'This is a demonstration version showing all app features without requiring YouTube subscription.'
                 : 'Exclusive app for HamaKi Studio subscribers' + '\n\n' + 'Stay connected with the latest content and exclusive features!'
               }
             </Text>
-          </View>
+          </View> */}
+
+          {/* Delete Account Button - Required for Apple App Store */}
+          {!isDemoMode && (
+            <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount}>
+              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+              <Text style={styles.deleteAccountText}>ანგარიშის წაშლა</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Sign Out Button */}
           <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
             <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.signOutText}>{isDemoMode ? 'Exit Demo' : 'Sign Out'}</Text>
+            <Text style={styles.signOutText}>{isDemoMode ? 'Exit Demo' : 'გამოსვლა'}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -202,7 +260,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               <Ionicons name="arrow-back" size={24} color={Colors.dark.text} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Channel Subscriptions</Text>
+            <Text style={styles.headerTitle}>არხის გამოწერა</Text>
             <View style={styles.headerLeft} />
           </View>
 
@@ -282,7 +340,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontFamily: 'hamaki-eng',
+    fontFamily: 'SpaceMono',
     color: Colors.dark.text,
     marginBottom: 15,
     fontWeight: 'bold',
@@ -335,13 +393,32 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     lineHeight: 24,
   },
+  deleteAccountButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+    alignItems: 'center',
+    marginTop: 'auto',
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#FF3B30',
+  },
+  deleteAccountText: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    color: '#FF3B30',
+    fontWeight: 'bold',
+  },
   signOutButton: {
     backgroundColor: '#FF6B6B',
     paddingVertical: 15,
     paddingHorizontal: 30,
     borderRadius: 25,
     alignItems: 'center',
-    marginTop: 'auto',
     marginBottom: 40,
     flexDirection: 'row',
     justifyContent: 'center',
@@ -420,5 +497,19 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     color: '#FFFFFF',
     fontWeight: 'bold',
+  },
+  magicLinkNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  magicLinkNoticeText: {
+    flex: 1,
+    color: Colors.dark.tabIconDefault,
+    fontSize: 14,
+    lineHeight: 20,
   },
 });

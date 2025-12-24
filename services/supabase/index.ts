@@ -7,6 +7,7 @@
  *   import { supabase, userService, postService, leaderboardService } from '@/services/supabase';
  */
 
+export { channelStateService } from './channelStateService';
 export { supabase } from './client';
 export { leaderboardService } from './leaderboardService';
 export { postService } from './postService';

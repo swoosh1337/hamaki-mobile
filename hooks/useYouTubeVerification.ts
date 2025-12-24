@@ -20,8 +20,8 @@ import {
 } from '@/services/youtube/subscriptionService';
 import { verificationCacheService } from '@/services/youtube/verificationCacheService';
 import {
-    getCachedVideoStatuses,
     getTotalPossibleVideoLikeXP,
+    getVideoStatusesFromDB,
     verifyAndAwardVideoLikeXP,
 } from '@/services/youtube/videoLikeService';
 import type {
@@ -77,26 +77,29 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
      * Load cached data on mount
      */
     useEffect(() => {
-        if (!userProfile?.google_id || authMethod !== 'google') {
+        // Only load for Google users with valid user ID
+        if (!userProfile?.id || authMethod !== 'google') {
             return;
         }
 
         loadCachedData();
-    }, [userProfile?.google_id, authMethod]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userProfile?.id, authMethod]);
 
     /**
      * Load cached subscription and video statuses
      */
     const loadCachedData = useCallback(async () => {
-        if (!userProfile?.google_id) return;
+        // Use user's UUID (id) - this matches what Edge Function saves to DB
+        if (!userProfile?.id) return;
 
         try {
-            // Load subscriptions from cache/DB
-            const subs = await getSubscriptionStatuses(userProfile.google_id);
+            // Load subscriptions from cache/DB using user UUID
+            const subs = await getSubscriptionStatuses(userProfile.id);
             setSubscriptionStatuses(subs);
 
-            // Load video statuses from cache
-            const videos = await getCachedVideoStatuses();
+            // Load video statuses from database (server-synced)
+            const videos = await getVideoStatusesFromDB();
             setVideoLikeStatuses(videos);
 
             // Get last check time
@@ -107,7 +110,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
         } catch (error) {
             log.error('Error loading cached data', error);
         }
-    }, [userProfile?.google_id]);
+    }, [userProfile?.id]);
 
     /**
      * Verify subscriptions and award XP

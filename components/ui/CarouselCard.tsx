@@ -1,5 +1,4 @@
 import { Colors } from '@/constants/Colors';
-import { youtubeService } from '@/services';
 import { trackCarouselTap } from '@/utils/analytics';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -59,7 +58,7 @@ export const CarouselCard: React.FC<CarouselCardProps> = ({ post, onPostTap }) =
           <Text style={styles.carouselBadgeText}>{post.metadata.badge}</Text>
         </View>
       )}
-      {post.type === 'video' && youtubeService.isVideoNew(post.publishedAt) && (
+      {post.type === 'video' && (Date.now() - new Date(post.publishedAt).getTime() < 7 * 24 * 60 * 60 * 1000) && (
         <View style={styles.carouselBadge} testID={`carousel-new-badge-${post.id}`}>
           <Text style={styles.carouselBadgeText}>NEW</Text>
         </View>

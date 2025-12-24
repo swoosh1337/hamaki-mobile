@@ -79,21 +79,28 @@ export const VideoLikesManager: React.FC = () => {
           </View>
         </View>
 
-        {/* Refresh Button */}
-        <TouchableOpacity
-          style={styles.refreshButton}
-          onPress={handleCheckVideoLikes}
-          disabled={isLoadingVideoLikes}
-        >
-          {isLoadingVideoLikes ? (
-            <ActivityIndicator size="small" color={Colors.dark.background} />
-          ) : (
-            <>
-              <Ionicons name="refresh" size={18} color={Colors.dark.background} />
-              <Text style={styles.refreshButtonText}>გადაამოწმე</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {/* Refresh Button - shows different state when all verified */}
+        {videoLikeStatuses.length > 0 && videoLikeStatuses.every(s => !s.latestVideoId || s.xpAwarded) ? (
+          <View style={styles.allVerifiedButton}>
+            <Ionicons name="checkmark-circle" size={18} color={Colors.dark.tint} />
+            <Text style={styles.allVerifiedText}>დადასტურდა</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={handleCheckVideoLikes}
+            disabled={isLoadingVideoLikes}
+          >
+            {isLoadingVideoLikes ? (
+              <ActivityIndicator size="small" color={Colors.dark.background} />
+            ) : (
+              <>
+                <Ionicons name="refresh" size={18} color={Colors.dark.background} />
+                <Text style={styles.refreshButtonText}>გადაამოწმე</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Video List */}
@@ -157,12 +164,12 @@ export const VideoLikesManager: React.FC = () => {
                     onPress={() => openVideo(status.latestVideoId!)}
                   >
                     <Ionicons name="play-circle-outline" size={20} color={Colors.dark.background} />
-                    <Text style={styles.watchButtonText}>Watch & Like</Text>
+                    <Text style={styles.watchButtonText}>უყურე და დაალაიქე</Text>
                   </TouchableOpacity>
                 )}
               </>
             ) : (
-              <Text style={styles.noVideo}>No recent video found</Text>
+              <Text style={styles.noVideo}>ვიდეო სინქრონიზირდება...</Text>
             )}
           </View>
         ))}
@@ -382,5 +389,22 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
     lineHeight: 20,
+  },
+  allVerifiedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(196, 255, 0, 0.15)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.dark.tint,
+  },
+  allVerifiedText: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.tint,
+    fontWeight: '600',
   },
 });

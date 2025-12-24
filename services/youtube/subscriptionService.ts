@@ -2,129 +2,124 @@
  * YouTube Subscription Service
  *
  * Handles YouTube subscription verification for XP rewards.
- * Uses caching to minimize API calls.
  *
- * Key features:
- * - Checks subscriptions via YouTube API
- * - Caches results for 7 days
- * - Awards XP only once per channel (never revoked)
+ * ⚠️ ZERO CLIENT-SIDE YOUTUBE API CALLS
+ * 
+ * This service:
+ *   1. Reads verification state from database
+ *   2. Calls Edge Function for verification (not YouTube directly)
+ *   3. XP is awarded once per channel (gate model, not signal)
+ * 
+ * Subscriptions are GATES:
+ *   - Verified once → never auto-checked again
+ *   - User can manually re-verify if needed
+ *   - XP is awarded once and never revoked
  */
 
-import { supabase } from '@/services/supabase/client';
+import { leaderboardService, supabase } from '@/services/supabase';
 import type {
     ChannelKey,
     SubscriptionStatus,
-    SubscriptionXPAwarded,
-    VerifySubscriptionsResult
+    VerifySubscriptionsResult,
 } from '@/types/youtube';
 import { YOUTUBE_CHANNELS as CHANNELS } from '@/types/youtube';
 import { createLogger } from '@/utils/logger';
-import { verificationCacheService } from './verificationCacheService';
 
 const log = createLogger('SubscriptionService');
 
-/**
- * Check if user is subscribed to a specific YouTube channel
- * Uses YouTube Data API subscriptions.list endpoint
- *
- * Cost: ~1-N units (depending on pagination)
- */
-async function checkSingleChannelSubscription(
-    accessToken: string,
-    channelId: string
-): Promise<boolean> {
-    try {
-        let nextPageToken: string | undefined = undefined;
+// Edge Function response type
+interface EdgeFunctionResult {
+    success: boolean;
+    results: Array<{
+        channelId: string;
+        channelKey: string;
+        subscribed: boolean;
+        xpAwarded: number;
+        alreadyVerified: boolean;
+    }>;
+    totalXPAwarded: number;
+    error?: string;
+}
 
-        do {
-            const url: string = `https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&mine=true&maxResults=50${nextPageToken ? `&pageToken=${nextPageToken}` : ''
-                }`;
-
-            const response = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                },
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                log.error(`YouTube API error for channel ${channelId}`, data);
-                throw new Error(
-                    `${response.status}: ${data.error?.message || 'Failed to fetch subscriptions'}`
-                );
-            }
-
-            // Check if subscribed to this channel on current page
-            const isSubscribed =
-                data.items?.some(
-                    (item: any) => item.snippet?.resourceId?.channelId === channelId
-                ) || false;
-
-            if (isSubscribed) {
-                return true;
-            }
-
-            nextPageToken = data.nextPageToken;
-        } while (nextPageToken);
-
-        return false;
-    } catch (error) {
-        log.error(`Error checking subscription for channel ${channelId}`, error);
-        throw error;
-    }
+// Database verification record
+interface SubscriptionVerification {
+    user_id: string;
+    channel_id: string;
+    channel_key: string;
+    subscribed: boolean;
+    xp_awarded: boolean;
+    verified_at: string | null;
 }
 
 /**
- * Check all channel subscriptions via YouTube API
- *
- * Cost: ~4 units (1 per channel, assuming user has < 50 subscriptions)
+ * Get subscription statuses from database
+ * ✅ Reads from youtube_subscription_verifications table
+ * ✅ Zero YouTube API calls
  */
-export async function checkAllChannelSubscriptions(
-    accessToken: string
-): Promise<Record<ChannelKey, boolean>> {
-    log.info('Checking all channel subscriptions...');
-
-    const results: Record<ChannelKey, boolean> = {
-        hamaki: false,
-        miro: false,
-        bastos: false,
-        koro: false,
-    };
-
+export async function getSubscriptionStatuses(
+    userId: string
+): Promise<SubscriptionStatus[]> {
+    const statuses: SubscriptionStatus[] = [];
     const channelKeys: ChannelKey[] = ['hamaki', 'miro', 'bastos', 'koro'];
 
-    await Promise.all(
-        channelKeys.map(async (key) => {
-            try {
-                const channel = CHANNELS[key];
-                results[key] = await checkSingleChannelSubscription(accessToken, channel.id);
-                log.debug(`Channel ${channel.name}: ${results[key] ? 'subscribed' : 'not subscribed'}`);
-            } catch (error) {
-                log.error(`Error checking ${key} subscription`, error);
-                results[key] = false;
-            }
-        })
-    );
+    try {
+        // Get existing verifications from DB
+        const { data: verifications } = await supabase
+            .from('youtube_subscription_verifications')
+            .select('*')
+            .eq('user_id', userId);
 
-    log.info('Subscription check completed', { results });
-    return results;
+        const verificationMap = new Map(
+            (verifications || []).map((v: SubscriptionVerification) => [v.channel_key, v])
+        );
+
+        for (const channelKey of channelKeys) {
+            const channel = CHANNELS[channelKey];
+            const verification = verificationMap.get(channelKey);
+
+            statuses.push({
+                channelKey,
+                channelId: channel.id,
+                channelName: channel.name,
+                isSubscribed: verification?.subscribed ?? false,
+                xpReward: channel.xpReward,
+                xpAwarded: verification?.xp_awarded ?? false,
+                lastChecked: verification?.verified_at
+                    ? new Date(verification.verified_at).getTime()
+                    : 0,
+            });
+        }
+    } catch (error) {
+        log.error('Error fetching subscription statuses:', error);
+        // Return unverified statuses on error
+        for (const channelKey of channelKeys) {
+            const channel = CHANNELS[channelKey];
+            statuses.push({
+                channelKey,
+                channelId: channel.id,
+                channelName: channel.name,
+                isSubscribed: false,
+                xpReward: channel.xpReward,
+                xpAwarded: false,
+                lastChecked: 0,
+            });
+        }
+    }
+
+    return statuses;
 }
 
 /**
- * Verify subscriptions and award XP
- * Uses cache when available, only makes API calls if cache is expired
- *
- * Key behavior:
- * - XP is awarded only once per channel
- * - If user was awarded XP before, they won't get it again (even if they unsubscribed)
- * - Cache is used to avoid repeated API calls (7-day TTL)
+ * Verify subscriptions and award XP via Edge Function
+ * ✅ Zero client-side YouTube API calls
+ * ✅ DB short-circuit (already verified = no API call)
+ * ✅ XP awarded once per channel (gate model)
  */
 export async function verifyAndAwardSubscriptionXP(
     accessToken: string,
     userId: string,
-    googleId: string,
-    forceRefresh: boolean = false
+    _googleId: string, // Kept for backwards compatibility
+    _forceRefresh: boolean = false // Ignored - gate model
 ): Promise<VerifySubscriptionsResult> {
     const result: VerifySubscriptionsResult = {
         success: false,
@@ -134,160 +129,78 @@ export async function verifyAndAwardSubscriptionXP(
     };
 
     try {
-        // Check if we need to make API calls or can use cache
-        const needsCheck = forceRefresh || await verificationCacheService.needsFullSubscriptionCheck();
+        const channelKeys: ChannelKey[] = ['hamaki', 'miro', 'bastos', 'koro'];
 
-        let subscriptionResults: Record<ChannelKey, boolean>;
+        // Build channel list for Edge Function
+        const channels = channelKeys.map(key => ({
+            channelId: CHANNELS[key].id,
+            channelKey: key,
+        }));
 
-        if (needsCheck) {
-            log.info('Making fresh API call for subscription check');
-            subscriptionResults = await checkAllChannelSubscriptions(accessToken);
-        } else {
-            log.info('Using cached subscription data');
-            const cache = await verificationCacheService.getCache();
-            subscriptionResults = {} as Record<ChannelKey, boolean>;
+        // Call Edge Function for verification
+        log.info('Verifying subscriptions via Edge Function');
 
-            for (const key of Object.keys(CHANNELS) as ChannelKey[]) {
-                const status = cache.subscriptions.statuses[key];
-                subscriptionResults[key] = status?.isSubscribed || false;
+        const { data, error } = await supabase.functions.invoke<EdgeFunctionResult>(
+            'verify-subscriptions',
+            {
+                body: { channels, userId },
+                headers: { Authorization: `Bearer ${accessToken}` },
             }
-        }
+        );
 
-        // Get current XP awarded status from database
-        const { data: userData, error: fetchError } = await supabase
-            .from('users')
-            .select('subscription_xp_awarded, xp_points')
-            .eq('google_id', googleId)
-            .single();
-
-        if (fetchError) {
-            log.error('Failed to fetch user data', fetchError);
-            result.errors.push('Failed to fetch user data');
+        if (error) {
+            log.error('Edge Function error:', error);
+            log.error('Edge Function error details:', {
+                message: error.message,
+                name: error.name,
+                context: (error as any).context,
+            });
+            result.errors.push(error.message);
             return result;
         }
 
-        const currentXPAwarded: SubscriptionXPAwarded = userData?.subscription_xp_awarded || {
-            hamaki: false,
-            miro: false,
-            bastos: false,
-            koro: false,
-        };
-        const currentXP = userData?.xp_points || 0;
+        if (!data?.success) {
+            log.error('Verification failed:', data?.error);
+            result.errors.push(data?.error || 'Unknown error');
+            return result;
+        }
 
-        let totalNewXP = 0;
-        const updatedXPAwarded = { ...currentXPAwarded };
-        const statuses: SubscriptionStatus[] = [];
+        // Convert Edge Function results to SubscriptionStatus
+        for (const channelKey of channelKeys) {
+            const channel = CHANNELS[channelKey];
+            const edgeResult = data.results.find(r => r.channelKey === channelKey);
 
-        // Process each channel
-        for (const [key, channel] of Object.entries(CHANNELS)) {
-            const channelKey = key as ChannelKey;
-            const isSubscribed = subscriptionResults[channelKey];
-            const alreadyAwarded = currentXPAwarded[channelKey] || false;
-
-            // Award XP only if subscribed AND not already awarded
-            let xpToAward = 0;
-            if (isSubscribed && !alreadyAwarded) {
-                xpToAward = channel.xpReward;
-                totalNewXP += xpToAward;
-                updatedXPAwarded[channelKey] = true;
-                log.info(`Awarding ${xpToAward} XP for ${channel.name} subscription`);
-            }
-
-            const status: SubscriptionStatus = {
+            result.statuses.push({
                 channelKey,
                 channelId: channel.id,
                 channelName: channel.name,
-                isSubscribed,
+                isSubscribed: edgeResult?.subscribed ?? false,
                 xpReward: channel.xpReward,
-                xpAwarded: alreadyAwarded || xpToAward > 0,
+                xpAwarded: (edgeResult?.xpAwarded ?? 0) > 0 || edgeResult?.alreadyVerified === true,
                 lastChecked: Date.now(),
-            };
-            statuses.push(status);
+            });
         }
-
-        // Update database if any XP was awarded
-        if (totalNewXP > 0) {
-            const { error: updateError } = await supabase
-                .from('users')
-                .update({
-                    xp_points: currentXP + totalNewXP,
-                    subscription_xp_awarded: updatedXPAwarded,
-                    subscriptions_verified_at: new Date().toISOString(),
-                })
-                .eq('google_id', googleId);
-
-            if (updateError) {
-                log.error('Failed to update user XP', updateError);
-                result.errors.push('Failed to update XP in database');
-                return result;
-            }
-
-            log.info(`Awarded ${totalNewXP} total XP for subscriptions`);
-        }
-
-        // Update cache
-        const statusMap: Record<ChannelKey, SubscriptionStatus> = {} as Record<ChannelKey, SubscriptionStatus>;
-        statuses.forEach(s => { statusMap[s.channelKey] = s; });
-        await verificationCacheService.updateAllSubscriptionStatuses(statusMap);
 
         result.success = true;
-        result.statuses = statuses;
-        result.totalXPAwarded = totalNewXP;
+        result.totalXPAwarded = data.totalXPAwarded;
+
+        // Update leaderboard if XP was awarded
+        if (data.totalXPAwarded > 0) {
+            log.info(`Awarded ${data.totalXPAwarded} XP for subscriptions`);
+            try {
+                await leaderboardService.updateLeaderboardPoints(userId, data.totalXPAwarded);
+                log.info('Updated leaderboard with subscription XP');
+            } catch (leaderboardError) {
+                log.error('Failed to update leaderboard:', leaderboardError);
+            }
+        }
+
         return result;
 
     } catch (error) {
-        log.error('Error in verifyAndAwardSubscriptionXP', error);
+        log.error('Error in verifyAndAwardSubscriptionXP:', error);
         result.errors.push(error instanceof Error ? error.message : 'Unknown error');
         return result;
-    }
-}
-
-/**
- * Get current subscription status from cache or DB
- * Does NOT make API calls
- */
-export async function getSubscriptionStatuses(
-    googleId: string
-): Promise<SubscriptionStatus[]> {
-    try {
-        // Try cache first
-        const cache = await verificationCacheService.getCache();
-        const cachedStatuses = Object.values(cache.subscriptions.statuses);
-
-        if (cachedStatuses.length > 0) {
-            return cachedStatuses;
-        }
-
-        // Fall back to database
-        const { data: userData } = await supabase
-            .from('users')
-            .select('subscription_xp_awarded, youtube_subscribed, miro_channel_subscribed, bastos_channel_subscribed, koro_channel_subscribed')
-            .eq('google_id', googleId)
-            .single();
-
-        if (!userData) {
-            return [];
-        }
-
-        const xpAwarded: SubscriptionXPAwarded = userData.subscription_xp_awarded || {};
-
-        return Object.entries(CHANNELS).map(([key, channel]) => {
-            const channelKey = key as ChannelKey;
-            const dbField = channel.dbField as keyof typeof userData;
-
-            return {
-                channelKey,
-                channelId: channel.id,
-                channelName: channel.name,
-                isSubscribed: userData[dbField] || false,
-                xpReward: channel.xpReward,
-                xpAwarded: xpAwarded[channelKey] || false,
-                lastChecked: 0,
-            };
-        });
-    } catch (error) {
-        log.error('Error getting subscription statuses', error);
-        return [];
     }
 }
 
@@ -299,7 +212,7 @@ export function getTotalPossibleSubscriptionXP(): number {
 }
 
 /**
- * Calculate earned subscription XP
+ * Calculate earned subscription XP from statuses
  */
 export function getEarnedSubscriptionXP(statuses: SubscriptionStatus[]): number {
     return statuses

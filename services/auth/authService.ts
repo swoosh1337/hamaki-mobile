@@ -194,10 +194,10 @@ export const authService = {
                 // Get the user's remember me preference
                 const preference = await rememberMeService.getPreference(userData.email);
                 const shouldStaySignedIn = preference?.rememberMe ?? true;
-                
-                log.info('Magic link authentication successful', { 
-                    email: userData.email, 
-                    rememberMe: shouldStaySignedIn 
+
+                log.info('Magic link authentication successful', {
+                    email: userData.email,
+                    rememberMe: shouldStaySignedIn
                 });
 
                 return {
@@ -239,7 +239,7 @@ export const authService = {
             // Get the user's remember me preference
             const preference = await rememberMeService.getPreference(userData.email);
             const shouldStaySignedIn = preference?.rememberMe ?? true;
-            
+
             return {
                 success: true,
                 userData,
@@ -488,32 +488,37 @@ export const authService = {
     },
 
     /**
-     * Verify YouTube subscription to the main Hamaki channel
-     * NOTE: This is now OPTIONAL and non-blocking
+     * Verify YouTube subscription via Edge Function
+     * Called once on login, then only manual verification
+     * ✅ Uses Edge Function (no client-side YouTube API)
      */
-    async verifyYouTubeSubscription(accessToken: string): Promise<boolean> {
+    async verifyYouTubeSubscription(accessToken: string, userId?: string): Promise<boolean> {
         try {
-            let nextPageToken: string | undefined = undefined;
+            // If no userId provided, we can't call Edge Function - skip
+            if (!userId) {
+                log.warn('No userId provided for subscription verification');
+                return true;
+            }
 
-            do {
-                const response: Response = await fetch(
-                    `https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&mine=true&maxResults=50${nextPageToken ? `&pageToken=${nextPageToken}` : ""}`,
-                    { headers: { Authorization: `Bearer ${accessToken}` } }
-                );
+            const channels = [
+                { channelId: HAMAKI_CHANNEL_ID, channelKey: 'hamaki' },
+            ];
 
-                const data: any = await response.json();
-                if (!response.ok) throw new Error(`${response.status}: ${data.error?.message || "YouTube API error"}`);
+            const { data, error } = await supabase.functions.invoke('verify-subscriptions', {
+                body: { channels, userId },
+                headers: { Authorization: `Bearer ${accessToken}` },
+            });
 
-                const found = data.items?.some((item: any) => item.snippet?.resourceId?.channelId === HAMAKI_CHANNEL_ID);
-                if (found) return true;
+            if (error) {
+                log.warn('Edge Function error during login verification', error);
+                return true; // Don't block login
+            }
 
-                nextPageToken = data.nextPageToken;
-            } while (nextPageToken);
-
-            return false;
+            const hamakiResult = data?.results?.find((r: any) => r.channelKey === 'hamaki');
+            return hamakiResult?.subscribed ?? true;
         } catch (error) {
-            log.error('YouTube subscription check error', error);
-            throw error;
+            log.warn('Subscription verification failed', error);
+            return true; // Don't block login on error
         }
     },
 

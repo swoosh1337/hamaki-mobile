@@ -2,214 +2,75 @@
  * YouTube Video Like Service
  *
  * Handles video like verification for XP rewards.
- * Uses caching to minimize API calls.
  *
- * Key features:
- * - Gets latest video from each channel (cached 24h)
- * - Checks if user liked the video
- * - Awards XP per video ID (not per channel)
+ * ⚠️ ZERO CLIENT-SIDE YOUTUBE API CALLS
+ * 
+ * This service:
+ *   1. Reads video state from database (via channelStateService)
+ *   2. Calls Edge Function for like verification (not YouTube directly)
+ *   3. Returns verification results
  */
 
-import { supabase } from '@/services/supabase/client';
+import { channelStateService, supabase } from '@/services/supabase';
 import type {
-    ChannelKey,
     VerifyVideoLikesResult,
     VideoLikeStatus,
-    VideoLikeXPAwarded,
+    YouTubeChannelState
 } from '@/types/youtube';
-import { VIDEO_LIKE_XP, YOUTUBE_CHANNELS } from '@/types/youtube';
+import { VIDEO_LIKE_XP } from '@/types/youtube';
 import { createLogger } from '@/utils/logger';
-import { verificationCacheService } from './verificationCacheService';
 
 const log = createLogger('VideoLikeService');
 
-const YOUTUBE_API_KEY = process.env.EXPO_PUBLIC_YOUTUBE_API_KEY || '';
-
-/**
- * Get the latest video from a channel
- * Uses cache if available (24h TTL), otherwise makes API call
- *
- * Cost: 100 units per call (search.list)
- */
-async function getLatestVideo(
-    channelId: string,
-    channelKey: ChannelKey,
-    forceRefresh: boolean = false
-): Promise<{ id: string; title: string; thumbnail?: string } | null> {
-    try {
-        // Check cache first (unless forced refresh)
-        if (!forceRefresh) {
-            const cached = await verificationCacheService.getCachedVideo(channelKey);
-            if (cached) {
-                log.debug(`Using cached video for ${channelKey}`, { videoId: cached.videoId });
-                return { id: cached.videoId, title: cached.title, thumbnail: cached.thumbnail };
-            }
-        }
-
-        // Make API call
-        log.info(`Fetching latest video for ${channelKey} from API`);
-        const url = `https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${channelId}&part=snippet&order=date&type=video&maxResults=1`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (!response.ok) {
-            log.error('YouTube API error getting latest video', data);
-            throw new Error(data.error?.message || 'Failed to fetch latest video');
-        }
-
-        if (data.items && data.items.length > 0) {
-            const video = data.items[0];
-            const result = {
-                id: video.id.videoId,
-                title: video.snippet.title,
-                thumbnail: video.snippet.thumbnails?.medium?.url,
-            };
-
-            // Update cache
-            await verificationCacheService.updateVideoCache(
-                channelKey,
-                result.id,
-                result.title,
-                result.thumbnail
-            );
-
-            return result;
-        }
-
-        return null;
-    } catch (error) {
-        log.error(`Error getting latest video for channel ${channelId}`, error);
-        throw error;
-    }
+// Edge Function response type
+interface EdgeFunctionResult {
+    success: boolean;
+    results: Array<{
+        videoId: string;
+        channelKey: string;
+        liked: boolean;
+        xpAwarded: number;
+    }>;
+    totalXPAwarded: number;
+    error?: string;
 }
 
 /**
- * Check if user has liked a specific video
- * Uses YouTube Data API videos.getRating endpoint
- *
- * Cost: 1 unit per call
+ * Get video statuses from database
+ * ✅ Reads from server-synced youtube_channel_state table
+ * ✅ Zero YouTube API calls
  */
-async function checkVideoLike(
-    accessToken: string,
-    videoId: string
-): Promise<boolean> {
-    try {
-        const url = `https://www.googleapis.com/youtube/v3/videos/getRating?id=${videoId}`;
-
-        const response = await fetch(url, {
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-            },
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            log.error('YouTube API error checking video rating', data);
-
-            // Permission denied - user needs to re-authenticate
-            if (data.error?.code === 403) {
-                log.warn('Insufficient permissions to check video rating');
-            }
-
-            return false;
-        }
-
-        const isLiked = data.items?.[0]?.rating === 'like';
-        log.debug(`Video ${videoId} like status: ${isLiked}`);
-        return isLiked;
-    } catch (error) {
-        log.error(`Error checking like for video ${videoId}`, error);
-        return false;
-    }
-}
-
-/**
- * Check all channels for video likes
- * Uses cached video IDs when possible
- *
- * Cost: ~4 units if all videos cached, ~404 units if all need refresh
- */
-export async function checkAllVideoLikes(
-    accessToken: string,
-    userId: string
-): Promise<VideoLikeStatus[]> {
+export async function getVideoStatusesFromDB(): Promise<VideoLikeStatus[]> {
     const statuses: VideoLikeStatus[] = [];
 
-    // Get user's awarded video likes from database
-    const { data: userData } = await supabase
-        .from('users')
-        .select('video_like_xp_awarded')
-        .eq('id', userId)
-        .single();
+    try {
+        const channelStates = await channelStateService.getAll();
 
-    const awardedLikes: VideoLikeXPAwarded = userData?.video_like_xp_awarded || {};
-    const channelKeys: ChannelKey[] = ['hamaki', 'miro', 'bastos', 'koro'];
-
-    for (const channelKey of channelKeys) {
-        const channel = YOUTUBE_CHANNELS[channelKey];
-
-        try {
-            // Get latest video (uses cache if valid)
-            const latestVideo = await getLatestVideo(channel.id, channelKey);
-
-            if (!latestVideo) {
-                statuses.push({
-                    channelKey,
-                    channelName: channel.name,
-                    latestVideoId: null,
-                    videoTitle: null,
-                    isLiked: false,
-                    xpReward: VIDEO_LIKE_XP[channelKey],
-                    xpAwarded: false,
-                    lastChecked: Date.now(),
-                });
-                continue;
-            }
-
-            // Check if user liked this video
-            const isLiked = await checkVideoLike(accessToken, latestVideo.id);
-
-            // Check if XP was already awarded for THIS specific video
-            const xpAwarded = awardedLikes[latestVideo.id] || false;
-
+        for (const state of channelStates) {
             statuses.push({
-                channelKey,
-                channelName: channel.name,
-                latestVideoId: latestVideo.id,
-                videoTitle: latestVideo.title,
-                videoThumbnail: latestVideo.thumbnail,
-                isLiked,
-                xpReward: VIDEO_LIKE_XP[channelKey],
-                xpAwarded,
-                lastChecked: Date.now(),
-            });
-        } catch (error) {
-            log.error(`Error checking video for ${channel.name}`, error);
-            statuses.push({
-                channelKey,
-                channelName: channel.name,
-                latestVideoId: null,
-                videoTitle: null,
-                isLiked: false,
-                xpReward: VIDEO_LIKE_XP[channelKey],
-                xpAwarded: false,
-                lastChecked: Date.now(),
+                channelKey: state.channel_key,
+                channelName: state.channel_name,
+                latestVideoId: state.latest_video_id,
+                videoTitle: state.latest_video_title,
+                videoThumbnail: state.latest_video_thumbnail || undefined,
+                isLiked: false, // Unknown until verified
+                xpReward: VIDEO_LIKE_XP[state.channel_key] || 0,
+                xpAwarded: false, // Unknown until verified
+                lastChecked: 0,
             });
         }
+    } catch (error) {
+        log.error('Error fetching video statuses from DB', error);
     }
 
     return statuses;
 }
 
 /**
- * Verify video likes and award XP
- *
- * Key behavior:
- * - XP is awarded per VIDEO ID (not per channel)
- * - When a new video is released, user can earn XP again
- * - If user liked and unliked, no duplicate XP
+ * Verify video likes and award XP via Edge Function
+ * ✅ Zero client-side YouTube API calls
+ * ✅ Batched verification (1 API unit)
+ * ✅ XP awarded per video ID
  */
 export async function verifyAndAwardVideoLikeXP(
     accessToken: string,
@@ -223,100 +84,79 @@ export async function verifyAndAwardVideoLikeXP(
     };
 
     try {
-        // Get all video like statuses
-        const statuses = await checkAllVideoLikes(accessToken, userId);
-        result.statuses = statuses;
+        // Get all channel states from database
+        const channelStates = await channelStateService.getAll();
 
-        // Get current awarded likes from DB
-        const { data: userData, error: fetchError } = await supabase
-            .from('users')
-            .select('video_like_xp_awarded, xp_points')
-            .eq('id', userId)
-            .single();
+        // Build video list for Edge Function
+        const videos = channelStates
+            .filter((state): state is YouTubeChannelState & { latest_video_id: string } =>
+                state.latest_video_id !== null
+            )
+            .map(state => ({
+                videoId: state.latest_video_id,
+                channelKey: state.channel_key,
+            }));
 
-        if (fetchError) {
-            log.error('Failed to fetch user data', fetchError);
-            result.errors.push('Failed to fetch user data');
+        if (videos.length === 0) {
+            log.warn('No videos to verify');
+            result.success = true;
             return result;
         }
 
-        const currentAwardedLikes: VideoLikeXPAwarded = userData?.video_like_xp_awarded || {};
-        const currentXP = userData?.xp_points || 0;
+        // Call Edge Function for verification
+        log.info(`Verifying ${videos.length} videos via Edge Function`);
 
-        let totalNewXP = 0;
-        const newAwardedLikes: VideoLikeXPAwarded = {};
-
-        // Process each status
-        for (const status of statuses) {
-            if (status.isLiked && !status.xpAwarded && status.latestVideoId) {
-                // User liked video AND XP not yet awarded for this video
-                totalNewXP += status.xpReward;
-                newAwardedLikes[status.latestVideoId] = true;
-                log.info(`Awarding ${status.xpReward} XP for liking ${status.channelName} video`, {
-                    videoId: status.latestVideoId,
-                });
+        const { data, error } = await supabase.functions.invoke<EdgeFunctionResult>(
+            'verify-video-likes',
+            {
+                body: { videos, userId },
+                headers: { Authorization: `Bearer ${accessToken}` },
             }
+        );
+
+        if (error) {
+            log.error('Edge Function error:', error);
+            result.errors.push(error.message);
+            return result;
         }
 
-        // Update database if any XP was awarded
-        if (totalNewXP > 0) {
-            const updatedAwardedLikes = { ...currentAwardedLikes, ...newAwardedLikes };
+        if (!data?.success) {
+            log.error('Verification failed:', data?.error);
+            result.errors.push(data?.error || 'Unknown error');
+            return result;
+        }
 
-            const { error: updateError } = await supabase
-                .from('users')
-                .update({
-                    xp_points: currentXP + totalNewXP,
-                    video_like_xp_awarded: updatedAwardedLikes,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', userId);
+        // Convert Edge Function results to VideoLikeStatus
+        for (const state of channelStates) {
+            const edgeResult = data.results.find(r => r.videoId === state.latest_video_id);
 
-            if (updateError) {
-                log.error('Failed to update user XP', updateError);
-                result.errors.push('Failed to update XP in database');
-                return result;
-            }
-
-            log.info(`Awarded ${totalNewXP} total XP for video likes`);
+            result.statuses.push({
+                channelKey: state.channel_key,
+                channelName: state.channel_name,
+                latestVideoId: state.latest_video_id,
+                videoTitle: state.latest_video_title,
+                videoThumbnail: state.latest_video_thumbnail || undefined,
+                isLiked: edgeResult?.liked ?? false,
+                xpReward: VIDEO_LIKE_XP[state.channel_key] || 0,
+                xpAwarded: (edgeResult?.xpAwarded ?? 0) > 0,
+                lastChecked: Date.now(),
+            });
         }
 
         result.success = true;
-        result.totalXPAwarded = totalNewXP;
+        result.totalXPAwarded = data.totalXPAwarded;
+
+        if (data.totalXPAwarded > 0) {
+            log.info(`Awarded ${data.totalXPAwarded} XP for video likes`);
+        }
+
         return result;
 
     } catch (error) {
-        log.error('Error in verifyAndAwardVideoLikeXP', error);
+        log.error('Error in verifyAndAwardVideoLikeXP:', error);
         result.errors.push(error instanceof Error ? error.message : 'Unknown error');
         return result;
     }
-}
-
-/**
- * Get current video like statuses from cache
- * Does NOT make fresh API calls
- */
-export async function getCachedVideoStatuses(): Promise<VideoLikeStatus[]> {
-    const statuses: VideoLikeStatus[] = [];
-    const channelKeys: ChannelKey[] = ['hamaki', 'miro', 'bastos', 'koro'];
-
-    for (const channelKey of channelKeys) {
-        const channel = YOUTUBE_CHANNELS[channelKey];
-        const cached = await verificationCacheService.getCachedVideo(channelKey);
-
-        statuses.push({
-            channelKey,
-            channelName: channel.name,
-            latestVideoId: cached?.videoId || null,
-            videoTitle: cached?.title || null,
-            videoThumbnail: cached?.thumbnail,
-            isLiked: false, // Unknown without API call
-            xpReward: VIDEO_LIKE_XP[channelKey],
-            xpAwarded: false, // Unknown without DB check
-            lastChecked: 0,
-        });
-    }
-
-    return statuses;
 }
 
 /**

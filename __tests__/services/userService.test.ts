@@ -338,4 +338,57 @@ describe('userService', () => {
             expect(result).toBeNull();
         });
     });
+
+    describe('deleteUserAccount', () => {
+        it('should successfully delete user account', async () => {
+            (mockSupabase.from as jest.Mock).mockReturnValue({
+                delete: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ error: null }),
+                }),
+            });
+
+            const result = await userService.deleteUserAccount('google-123');
+
+            expect(result).toBe(true);
+            expect(mockSupabase.from).toHaveBeenCalledWith('users');
+        });
+
+        it('should return false when deletion fails', async () => {
+            const mockError = { message: 'Database error', code: '500' };
+            (mockSupabase.from as jest.Mock).mockReturnValue({
+                delete: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({ error: mockError }),
+                }),
+            });
+
+            const result = await userService.deleteUserAccount('google-123');
+
+            expect(result).toBe(false);
+        });
+
+        it('should return false when exception occurs', async () => {
+            (mockSupabase.from as jest.Mock).mockImplementation(() => {
+                throw new Error('Network error');
+            });
+
+            const result = await userService.deleteUserAccount('google-123');
+
+            expect(result).toBe(false);
+        });
+
+        it('should call delete with correct google_id', async () => {
+            const mockEq = jest.fn().mockResolvedValue({ error: null });
+            const mockDelete = jest.fn().mockReturnValue({
+                eq: mockEq,
+            });
+            (mockSupabase.from as jest.Mock).mockReturnValue({
+                delete: mockDelete,
+            });
+
+            await userService.deleteUserAccount('google-456');
+
+            expect(mockDelete).toHaveBeenCalled();
+            expect(mockEq).toHaveBeenCalledWith('google_id', 'google-456');
+        });
+    });
 });

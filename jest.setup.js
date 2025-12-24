@@ -144,6 +144,8 @@ jest.mock('react-native', () => ({
   Modal: 'Modal',
   SafeAreaView: 'SafeAreaView',
   KeyboardAvoidingView: 'KeyboardAvoidingView',
+  ScrollView: 'ScrollView',
+  RefreshControl: 'RefreshControl',
   Dimensions: {
     get: jest.fn(() => ({ width: 375, height: 812 })),
   },
