@@ -24,6 +24,7 @@ import type {
 } from '@/types/youtube';
 import { YOUTUBE_CHANNELS as CHANNELS } from '@/types/youtube';
 import { createLogger } from '@/utils/logger';
+import { retryWithBackoff } from '@/utils/retry';
 
 const log = createLogger('SubscriptionService');
 
@@ -64,10 +65,24 @@ export async function getSubscriptionStatuses(
 
     try {
         // Get existing verifications from DB
-        const { data: verifications } = await supabase
+        log.debug('Loading subscriptions for userId:', userId);
+        const { data: verifications, error } = await supabase
             .from('youtube_subscription_verifications')
             .select('*')
             .eq('user_id', userId);
+
+        if (error) {
+            log.error('DB error loading subscriptions:', error);
+        }
+
+        log.debug('DB returned verifications:', {
+            count: verifications?.length || 0,
+            data: verifications?.map(v => ({
+                channel: v.channel_key,
+                subscribed: v.subscribed,
+                xpAwarded: v.xp_awarded
+            }))
+        });
 
         const verificationMap = new Map(
             (verifications || []).map((v: SubscriptionVerification) => [v.channel_key, v])
@@ -110,6 +125,24 @@ export async function getSubscriptionStatuses(
 }
 
 /**
+ * Check if all channels have been verified and XP awarded
+ * Used to skip background checks if already fully verified
+ */
+export async function areAllChannelsVerified(userId: string): Promise<boolean> {
+    if (!userId) return false;
+
+    const statuses = await getSubscriptionStatuses(userId);
+
+    // Must have all 4 channels and all must have XP awarded
+    const allChannelKeys = ['hamaki', 'miro', 'bastos', 'koro'];
+    if (statuses.length !== allChannelKeys.length) {
+        return false;
+    }
+
+    return statuses.every(s => s.xpAwarded);
+}
+
+/**
  * Verify subscriptions and award XP via Edge Function
  * ✅ Zero client-side YouTube API calls
  * ✅ DB short-circuit (already verified = no API call)
@@ -137,24 +170,82 @@ export async function verifyAndAwardSubscriptionXP(
             channelKey: key,
         }));
 
-        // Call Edge Function for verification
+        // Call Edge Function for verification with retry for network errors
         log.info('Verifying subscriptions via Edge Function');
 
-        const { data, error } = await supabase.functions.invoke<EdgeFunctionResult>(
-            'verify-subscriptions',
+        // Pre-flight validation: ensure access token is valid
+        const trimmedToken = accessToken.trim();
+        if (!trimmedToken) {
+            log.error('Access token is empty or whitespace', {
+                hasToken: !!accessToken,
+                tokenLength: accessToken.length,
+            });
+            result.errors.push('Access token is empty');
+            return result;
+        }
+
+        log.debug('Calling Edge Function with token', {
+            tokenLength: trimmedToken.length,
+            tokenPrefix: trimmedToken.substring(0, 10),
+        });
+
+        const { data, error } = await retryWithBackoff(
+            () => supabase.functions.invoke<EdgeFunctionResult>(
+                'verify-subscriptions',
+                {
+                    body: { channels, userId, accessToken: trimmedToken },
+                }
+            ),
             {
-                body: { channels, userId },
-                headers: { Authorization: `Bearer ${accessToken}` },
+                maxRetries: 3,
+                baseDelayMs: 1000,
+                onRetry: (attempt, err) => {
+                    log.warn(`Retry attempt ${attempt} for verify-subscriptions`, err);
+                },
             }
         );
 
         if (error) {
             log.error('Edge Function error:', error);
+
+            // Log full error object to understand structure
+            log.error('Edge Function error (full):', JSON.stringify(error, null, 2));
+
             log.error('Edge Function error details:', {
                 message: error.message,
                 name: error.name,
                 context: (error as any).context,
+                status: (error as any).status,
+                statusText: (error as any).statusText,
             });
+
+            // Try to get error response body multiple ways
+            try {
+                // Try reading response body from context
+                const context = (error as any).context;
+
+                if (context) {
+                    // Try to read as text
+                    try {
+                        const response = context as Response;
+                        const clonedResponse = response.clone();
+                        const errorText = await clonedResponse.text();
+                        log.error('Edge Function error body (text):', errorText);
+
+                        try {
+                            const errorJson = JSON.parse(errorText);
+                            log.error('Edge Function error body (parsed):', errorJson);
+                        } catch {
+                            // Not JSON, already logged as text
+                        }
+                    } catch (readError) {
+                        log.error('Could not read response body:', readError);
+                    }
+                }
+            } catch (parseError) {
+                log.error('Could not parse error body:', parseError);
+            }
+
             result.errors.push(error.message);
             return result;
         }

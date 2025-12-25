@@ -17,6 +17,7 @@ import type {
     VideoLikeStatus
 } from '@/types/youtube';
 import { createLogger } from '@/utils/logger';
+import { decodeHtmlEntities } from '@/utils/text';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const log = createLogger('VerificationCache');
@@ -40,6 +41,10 @@ function createEmptyCache(): VerificationCache {
         videos: {
             videos: {} as VideoCache['videos'],
         },
+        videoLikes: {
+            statuses: {} as Record<ChannelKey, VideoLikeStatus>,
+            lastFullCheck: 0,
+        },
         lastUpdated: 0,
     };
 }
@@ -47,6 +52,7 @@ function createEmptyCache(): VerificationCache {
 export const verificationCacheService = {
     /**
      * Get the entire verification cache from AsyncStorage
+     * Handles migration of old caches that don't have videoLikes
      */
     async getCache(): Promise<VerificationCache> {
         try {
@@ -56,9 +62,29 @@ export const verificationCacheService = {
                 return createEmptyCache();
             }
 
-            const parsed = JSON.parse(cached) as VerificationCache;
-            log.debug('Cache retrieved', { lastUpdated: new Date(parsed.lastUpdated).toISOString() });
-            return parsed;
+            const parsed = JSON.parse(cached) as Partial<VerificationCache>;
+
+            // Migrate old caches that don't have videoLikes
+            if (!parsed.videoLikes) {
+                log.debug('Migrating old cache - adding videoLikes');
+                parsed.videoLikes = {
+                    statuses: {},
+                    lastFullCheck: 0,
+                };
+            }
+
+            // Ensure subscriptions exists
+            if (!parsed.subscriptions) {
+                parsed.subscriptions = { statuses: {}, lastFullCheck: 0 };
+            }
+
+            // Ensure videos exists
+            if (!parsed.videos) {
+                parsed.videos = { videos: {} };
+            }
+
+            log.debug('Cache retrieved', { lastUpdated: new Date(parsed.lastUpdated || 0).toISOString() });
+            return parsed as VerificationCache;
         } catch (error) {
             log.error('Error reading cache', error);
             return createEmptyCache();
@@ -190,17 +216,54 @@ export const verificationCacheService = {
     },
 
     /**
-     * Update video like status
+     * Update video like status and cache it
      */
     async updateVideoLikeStatus(
         channelKey: ChannelKey,
         status: VideoLikeStatus
     ): Promise<void> {
-        // Video like statuses are part of the main cache
         const cache = await this.getCache();
-        // Store in a special location if needed
-        // For now, video likes are checked fresh each time (not cached long-term)
-        log.debug('Video like status noted', { channelKey, isLiked: status.isLiked });
+        cache.videoLikes.statuses[channelKey] = status;
+        await this.saveCache(cache);
+        log.debug('Video like status cached', { channelKey, isLiked: status.isLiked, xpAwarded: status.xpAwarded });
+    },
+
+    /**
+     * Update all video like statuses after verification
+     */
+    async updateAllVideoLikeStatuses(
+        statuses: VideoLikeStatus[]
+    ): Promise<void> {
+        const cache = await this.getCache();
+        for (const status of statuses) {
+            cache.videoLikes.statuses[status.channelKey] = status;
+        }
+        cache.videoLikes.lastFullCheck = Date.now();
+        await this.saveCache(cache);
+        log.info('All video like statuses cached', { count: statuses.length });
+    },
+
+    /**
+     * Get cached video like statuses
+     * Decodes HTML entities in video titles for proper display
+     */
+    async getCachedVideoLikeStatuses(): Promise<VideoLikeStatus[]> {
+        const cache = await this.getCache();
+        const statuses = Object.values(cache.videoLikes.statuses);
+
+        // Decode HTML entities in video titles (cached values may have encoded entities)
+        return statuses.map(status => ({
+            ...status,
+            videoTitle: decodeHtmlEntities(status.videoTitle),
+        }));
+    },
+
+    /**
+     * Check if video like cache has data
+     */
+    async hasVideoLikeCache(): Promise<boolean> {
+        const cache = await this.getCache();
+        return Object.keys(cache.videoLikes.statuses).length > 0;
     },
 
     /**

@@ -32,6 +32,21 @@ jest.mock('@expo/vector-icons', () => ({
   Ionicons: 'Ionicons',
 }));
 
+jest.mock('expo-router', () => ({
+  useFocusEffect: jest.fn(),
+  router: {
+    push: jest.fn(),
+    replace: jest.fn(),
+    back: jest.fn(),
+  },
+}));
+
+jest.mock('expo-linking', () => ({
+  createURL: jest.fn((path) => `exp://192.168.1.1/${path}`),
+  addEventListener: jest.fn(),
+  getInitialURL: jest.fn().mockResolvedValue(null),
+}));
+
 jest.mock('@/components/profile/AvatarPicker', () => ({
   AvatarPicker: ({ onSelect }: any) => {
     const { View } = require('react-native');

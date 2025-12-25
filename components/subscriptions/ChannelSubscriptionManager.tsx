@@ -25,10 +25,15 @@ import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ChannelSubscriptionManager');
 
-export const ChannelSubscriptionManager: React.FC = () => {
+interface ChannelSubscriptionManagerProps {
+  // Optional initial data from parent to avoid loading on mount
+  initialStatuses?: import('@/types/youtube').SubscriptionStatus[];
+}
+
+export const ChannelSubscriptionManager: React.FC<ChannelSubscriptionManagerProps> = ({ initialStatuses }) => {
   const { userProfile, updateUserProfile } = useAuth();
   const {
-    subscriptionStatuses,
+    subscriptionStatuses: hookStatuses,
     isLoadingSubscriptions,
     subscriptionError,
     verifySubscriptions,
@@ -36,6 +41,9 @@ export const ChannelSubscriptionManager: React.FC = () => {
     totalSubscriptionXP,
     earnedSubscriptionXP,
   } = useYouTubeVerification();
+
+  // Use initial statuses if provided and hook hasn't loaded yet
+  const subscriptionStatuses = hookStatuses.length > 0 ? hookStatuses : (initialStatuses || []);
 
   // Debug: Log subscription statuses to see xpAwarded values
   console.log('[ChannelSubscriptionManager] statuses:',
@@ -143,7 +151,8 @@ export const ChannelSubscriptionManager: React.FC = () => {
     );
   };
 
-  if (isLoadingSubscriptions) {
+  // Only show loading if no data at all (not even from props)
+  if (isLoadingSubscriptions && subscriptionStatuses.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.dark.tint} />

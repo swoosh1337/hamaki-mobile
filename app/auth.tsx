@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   welcomeText: {
-    fontFamily: 'HamakiGeo',
+    fontFamily: 'SpaceMono',
     fontSize: 28,
     color: Colors.dark.text, // White/light gray
     textAlign: 'center',

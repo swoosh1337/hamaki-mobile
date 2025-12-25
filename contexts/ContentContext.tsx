@@ -1,6 +1,7 @@
 import { supabase } from '@/services/supabase/client';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 import { createLogger } from '@/utils/logger';
+import { decodeHtmlEntities } from '@/utils/text';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 const log = createLogger('Content');
@@ -64,8 +65,8 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const transformDatabasePost = (dbPost: any): Post => ({
     id: dbPost.id,
     type: dbPost.type,
-    title: dbPost.title,
-    excerpt: dbPost.excerpt,
+    title: decodeHtmlEntities(dbPost.title), // Decode HTML entities from YouTube API
+    excerpt: decodeHtmlEntities(dbPost.excerpt),
     content: dbPost.content,
     thumbnail: dbPost.thumbnail,
     isPublished: dbPost.is_published,

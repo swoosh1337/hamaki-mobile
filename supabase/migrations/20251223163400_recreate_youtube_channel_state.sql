@@ -19,7 +19,7 @@ CREATE TABLE public.youtube_channel_state (
 
 -- Seed initial channels with their YouTube channel IDs
 INSERT INTO public.youtube_channel_state (channel_id, channel_key, channel_name) VALUES
-    ('UCgdME9lBqBHrNNzyMqzfrag', 'hamaki', 'HamaKi'),
+    ('UCSI5XbaxsX1USijrfFVuJqA', 'hamaki', 'HamaKi'),
     ('UChJnB_7-JUYXEr-Fv3Y_rGA', 'miro', 'Miro'),
     ('UCjSZIjLKfQHkdZbZMvYQhAw', 'bastos', 'Basto'),
     ('UCPCQmO5MrP3S1oVu6p9bxRw', 'koro', 'Koro');

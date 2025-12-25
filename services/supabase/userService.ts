@@ -290,25 +290,23 @@ export const userService = {
             weekEnd.setDate(weekStart.getDate() + 6);
             weekEnd.setHours(23, 59, 59, 999);
 
-            // Get weekly XP from leaderboard_entries table
-            const weekStartDate = getWeekStartDate();
-
-            const { data: weeklyEntry, error: weeklyError } = await supabase
+            // Get XP from leaderboard_entries table (current total XP)
+            const { data: leaderboardEntry, error: leaderboardError } = await supabase
                 .from('leaderboard_entries')
-                .select('points')
+                .select('total_xp, game_xp, subscription_xp, video_like_xp')
                 .eq('user_id', userProfile.id)
-                .eq('period_type', 'weekly')
-                .eq('week_start_date', weekStartDate)
                 .single();
 
-            if (weeklyError && weeklyError.code !== 'PGRST116') {
-                log.error('Error fetching weekly XP:', weeklyError);
+            if (leaderboardError && leaderboardError.code !== 'PGRST116') {
+                log.error('Error fetching leaderboard XP:', leaderboardError);
             }
 
-            const weeklyXP = weeklyEntry?.points || 0;
+            // Use leaderboard total_xp if available, otherwise fall back to user xp_points
+            const totalXP = leaderboardEntry?.total_xp || userProfile.xp_points;
+            const weeklyXP = leaderboardEntry?.game_xp || 0; // Game XP = weekly competitive XP
 
             return {
-                totalXP: userProfile.xp_points,
+                totalXP,
                 weeklyXP,
                 weeklyStartDate: weekStart.toISOString(),
                 weeklyEndDate: weekEnd.toISOString(),

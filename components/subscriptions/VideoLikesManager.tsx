@@ -17,22 +17,30 @@ import { createLogger } from '@/utils/logger';
 
 const log = createLogger('VideoLikesManager');
 
-export const VideoLikesManager: React.FC = () => {
+interface VideoLikesManagerProps {
+  // Optional initial data from parent to avoid loading on mount
+  initialStatuses?: import('@/types/youtube').VideoLikeStatus[];
+}
+
+export const VideoLikesManager: React.FC<VideoLikesManagerProps> = ({ initialStatuses }) => {
   const {
-    videoLikeStatuses,
+    videoLikeStatuses: hookStatuses,
     isLoadingVideoLikes,
     videoLikeError,
     verifyVideoLikes,
     totalVideoLikeXP,
   } = useYouTubeVerification();
 
+  // Use initial statuses if provided and hook hasn't loaded yet
+  const videoLikeStatuses = hookStatuses.length > 0 ? hookStatuses : (initialStatuses || []);
+
   const handleCheckVideoLikes = async () => {
     try {
       await verifyVideoLikes();
-      Alert.alert('Success', 'Video likes checked successfully!');
+      Alert.alert('ვერიფიკაცია დასრულდა', 'ლაიქები წარმატებით გადამოწმდა!');
     } catch (error) {
       log.error('Error checking video likes', error);
-      Alert.alert('Error', 'Failed to check video likes. Please try again.');
+      Alert.alert('ვერიფიკაცია ვერ მოხერხდა', 'სამწუხაროდ ვერიფიკაცია ვერ მოხერხდა. გთხოვთ სცადოთ თავიდან.');
     }
   };
 
@@ -43,9 +51,8 @@ export const VideoLikesManager: React.FC = () => {
   const earnedXP = videoLikeStatuses
     .filter(s => s.xpAwarded)
     .reduce((sum, status) => sum + status.xpReward, 0);
-  const rawPercent = totalVideoLikeXP > 0 ? (earnedXP / totalVideoLikeXP) * 100 : 0;
-  const percent = Math.max(0, Math.min(100, rawPercent));
 
+  // Only show loading if no data at all (not even from props)
   if (isLoadingVideoLikes && videoLikeStatuses.length === 0) {
     return (
       <View style={styles.loadingContainer}>
@@ -56,133 +63,138 @@ export const VideoLikesManager: React.FC = () => {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>დაალაიქე ჩვენი ვიდეობი</Text>
-        <Text style={styles.subtitle}>
+    <View style={styles.container}>
+      {/* Stats Card */}
+      <View style={styles.statsCard}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{earnedXP}</Text>
+          <Text style={styles.statLabel}>XP მიღებული</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{totalVideoLikeXP}</Text>
+          <Text style={styles.statLabel}>ჯამური XP</Text>
+        </View>
+      </View>
+
+      {/* Video List */}
+      <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionTitle}>დაალაიქე ახალი ვიდეობი</Text>
+        <Text style={styles.sectionDescription}>
           დააგროვე XP ჩვენი ახალი ვიდეოების დალაიქებით
         </Text>
 
-        {/* XP Progress */}
-        <View style={styles.xpProgress}>
-          <Text style={styles.xpText}>
-            {earnedXP} / {totalVideoLikeXP} XP მიღებულია
-          </Text>
-          <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${percent}%` }
-              ]}
-            />
-          </View>
+        <View style={styles.videoList}>
+          {videoLikeStatuses.map((status) => (
+            <View key={status.channelKey} style={styles.videoCard}>
+              <View style={styles.videoHeader}>
+                <View style={styles.channelInfo}>
+                  <Ionicons
+                    name="logo-youtube"
+                    size={24}
+                    color="#FF0000"
+                  />
+                  <Text style={styles.channelName}>{status.channelName}</Text>
+                </View>
+                <View style={styles.xpBadge}>
+                  <Text style={styles.xpBadgeText}>+{status.xpReward} XP</Text>
+                </View>
+              </View>
+
+              {status.latestVideoId ? (
+                <>
+                  <Text style={styles.videoTitle} numberOfLines={2}>
+                    {status.videoTitle || 'Loading video details...'}
+                  </Text>
+
+                  {/* Like Status and Actions */}
+                  <View style={styles.videoActions}>
+                    <View style={styles.likeStatus}>
+                      <Ionicons
+                        name={status.isLiked ? 'thumbs-up' : 'thumbs-up-outline'}
+                        size={20}
+                        color={status.isLiked ? Colors.dark.tint : Colors.dark.tabIconDefault}
+                      />
+                      <Text style={[
+                        styles.likeStatusText,
+                        status.isLiked && styles.likeStatusTextActive
+                      ]}>
+                        {status.isLiked ? 'Liked' : 'Not Liked'}
+                      </Text>
+                    </View>
+
+                    {/* XP Status */}
+                    {status.xpAwarded ? (
+                      <View style={styles.xpAwarded}>
+                        <Ionicons name="checkmark-circle" size={20} color={Colors.dark.tint} />
+                        <Text style={styles.xpAwardedText}>XP მიღებულია</Text>
+                      </View>
+                    ) : status.isLiked ? (
+                      <View style={styles.xpPending}>
+                        <Ionicons name="time-outline" size={20} color="#FFA500" />
+                        <Text style={styles.xpPendingText}>მუშავდება...</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {/* Watch/Like Button or Verified State */}
+                  {status.xpAwarded ? (
+                    <View style={styles.likedButton}>
+                      <Ionicons name="thumbs-up" size={16} color={Colors.dark.tabIconDefault} />
+                      <Text style={styles.likedButtonText}>დალაიქებულია</Text>
+                    </View>
+                  ) : !status.isLiked ? (
+                    <TouchableOpacity
+                      style={styles.watchButton}
+                      onPress={() => openVideo(status.latestVideoId!)}
+                    >
+                      <Ionicons name="play-circle-outline" size={20} color={Colors.dark.background} />
+                      <Text style={styles.watchButtonText}>უყურე და დაალაიქე</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </>
+              ) : (
+                <Text style={styles.noVideo}>ვიდეო სინქრონიზირდება...</Text>
+              )}
+            </View>
+          ))}
         </View>
 
-        {/* Refresh Button - shows different state when all verified */}
+        {/* Info Box */}
+        <View style={styles.infoBox}>
+          <Ionicons name="information-circle-outline" size={24} color={Colors.dark.tint} />
+          <Text style={styles.infoText}>
+            XP გემატება ავტომატურად, როდესაც დაალაიქებ ჩვენს ვიდეოს. დააჭირე გადამოწმების ღილაკს რომ ნახო ცვლილება.
+          </Text>
+        </View>
+      </ScrollView>
+
+      {/* Verify Button Section - Fixed at bottom */}
+      <View style={styles.verifySection}>
         {videoLikeStatuses.length > 0 && videoLikeStatuses.every(s => !s.latestVideoId || s.xpAwarded) ? (
           <View style={styles.allVerifiedButton}>
-            <Ionicons name="checkmark-circle" size={18} color={Colors.dark.tint} />
-            <Text style={styles.allVerifiedText}>დადასტურდა</Text>
+            <Ionicons name="checkmark-circle" size={20} color={Colors.dark.tint} />
+            <Text style={styles.allVerifiedButtonText}>ყველა ვიდეო გადამოწმებულია</Text>
           </View>
         ) : (
           <TouchableOpacity
-            style={styles.refreshButton}
+            style={[styles.verifyButton, isLoadingVideoLikes && styles.verifyButtonDisabled]}
             onPress={handleCheckVideoLikes}
             disabled={isLoadingVideoLikes}
+            activeOpacity={0.7}
           >
             {isLoadingVideoLikes ? (
               <ActivityIndicator size="small" color={Colors.dark.background} />
             ) : (
               <>
-                <Ionicons name="refresh" size={18} color={Colors.dark.background} />
-                <Text style={styles.refreshButtonText}>გადაამოწმე</Text>
+                <Ionicons name="shield-checkmark" size={20} color={Colors.dark.background} />
+                <Text style={styles.verifyButtonText}>დაადასტურე ლაიქები</Text>
               </>
             )}
           </TouchableOpacity>
         )}
       </View>
-
-      {/* Video List */}
-      <View style={styles.videoList}>
-        {videoLikeStatuses.map((status) => (
-          <View key={status.channelKey} style={styles.videoCard}>
-            <View style={styles.videoHeader}>
-              <View style={styles.channelInfo}>
-                <Ionicons
-                  name="logo-youtube"
-                  size={24}
-                  color="#FF0000"
-                />
-                <Text style={styles.channelName}>{status.channelName}</Text>
-              </View>
-              <View style={styles.xpBadge}>
-                <Text style={styles.xpBadgeText}>+{status.xpReward} XP</Text>
-              </View>
-            </View>
-
-            {status.latestVideoId && status.videoTitle ? (
-              <>
-                <Text style={styles.videoTitle} numberOfLines={2}>
-                  {status.videoTitle}
-                </Text>
-
-                {/* Like Status and Actions */}
-                <View style={styles.videoActions}>
-                  <View style={styles.likeStatus}>
-                    <Ionicons
-                      name={status.isLiked ? 'thumbs-up' : 'thumbs-up-outline'}
-                      size={20}
-                      color={status.isLiked ? Colors.dark.tint : Colors.dark.tabIconDefault}
-                    />
-                    <Text style={[
-                      styles.likeStatusText,
-                      status.isLiked && styles.likeStatusTextActive
-                    ]}>
-                      {status.isLiked ? 'Liked' : 'Not Liked'}
-                    </Text>
-                  </View>
-
-                  {/* XP Status */}
-                  {status.xpAwarded ? (
-                    <View style={styles.xpAwarded}>
-                      <Ionicons name="checkmark-circle" size={20} color={Colors.dark.tint} />
-                      <Text style={styles.xpAwardedText}>XP Earned</Text>
-                    </View>
-                  ) : status.isLiked ? (
-                    <View style={styles.xpPending}>
-                      <Ionicons name="time-outline" size={20} color="#FFA500" />
-                      <Text style={styles.xpPendingText}>Processing...</Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                {/* Watch/Like Button */}
-                {!status.isLiked && (
-                  <TouchableOpacity
-                    style={styles.watchButton}
-                    onPress={() => openVideo(status.latestVideoId!)}
-                  >
-                    <Ionicons name="play-circle-outline" size={20} color={Colors.dark.background} />
-                    <Text style={styles.watchButtonText}>უყურე და დაალაიქე</Text>
-                  </TouchableOpacity>
-                )}
-              </>
-            ) : (
-              <Text style={styles.noVideo}>ვიდეო სინქრონიზირდება...</Text>
-            )}
-          </View>
-        ))}
-      </View>
-
-      {/* Info Box */}
-      <View style={styles.infoBox}>
-        <Ionicons name="information-circle-outline" size={24} color={Colors.dark.tint} />
-        <Text style={styles.infoText}>
-          XP გემატება ავტომატურად, როდესაც დაალაიქებ ჩვენს ვიდეოს. დააჭირე გადამოწმების ღილაკს რომ ნახო ცვლილება.
-        </Text>
-      </View>
-    </ScrollView>
+    </View>
   );
 };
 
@@ -202,66 +214,52 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     marginTop: 16,
   },
-  header: {
-    marginBottom: 24,
+  statsCard: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(196, 255, 0, 0.3)',
   },
-  title: {
-    fontSize: 24,
-    fontFamily: 'HamakiENG',
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 28,
+    fontFamily: 'SpaceMono',
+    fontWeight: 'bold',
     color: Colors.dark.tint,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    opacity: 0.7,
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: 'rgba(196, 255, 0, 0.3)',
+    marginHorizontal: 16,
+  },
+  scrollArea: {
+    flex: 1,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontFamily: 'HamakiENG',
+    color: Colors.dark.text,
     marginBottom: 8,
   },
-  subtitle: {
+  sectionDescription: {
     fontSize: 14,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
     opacity: 0.7,
     marginBottom: 16,
-  },
-  xpProgress: {
-    marginBottom: 16,
-  },
-  xpText: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.text,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: 'rgba(196, 255, 0, 0.2)',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: Colors.dark.tint,
-    borderRadius: 4,
-  },
-  refreshButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.dark.tint,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    gap: 8,
-    marginBottom: 8,
-  },
-  refreshButtonText: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.background,
-    fontWeight: '600',
-  },
-  lastChecked: {
-    fontSize: 12,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.text,
-    opacity: 0.5,
-    textAlign: 'center',
   },
   videoList: {
     gap: 16,
@@ -367,6 +365,24 @@ const styles = StyleSheet.create({
     color: Colors.dark.background,
     fontWeight: '600',
   },
+  likedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(196, 255, 0, 0.3)',
+  },
+  likedButtonText: {
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.tabIconDefault,
+    fontWeight: '600',
+  },
   noVideo: {
     fontSize: 14,
     fontFamily: 'SpaceMono',
@@ -382,6 +398,7 @@ const styles = StyleSheet.create({
     gap: 12,
     borderWidth: 1,
     borderColor: 'rgba(196, 255, 0, 0.3)',
+    marginBottom: 16,
   },
   infoText: {
     flex: 1,
@@ -390,21 +407,47 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
     lineHeight: 20,
   },
+  verifySection: {
+    padding: 16,
+    paddingBottom: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(196, 255, 0, 0.2)',
+  },
+  verifyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.dark.tint,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 10,
+  },
+  verifyButtonDisabled: {
+    opacity: 0.6,
+  },
+  verifyButtonText: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.background,
+    fontWeight: 'bold',
+  },
   allVerifiedButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     backgroundColor: 'rgba(196, 255, 0, 0.15)',
-    borderRadius: 8,
+    borderRadius: 12,
+    gap: 10,
     borderWidth: 1,
     borderColor: Colors.dark.tint,
   },
-  allVerifiedText: {
-    fontSize: 12,
+  allVerifiedButtonText: {
+    fontSize: 16,
     fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
 });

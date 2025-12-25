@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Image, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { AvatarPicker } from '@/components/profile/AvatarPicker';
@@ -19,7 +20,7 @@ import { createLogger } from '@/utils/logger';
 const log = createLogger('Profile');
 
 export default function ProfileScreen() {
-  const { userProfile, updateUserProfile, isDemoMode } = useAuth();
+  const { userProfile, updateUserProfile, isDemoMode, authMethod } = useAuth();
 
   // Use profile hook for XP stats
   const {
@@ -33,8 +34,17 @@ export default function ProfileScreen() {
     autoFetch: true,
   });
 
-  // Get pending XP count for settings badge
-  const { pendingActionCount: pendingXPCount } = useYouTubeVerification();
+  // Get pending XP count for settings badge (with refresh function)
+  const { pendingActionCount: pendingXPCount, refreshAll } = useYouTubeVerification();
+
+  // Refresh verification data when Profile screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      if (authMethod === 'google') {
+        refreshAll();
+      }
+    }, [authMethod, refreshAll])
+  );
 
   // UI state management
   const [selectedAvatar, setSelectedAvatar] = useState<string>('avatar-1');

@@ -31,13 +31,31 @@ export const rememberMeService = {
   async getPreference(email: string): Promise<RememberMePreference | null> {
     try {
       const preferencesJson = await AsyncStorage.getItem(PREFERENCES_KEY);
-      if (!preferencesJson) return null;
+      log.debug('Getting preference from storage', {
+        email,
+        emailHash: this.hashEmail(email),
+        hasStorage: !!preferencesJson
+      });
+
+      if (!preferencesJson) {
+        log.debug('No preferences found in storage');
+        return null;
+      }
 
       const preferences: Record<string, RememberMePreference> = JSON.parse(preferencesJson);
       const emailHash = this.hashEmail(email);
       const preference = preferences[emailHash];
 
-      if (!preference) return null;
+      log.debug('Preference lookup result', {
+        emailHash,
+        found: !!preference,
+        totalPreferences: Object.keys(preferences).length
+      });
+
+      if (!preference) {
+        log.debug('No preference found for this email hash');
+        return null;
+      }
 
       // Check if preference has expired (preferences expire after 90 days)
       if (Date.now() > preference.expiresAt) {
@@ -71,7 +89,16 @@ export const rememberMeService = {
       };
 
       await AsyncStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
-      log.info(`Remember me preference saved`, { email, rememberMe });
+      log.info(`Remember me preference saved`, {
+        email,
+        rememberMe,
+        emailHash,
+        expiresAt: new Date(preferences[emailHash].expiresAt).toISOString()
+      });
+
+      // Verify it was saved
+      const verify = await AsyncStorage.getItem(PREFERENCES_KEY);
+      log.debug('Verified saved preferences', { saved: !!verify });
     } catch (error) {
       log.error('Error saving remember me preference', error);
       throw error;

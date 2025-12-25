@@ -187,8 +187,9 @@ describe('PostListItem', () => {
 
     describe('Date Formatting', () => {
         it('should show "Yesterday" for posts from yesterday', () => {
+            // Create a date 18 hours ago to ensure Math.ceil gives us 1 day
             const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
+            yesterday.setTime(yesterday.getTime() - (18 * 60 * 60 * 1000)); // 18 hours ago
 
             const postFromYesterday = {
                 ...mockPost,

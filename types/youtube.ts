@@ -137,11 +137,21 @@ export interface VideoCache {
 }
 
 /**
+ * Cache for video like statuses
+ * Persists the xpAwarded status so UI doesn't reload every time
+ */
+export interface VideoLikeCache {
+    statuses: Partial<Record<ChannelKey, VideoLikeStatus>>;
+    lastFullCheck: number;
+}
+
+/**
  * Combined verification cache stored in AsyncStorage
  */
 export interface VerificationCache {
     subscriptions: SubscriptionCache;
     videos: VideoCache;
+    videoLikes: VideoLikeCache;  // NEW: Cache for video like statuses
     lastUpdated: number;
 }
 

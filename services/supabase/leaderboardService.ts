@@ -5,11 +5,9 @@
  * No React dependencies - pure data access layer.
  */
 
-import type { LeaderboardPeriod, UserProfile } from '@/types';
-import { isNetworkError } from '@/utils/errorHandling';
+import type { UserProfile } from '@/types';
 import { createLogger } from '@/utils/logger';
 import { supabase } from './client';
-import { getWeekStartDate } from './userService';
 
 const log = createLogger('Service:Leaderboard');
 
@@ -18,14 +16,31 @@ const log = createLogger('Service:Leaderboard');
  */
 export const leaderboardService = {
     /**
-     * Get leaderboard (top users by XP)
+     * Get all-time leaderboard (top users by total XP)
+     * Uses leaderboard_entries table to avoid duplicates
      */
     async getLeaderboard(limit = 10): Promise<UserProfile[]> {
         try {
+            log.debug('Fetching all-time leaderboard (total XP)', { limit });
+
             const { data, error } = await supabase
-                .from('users')
-                .select('*')
-                .order('xp_points', { ascending: false })
+                .from('leaderboard_entries')
+                .select(`
+                    user_id,
+                    total_xp,
+                    game_xp,
+                    subscription_xp,
+                    video_like_xp,
+                    users!leaderboard_entries_user_id_fkey(
+                        id,
+                        google_id,
+                        email,
+                        full_name,
+                        avatar_url,
+                        xp_points
+                    )
+                `)
+                .order('total_xp', { ascending: false })
                 .limit(limit);
 
             if (error) {
@@ -33,7 +48,20 @@ export const leaderboardService = {
                 return [];
             }
 
-            return data || [];
+            log.debug('Fetched all-time leaderboard entries', { count: data?.length || 0 });
+
+            // Map to UserProfile format for backwards compatibility
+            return (data || []).map(entry => {
+                const user = Array.isArray(entry.users) ? entry.users[0] : entry.users;
+                return {
+                    ...user,
+                    xp_points: entry.total_xp,  // Use total_xp from leaderboard
+                    // Provide defaults for required fields if not selected
+                    youtube_subscribed: (user as any)?.youtube_subscribed ?? false,
+                    created_at: (user as any)?.created_at ?? new Date().toISOString(),
+                    updated_at: (user as any)?.updated_at ?? new Date().toISOString(),
+                } as UserProfile;
+            });
         } catch (error) {
             log.error('Error fetching leaderboard:', error);
             return [];
@@ -41,184 +69,82 @@ export const leaderboardService = {
     },
 
     /**
-     * Get weekly leaderboard entries
-     * Uses FK join: leaderboard_entries.user_id → users.id
+     * Get weekly/monthly competitive leaderboard entries
+     * Uses game_xp which resets monthly for fair competition
      */
     async getWeeklyLeaderboard(limit = 10): Promise<Array<{
         user_id: string;
-        points: number;
+        points: number;  // Keep name for backwards compatibility
         user: { full_name: string; avatar_url?: string };
     }>> {
         try {
-            const weekStartDate = getWeekStartDate();
-            log.debug('Fetching weekly leaderboard', { weekStartDate, limit });
+            log.debug('Fetching competitive leaderboard (monthly game XP)', { limit });
 
             const { data, error } = await supabase
                 .from('leaderboard_entries')
                 .select(`
                     user_id,
-                    points,
+                    game_xp,
                     users!leaderboard_entries_user_id_fkey(full_name, avatar_url)
                 `)
-                .eq('period_type', 'weekly')
-                .eq('week_start_date', weekStartDate)
-                .order('points', { ascending: false })
+                .order('game_xp', { ascending: false })
                 .limit(limit);
 
             if (error) {
-                log.error('Supabase error fetching weekly leaderboard:', error);
+                log.error('Supabase error fetching competitive leaderboard:', error);
                 return [];
             }
 
-            log.debug('Fetched weekly leaderboard entries', { count: data?.length || 0 });
+            log.debug('Fetched competitive leaderboard entries', { count: data?.length || 0 });
 
             return (data || []).map(entry => ({
                 user_id: entry.user_id,
-                points: entry.points,
+                points: entry.game_xp,  // Map game_xp to points for backwards compatibility
                 user: Array.isArray(entry.users) ? entry.users[0] : entry.users,
             }));
         } catch (error) {
-            log.error('Exception fetching weekly leaderboard:', error);
+            log.error('Exception fetching competitive leaderboard:', error);
             return [];
         }
     },
 
     /**
-     * Update user's leaderboard points (called after game completion)
-     * Includes retry logic for network errors
+     * Update user's leaderboard points (DEPRECATED)
+     * 
+     * NOTE: With the new monthly reset system, game XP should be awarded
+     * through the `award_xp()` Edge Function, not directly through this service.
+     * 
+     * This method is kept for backwards compatibility but should not be used
+     * for new features.
      */
     async updateLeaderboardPoints(
         userId: string,
         points: number,
         retryCount = 0
     ): Promise<boolean> {
-        const MAX_RETRIES = 3;
-        const RETRY_DELAY = 1000; // base delay in ms
-        const MAX_DELAY = 5000; // cap exponential backoff to 5s
+        log.warn('updateLeaderboardPoints is deprecated. Use award_xp Edge Function instead.');
 
+        // For backwards compatibility, update game_xp directly
+        // In production, this should go through the Edge Function
         try {
-            const weekStartDate = getWeekStartDate();
+            const { error } = await supabase
+                .from('leaderboard_entries')
+                .upsert({
+                    user_id: userId,
+                    game_xp: points  // Will be automatically included in total_xp
+                }, {
+                    onConflict: 'user_id'
+                });
 
-            // Update weekly leaderboard
-            let weeklySuccess = false;
-            let allTimeSuccess = false;
-
-            try {
-                weeklySuccess = await this.updatePeriodPoints(
-                    userId,
-                    points,
-                    'weekly',
-                    weekStartDate
-                );
-            } catch (weeklyError) {
-                log.error('Weekly leaderboard update failed:', weeklyError);
-                // Continue to all-time update even if weekly fails
+            if (error) {
+                log.error('Error updating game XP:', error);
+                return false;
             }
 
-            // Update all-time leaderboard
-            try {
-                allTimeSuccess = await this.updatePeriodPoints(
-                    userId,
-                    points,
-                    'all_time'
-                );
-            } catch (allTimeError) {
-                log.error('All-time leaderboard update failed:', allTimeError);
-                throw allTimeError; // Throw to trigger retry
-            }
-
-            if (weeklySuccess && allTimeSuccess) {
-                log.info('Leaderboard updated successfully (both weekly and all-time)');
-            } else if (allTimeSuccess) {
-                log.warn('Leaderboard partially updated (all-time succeeded, weekly failed)');
-            }
-
-            return allTimeSuccess;
+            return true;
         } catch (error) {
-            log.error(
-                `Error updating leaderboard points (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`,
-                error
-            );
-
-            // Retry on network errors
-            if (isNetworkError(error) && retryCount < MAX_RETRIES) {
-                const delay = Math.min(MAX_DELAY, RETRY_DELAY * (retryCount + 1));
-                log.info(`Retrying leaderboard update in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                return this.updateLeaderboardPoints(userId, points, retryCount + 1);
-            }
-
+            log.error('Exception updating game XP:', error);
             return false;
         }
-    },
-
-    /**
-     * Update points for a specific period type
-     */
-    async updatePeriodPoints(
-        userId: string,
-        points: number,
-        periodType: LeaderboardPeriod,
-        weekStartDate?: string
-    ): Promise<boolean> {
-        // Build the query to check for existing entry
-        let checkQuery = supabase
-            .from('leaderboard_entries')
-            .select('points')
-            .eq('user_id', userId)
-            .eq('period_type', periodType);
-
-        if (periodType === 'weekly' && weekStartDate) {
-            checkQuery = checkQuery.eq('week_start_date', weekStartDate);
-        }
-
-        const { data: existingEntry, error: checkError } = await checkQuery.single();
-
-        if (checkError && checkError.code !== 'PGRST116') {
-            log.error(`Error checking ${periodType} leaderboard:`, checkError);
-            throw checkError;
-        }
-
-        if (existingEntry) {
-            // Update existing entry
-            let updateQuery = supabase
-                .from('leaderboard_entries')
-                .update({ points: existingEntry.points + points })
-                .eq('user_id', userId)
-                .eq('period_type', periodType);
-
-            if (periodType === 'weekly' && weekStartDate) {
-                updateQuery = updateQuery.eq('week_start_date', weekStartDate);
-            }
-
-            const { error: updateError } = await updateQuery;
-
-            if (updateError) {
-                log.error(`Error updating ${periodType} leaderboard:`, updateError);
-                throw updateError;
-            }
-        } else {
-            // Create new entry
-            const insertData: Record<string, unknown> = {
-                user_id: userId,
-                points,
-                period_type: periodType,
-            };
-
-            if (periodType === 'weekly' && weekStartDate) {
-                insertData.week_start_date = weekStartDate;
-            }
-
-            const { error: insertError } = await supabase
-                .from('leaderboard_entries')
-                .insert(insertData);
-
-            if (insertError) {
-                log.error(`Error inserting ${periodType} leaderboard:`, insertError);
-                throw insertError;
-            }
-        }
-
-        return true;
     },
 };

@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
         color: Colors.dark.tint, // Neon green text
         fontSize: 18,
         fontWeight: '600',
-        fontFamily: 'HamakiGeo',
+        fontFamily: 'SpaceMono',
     },
     buttonTextDisabled: {
         color: 'rgba(196, 255, 0, 0.5)',

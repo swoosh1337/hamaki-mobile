@@ -29,6 +29,13 @@ jest.mock('@/services/youtube/subscriptionService', () => ({
     totalXPAwarded: 0,
     errors: [],
   }),
+  areAllChannelsVerified: jest.fn().mockResolvedValue(false),
+}));
+
+// Mock verification data version service
+jest.mock('@/services/youtube/verificationDataVersion', () => ({
+  incrementDataVersion: jest.fn().mockResolvedValue(1),
+  getDataVersion: jest.fn().mockResolvedValue(0),
 }));
 
 // Mock React Native modules - define inline to avoid hoisting issues
@@ -228,6 +235,9 @@ describe('AuthContext Background Checks', () => {
       mockUserService.upsertUserProfile.mockResolvedValue(mockUser);
       mockUserService.getUserProfile.mockResolvedValue(mockUser);
 
+      // Mock valid access token for background checks
+      mockTokenManager.getValidAccessToken.mockResolvedValue('test-access-token');
+
       // Mock subscription verification success - XP awarded
       (verifyAndAwardSubscriptionXP as jest.Mock).mockResolvedValue({
         success: true,
@@ -305,6 +315,9 @@ describe('AuthContext Background Checks', () => {
 
       mockUserService.upsertUserProfile.mockResolvedValue(mockUser);
       mockUserService.getUserProfile.mockResolvedValue(mockUser);
+
+      // Mock valid access token for background checks
+      mockTokenManager.getValidAccessToken.mockResolvedValue('test-access-token');
 
       // Mock subscription verification - NOT subscribed, no XP
       (verifyAndAwardSubscriptionXP as jest.Mock).mockResolvedValue({
@@ -511,6 +524,9 @@ describe('AuthContext Background Checks', () => {
       mockUserService.getUserProfile
         .mockResolvedValueOnce(mockUser)
         .mockResolvedValueOnce(updatedUser);
+
+      // Mock valid access token for background checks
+      mockTokenManager.getValidAccessToken.mockResolvedValue('test-access-token');
 
       // Mock subscription verification success - XP awarded
       (verifyAndAwardSubscriptionXP as jest.Mock).mockResolvedValue({

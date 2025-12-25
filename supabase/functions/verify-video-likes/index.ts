@@ -77,7 +77,7 @@ async function checkVideoRatings(
     return ratings;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
     console.log('[verify-video-likes] Request received:', {
         method: req.method,
         url: req.url,
@@ -203,6 +203,7 @@ Deno.serve(async (req) => {
 
         // Update user's XP and awarded likes
         if (totalXPAwarded > 0) {
+            // Update users table
             await supabase
                 .from('users')
                 .update({
@@ -210,6 +211,28 @@ Deno.serve(async (req) => {
                     video_like_xp_awarded: newAwardedLikes,
                 })
                 .eq('id', userId);
+
+            // Also update leaderboard_entries.video_like_xp
+            // First get current value
+            const { data: leaderboardData } = await supabase
+                .from('leaderboard_entries')
+                .select('video_like_xp')
+                .eq('user_id', userId)
+                .single();
+
+            const currentVideoLikeXP = leaderboardData?.video_like_xp || 0;
+
+            // Upsert with new value
+            await supabase
+                .from('leaderboard_entries')
+                .upsert({
+                    user_id: userId,
+                    video_like_xp: currentVideoLikeXP + totalXPAwarded,
+                }, {
+                    onConflict: 'user_id'
+                });
+
+            console.log(`[verify-video-likes] Updated leaderboard_entries.video_like_xp: ${currentVideoLikeXP} -> ${currentVideoLikeXP + totalXPAwarded}`);
         }
 
         console.log(`[verify-video-likes] Complete. Total XP: ${totalXPAwarded}`);
@@ -224,9 +247,10 @@ Deno.serve(async (req) => {
         );
 
     } catch (error) {
-        console.error('[verify-video-likes] Error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[verify-video-likes] Error:', errorMessage);
         return new Response(
-            JSON.stringify({ error: error.message }),
+            JSON.stringify({ error: errorMessage }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }

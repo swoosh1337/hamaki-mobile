@@ -33,7 +33,7 @@ describe('Notifications', () => {
       expect(mockScheduleNotification).toHaveBeenCalledWith({
         content: {
           title: '✅ გამოწერა დადასტურდა',
-          body: 'HamaKi გამოწერა წარმატებით დადასტურდა. დამატებითი XP დაერიგისტრირდა!',
+          body: 'HamaKi გამოწერა წარმატებით დადასტურდა. დამატებითი XP მოგემატად!',
           data: {
             type: 'subscription_verification',
             isSubscribed: true,
@@ -73,7 +73,7 @@ describe('Notifications', () => {
       expect(mockScheduleNotification).toHaveBeenCalledWith({
         content: {
           title: '✅ გამოწერა დადასტურდა',
-          body: 'YouTube გამოწერა წარმატებით დადასტურდა. დამატებითი XP დაერიგისტრირდა!',
+          body: 'YouTube გამოწერა წარმატებით დადასტურდა. დამატებითი XP მოგემატად!',
           data: {
             type: 'subscription_verification',
             isSubscribed: true,

@@ -14,7 +14,8 @@
 import { authService, rememberMeService, tokenManager } from '@/services/auth';
 import { supabase } from '@/services/supabase/client';
 import { userService } from '@/services/supabase/userService';
-import { verifyAndAwardSubscriptionXP } from '@/services/youtube/subscriptionService';
+import { areAllChannelsVerified, verifyAndAwardSubscriptionXP } from '@/services/youtube/subscriptionService';
+import { incrementDataVersion } from '@/services/youtube/verificationDataVersion';
 import type { AuthMethod, AuthResult, MagicLinkResult } from '@/types';
 import type { UserProfile } from '@/types/user';
 import { analytics } from '@/utils/analytics';
@@ -158,7 +159,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
       }
 
-      // Show Remember Me modal
+      // Check if user has existing "Remember Me" preference
+      log.debug('Checking for existing Remember Me preference', {
+        email: result.userData.email,
+        method
+      });
+      const existingPreference = await rememberMeService.getPreference(result.userData.email);
+      log.debug('Existing preference result', {
+        found: !!existingPreference,
+        rememberMe: existingPreference?.rememberMe,
+        expiresAt: existingPreference?.expiresAt ? new Date(existingPreference.expiresAt).toISOString() : null
+      });
+
+      if (existingPreference && existingPreference.rememberMe) {
+        // User previously chose "Remember Me" - skip modal and apply preference
+        log.info('User has existing Remember Me preference, auto-applying');
+
+        // Update session to be persistent
+        if (result.tokenData) {
+          await tokenManager.storeSession(
+            result.tokenData,
+            result.userData,
+            result.isSubscribed || false,
+            true, // Persistent session
+            method
+          );
+        }
+
+        // Finalize user and update preference timestamp
+        await rememberMeService.setPreference(result.userData.email, true);
+
+        setUserProfile(updatedUser);
+        setAuthMethod(method);
+        setIsSubscribed(result.isSubscribed || false);
+        setIsAuthenticated(true);
+
+        // Perform background checks for Google users
+        if (method === 'google' && updatedUser.google_id && updatedUser.id) {
+          performBackgroundChecks(updatedUser.google_id, updatedUser.id);
+        }
+
+        return true;
+      }
+
+      // No existing preference - show Remember Me modal
+      log.info('No existing Remember Me preference found, showing modal', {
+        email: result.userData.email,
+        preferenceExists: !!existingPreference,
+        rememberMeValue: existingPreference?.rememberMe
+      });
       setPendingAuthResult(result);
       setShowRememberMeModal(true);
 
@@ -227,10 +276,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         // Perform background checks for Google OAuth users (non-blocking)
-        if (pendingAuthResult.authMethod === 'google') {
+        if (pendingAuthResult.authMethod === 'google' && supabaseUser.id && supabaseUser.google_id) {
           // Don't await these - let them run in background
           // Subscription verification happens here, NOT during login
-          performBackgroundChecks(supabaseUser.google_id, pendingAuthResult.userData?.id)
+          performBackgroundChecks(supabaseUser.google_id, supabaseUser.id)
             .catch(error => {
               log.warn('Background checks failed (non-blocking)', error);
             });
@@ -262,10 +311,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
    */
   const performBackgroundChecks = useCallback(async (
     googleId: string,
-    googleUserId?: string
+    supabaseUserId: string
   ) => {
     try {
-      log.info('Starting background subscription verification...');
+      log.info('Starting background subscription verification...', {
+        googleId,
+        supabaseUserId
+      });
+
+      // Check DB first - skip if all channels already verified
+      const alreadyAllVerified = await areAllChannelsVerified(supabaseUserId);
+      if (alreadyAllVerified) {
+        log.info('All channels already verified in DB, skipping background check');
+        return;
+      }
 
       // Get access token for YouTube API calls
       const accessToken = await tokenManager.getValidAccessToken();
@@ -274,11 +333,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      log.info('Access token obtained for background checks', {
+        tokenLength: accessToken.length,
+        tokenPrefix: accessToken.substring(0, 10),
+        hasWhitespace: accessToken !== accessToken.trim(),
+      });
+
       // Check and award XP for channel subscriptions using new service
       try {
+        log.info('Calling verifyAndAwardSubscriptionXP', {
+          supabaseUserId,
+          googleId,
+        });
+
         const result = await verifyAndAwardSubscriptionXP(
           accessToken,
-          googleUserId || '',
+          supabaseUserId,
           googleId,
           false // Use cache if available
         );
@@ -294,6 +364,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // Send notification for subscription verification results
           if (result.totalXPAwarded > 0) {
+            // Signal that verification data has been updated
+            await incrementDataVersion();
+
             await sendSubscriptionVerificationNotification(true, 'HamaKi');
 
             // Refresh user profile to get updated XP
@@ -560,10 +633,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const result = await authService.authenticate();
 
       if (result.success && result.userData) {
-        // Always complete authentication - no subscription gating
-        // Show Remember Me modal for better UX
-        setPendingAuthResult(result);
-        setShowRememberMeModal(true);
+        // Complete authentication - this will check for existing Remember Me preference
+        await completeAuthentication(result);
         setIsLoading(false);
 
         return { success: true, userData: result.userData, isSubscribed: result.isSubscribed };

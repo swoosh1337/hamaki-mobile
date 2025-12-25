@@ -42,6 +42,14 @@ interface VerificationResult {
     alreadyVerified: boolean;
 }
 
+// Type for existing verification records from database
+interface ExistingVerification {
+    channel_id: string;
+    subscribed: boolean;
+    xp_awarded: boolean;
+    alreadyVerified: boolean;
+}
+
 interface YouTubeSubscription {
     snippet?: {
         resourceId?: {
@@ -111,7 +119,7 @@ async function checkSubscriptions(
     return foundChannels;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
     console.log('[verify-subscriptions] Request received:', {
         method: req.method,
         url: req.url,
@@ -123,27 +131,15 @@ Deno.serve(async (req) => {
     }
 
     try {
-        // Get user's access token from Authorization header
-        const authHeader = req.headers.get('Authorization');
-        console.log('[verify-subscriptions] Auth header present:', !!authHeader);
-
-        if (!authHeader?.startsWith('Bearer ')) {
-            console.error('[verify-subscriptions] Missing or invalid access token');
-            return new Response(
-                JSON.stringify({ error: 'Missing access token' }),
-                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
-        const accessToken = authHeader.replace('Bearer ', '');
-        console.log('[verify-subscriptions] Access token extracted (length):', accessToken.length);
-
-        // Parse request body
-        let body: { channels?: ChannelToVerify[]; userId?: string };
+        // Parse request body first to get access token
+        let body: { channels?: ChannelToVerify[]; userId?: string; accessToken?: string };
         try {
             body = await req.json();
-            console.log('[verify-subscriptions] Request body:', {
+            console.log('[verify-subscriptions] Request body received:', {
                 channelCount: body?.channels?.length,
                 userId: body?.userId ? 'present' : 'missing',
+                hasAccessToken: !!body?.accessToken,
+                accessTokenLength: body?.accessToken?.length || 0,
             });
         } catch (parseError) {
             console.error('[verify-subscriptions] Failed to parse request body:', parseError);
@@ -153,8 +149,9 @@ Deno.serve(async (req) => {
             );
         }
 
-        const { channels, userId } = body;
+        const { channels, userId, accessToken } = body;
 
+        // Validate required fields
         if (!channels?.length || !userId) {
             console.error('[verify-subscriptions] Missing required fields:', { channels: !!channels?.length, userId: !!userId });
             return new Response(
@@ -162,6 +159,20 @@ Deno.serve(async (req) => {
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
+
+        // Validate access token
+        if (!accessToken?.trim()) {
+            console.error('[verify-subscriptions] Missing or empty access token');
+            return new Response(
+                JSON.stringify({ error: 'Missing access token' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        console.log('[verify-subscriptions] Access token validated:', {
+            length: accessToken.trim().length,
+            prefix: accessToken.trim().substring(0, 10),
+        });
 
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -194,8 +205,8 @@ Deno.serve(async (req) => {
             .eq('user_id', userId)
             .in('channel_id', channels.map(c => c.channelId));
 
-        const verifiedChannels = new Map(
-            (existingVerifications || []).map(v => [v.channel_id, v])
+        const verifiedChannels = new Map<string, ExistingVerification>(
+            (existingVerifications || []).map((v: ExistingVerification) => [v.channel_id, v])
         );
 
         // Separate already-verified from needs-check
@@ -231,21 +242,31 @@ Deno.serve(async (req) => {
                 const isSubscribed = foundIds.has(channel.channelId);
                 const xpAmount = isSubscribed ? CHANNEL_XP[channel.channelKey] || 0 : 0;
 
-                // Upsert verification result
-                await supabase
+                // Upsert verification result - specify conflict resolution
+                const { error: upsertError } = await supabase
                     .from('youtube_subscription_verifications')
-                    .upsert({
-                        user_id: userId,
-                        channel_id: channel.channelId,
-                        channel_key: channel.channelKey,
-                        subscribed: isSubscribed,
-                        xp_awarded: isSubscribed,
-                        verified_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                    });
+                    .upsert(
+                        {
+                            user_id: userId,
+                            channel_id: channel.channelId,
+                            channel_key: channel.channelKey,
+                            subscribed: isSubscribed,
+                            xp_awarded: isSubscribed,
+                            verified_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                        },
+                        { onConflict: 'user_id,channel_id' }
+                    );
+
+                if (upsertError) {
+                    console.error(`[${channel.channelKey}] Upsert error:`, upsertError);
+                } else {
+                    console.log(`[${channel.channelKey}] Saved to DB: subscribed=${isSubscribed}, xpAwarded=${isSubscribed}`);
+                }
 
                 // Award XP if subscribed
                 if (isSubscribed && xpAmount > 0) {
+                    // Update users.xp_points
                     const { data: user } = await supabase
                         .from('users')
                         .select('xp_points')
@@ -257,8 +278,26 @@ Deno.serve(async (req) => {
                         .update({ xp_points: (user?.xp_points || 0) + xpAmount })
                         .eq('id', userId);
 
+                    // Also update leaderboard_entries.subscription_xp
+                    const { data: leaderboardData } = await supabase
+                        .from('leaderboard_entries')
+                        .select('subscription_xp')
+                        .eq('user_id', userId)
+                        .single();
+
+                    const currentSubXP = leaderboardData?.subscription_xp || 0;
+
+                    await supabase
+                        .from('leaderboard_entries')
+                        .upsert({
+                            user_id: userId,
+                            subscription_xp: currentSubXP + xpAmount,
+                        }, {
+                            onConflict: 'user_id'
+                        });
+
                     totalXPAwarded += xpAmount;
-                    console.log(`[${channel.channelKey}] Awarded ${xpAmount} XP`);
+                    console.log(`[${channel.channelKey}] Awarded ${xpAmount} XP (leaderboard: ${currentSubXP} -> ${currentSubXP + xpAmount})`);
                 }
 
                 results.push({
@@ -282,10 +321,11 @@ Deno.serve(async (req) => {
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
 
-    } catch (error) {
-        console.error('[verify-subscriptions] Error:', error);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[verify-subscriptions] Error:', errorMessage);
         return new Response(
-            JSON.stringify({ error: error.message }),
+            JSON.stringify({ error: errorMessage }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }

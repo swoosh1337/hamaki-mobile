@@ -210,7 +210,7 @@ export async function sendSubscriptionVerificationNotification(
   try {
     const title = isSubscribed ? '✅ გამოწერა დადასტურდა' : '❌ გამოწერა ვერ მოიძებნა';
     const body = isSubscribed
-      ? `${channelName} გამოწერა წარმატებით დადასტურდა. დამატებითი XP დაერიგისტრირდა!`
+      ? `${channelName} გამოწერა წარმატებით დადასტურდა. დამატებითი XP მოგემატად!`
       : `${channelName} გამოწერა ვერ მოიძებნა. შეგიძლიათ ხელით შეამოწმოთ პარამეტრებში.`;
 
     await Notifications.scheduleNotificationAsync({

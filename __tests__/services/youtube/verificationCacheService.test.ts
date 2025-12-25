@@ -45,6 +45,10 @@ describe('verificationCacheService', () => {
                 videos: {
                     videos: {},
                 },
+                videoLikes: {
+                    statuses: {},
+                    lastFullCheck: 0,
+                },
                 lastUpdated: 0,
             });
         });
@@ -66,6 +70,7 @@ describe('verificationCacheService', () => {
                     lastFullCheck: Date.now() - 1000,
                 },
                 videos: { videos: {} },
+                videoLikes: { statuses: {}, lastFullCheck: 0 },
                 lastUpdated: Date.now() - 1000,
             };
 
@@ -91,6 +96,7 @@ describe('verificationCacheService', () => {
             const mockCache: VerificationCache = {
                 subscriptions: { statuses: {} as any, lastFullCheck: 0 },
                 videos: { videos: {} },
+                videoLikes: { statuses: {}, lastFullCheck: 0 },
                 lastUpdated: 0,
             };
 
@@ -191,6 +197,7 @@ describe('verificationCacheService', () => {
                         },
                     },
                 },
+                videoLikes: { statuses: {}, lastFullCheck: 0 },
                 lastUpdated: 0,
             };
 
@@ -213,6 +220,7 @@ describe('verificationCacheService', () => {
                         },
                     },
                 },
+                videoLikes: { statuses: {}, lastFullCheck: 0 },
                 lastUpdated: Date.now(),
             };
 

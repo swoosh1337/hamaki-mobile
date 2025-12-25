@@ -652,12 +652,290 @@ await waitFor(
 
 ---
 
+## Screen Testing
+
+### Testing Expo Router Screens
+
+When testing screens from `app/(tabs)/`, follow these patterns:
+
+**Example:** `__tests__/screens/ProfileScreen.test.tsx`
+
+```typescript
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import React from 'react';
+import { Alert } from 'react-native';
+
+// Mock all dependencies BEFORE importing the screen
+jest.mock('@/contexts/AuthContext', () => ({
+  useAuth: jest.fn(),
+}));
+
+jest.mock('@/hooks/useUserProfile', () => ({
+  useUserProfile: jest.fn(),
+}));
+
+// Mock child components using the PostList pattern
+jest.mock('@/components/profile/StatsCard', () => ({
+  StatsCard: ({ xpStats, isLoading }: any) => {
+    const { View, Text } = require('react-native');
+    return (
+      <View testID="stats-card">
+        <Text>Stats Card</Text>
+      </View>
+    );
+  },
+}));
+
+// Import mocked modules
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
+
+const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+const mockUseUserProfile = useUserProfile as jest.MockedFunction<typeof useUserProfile>;
+
+// Import screen AFTER all mocks are set up
+import ProfileScreen from '@/app/(tabs)/profile';
+
+describe('ProfileScreen', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    
+    // Set up default mock return values
+    mockUseAuth.mockReturnValue({
+      userProfile: mockUserProfile,
+      updateUserProfile: jest.fn(),
+      // ... all required AuthContext properties
+    });
+    
+    mockUseUserProfile.mockReturnValue({
+      profile: mockUserProfile,
+      xpStats: mockXPStats,
+      // ... all required hook properties
+    });
+  });
+
+  it('should render user name', () => {
+    const { getByText } = render(<ProfileScreen />);
+    expect(getByText('Test User')).toBeTruthy();
+  });
+});
+```
+
+**Key Points:**
+- Mock ALL dependencies before importing the screen
+- Use the same component mocking pattern as `PostList.test.tsx`
+- Import screen AFTER mocks are set up
+- Provide complete mock return values (all required properties)
+
+---
+
+## Troubleshooting Common Issues
+
+### Issue 1: "Element type is invalid: expected a string... but got: undefined"
+
+**Cause:** A component used by your test subject is not properly mocked or is missing from the global `react-native` mock.
+
+**Solution:**
+
+1. **Check if it's a React Native component:**
+   ```javascript
+   // Add to jest.setup.js
+   jest.mock('react-native', () => ({
+     // ... existing mocks
+     ScrollView: 'ScrollView',
+     RefreshControl: 'RefreshControl',
+     // Add any missing RN components
+   }));
+   ```
+
+2. **Check if it's a custom component:**
+   ```typescript
+   // Mock it using the PostList pattern
+   jest.mock('@/components/MyComponent', () => ({
+     MyComponent: ({ prop }: any) => {
+       const { View, Text } = require('react-native');
+       return (
+         <View testID="my-component">
+           <Text>{prop}</Text>
+         </View>
+       );
+     },
+   }));
+   ```
+
+3. **Verify the component is exported correctly:**
+   - Check if it's a default export or named export
+   - Match the import style in your test
+
+### Issue 2: Alert/Keyboard is undefined
+
+**Cause:** The global `react-native` mock doesn't include these APIs.
+
+**Solution:**
+Already fixed in `jest.setup.js`. Don't override `react-native` in individual test files.
+
+```typescript
+// ✅ CORRECT - Import directly
+import { Alert } from 'react-native';
+const alertSpy = jest.spyOn(Alert, 'alert');
+
+// ❌ WRONG - Don't mock react-native locally
+jest.mock('react-native', () => ({
+  Alert: { alert: jest.fn() },
+}));
+```
+
+### Issue 3: Flaky Date/Time Tests
+
+**Cause:** Tests that depend on exact date calculations can fail due to timing differences.
+
+**Solution:**
+Use regex patterns instead of exact strings:
+
+```typescript
+// ❌ WRONG - Flaky
+expect(getByText('3 days ago')).toBeTruthy();
+
+// ✅ CORRECT - Flexible
+expect(getByText(/\d+ days ago/)).toBeTruthy();
+```
+
+### Issue 4: Mock Return Values Missing Properties
+
+**Cause:** TypeScript errors when mock doesn't include all required properties.
+
+**Solution:**
+Provide complete mock objects:
+
+```typescript
+// ❌ WRONG - Incomplete
+mockUseAuth.mockReturnValue({
+  userProfile: mockUserProfile,
+});
+
+// ✅ CORRECT - Complete
+mockUseAuth.mockReturnValue({
+  userProfile: mockUserProfile,
+  updateUserProfile: jest.fn(),
+  isLoading: false,
+  isAuthenticated: true,
+  // ... all required AuthContextType properties
+});
+```
+
+### Issue 5: Component Mocks Returning null/undefined
+
+**Cause:** Mock factory function doesn't return a valid React element.
+
+**Solution:**
+Use `require('react-native')` inside the mock factory:
+
+```typescript
+// ❌ WRONG
+jest.mock('@/components/MyComponent', () => ({
+  MyComponent: () => null, // Invalid!
+}));
+
+// ✅ CORRECT
+jest.mock('@/components/MyComponent', () => ({
+  MyComponent: ({ prop }: any) => {
+    const { View, Text } = require('react-native');
+    return (
+      <View testID="my-component">
+        <Text>{prop}</Text>
+      </View>
+    );
+  },
+}));
+```
+
+---
+
+## Best Practices Learned
+
+### 1. Global Mock Management
+
+**Keep `jest.setup.js` updated** with commonly used React Native components:
+- When you encounter "undefined" errors, add the component to the global mock
+- This prevents having to mock `react-native` in every test file
+- Current global mock includes: View, Text, ScrollView, Modal, Alert, Keyboard, etc.
+
+### 2. Component Mocking Pattern
+
+**Follow the PostList.test.tsx pattern** for mocking child components:
+```typescript
+jest.mock('@/components/ChildComponent', () => ({
+  ChildComponent: ({ prop1, prop2 }: any) => {
+    const { View, Text } = require('react-native');
+    return (
+      <View testID="child-component">
+        <Text>{prop1}</Text>
+      </View>
+    );
+  },
+}));
+```
+
+**Why this pattern?**
+- Returns actual React components (not null/undefined)
+- Uses `require()` inside factory to avoid hoisting issues
+- Provides testIDs for easy querying
+- Accepts props for more realistic testing
+
+### 3. Mock Order Matters
+
+**Always mock dependencies BEFORE importing the component:**
+```typescript
+// 1. Mock dependencies first
+jest.mock('@/contexts/AuthContext');
+jest.mock('@/hooks/useUserProfile');
+
+// 2. Import mocked modules
+import { useAuth } from '@/contexts/AuthContext';
+
+// 3. Cast to mocked types
+const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+
+// 4. Import component LAST
+import ProfileScreen from '@/app/(tabs)/profile';
+```
+
+### 4. Test Isolation
+
+**Always reset mocks in `beforeEach`:**
+```typescript
+beforeEach(() => {
+  jest.clearAllMocks();
+  
+  // Re-establish default mock return values
+  mockService.method.mockResolvedValue(defaultValue);
+});
+```
+
+### 5. Avoid Flaky Tests
+
+**Time-based tests:**
+- Use regex patterns for relative dates
+- Don't rely on exact millisecond timing
+- Consider mocking `Date` if needed
+
+**Async tests:**
+- Always use `waitFor` for async assertions
+- Set appropriate timeouts
+- Don't assume immediate state updates
+
+---
+
 ## Examples from Our Codebase
 
 ### Component Tests
 - `__tests__/components/GoogleSignInButton.test.tsx` - Basic component
 - `__tests__/components/ideas/CreatePostModal.test.tsx` - Modal with Alert
 - `__tests__/components/community/CreatePostFAB.test.tsx` - FAB with styles
+- `__tests__/components/community/PostList.test.tsx` - **Component mocking pattern**
+
+### Screen Tests
+- `__tests__/screens/ProfileScreen.test.tsx` - **Full screen with hooks and context**
 
 ### Service Tests
 - `__tests__/services/supabase/userService.test.ts` - Supabase service
@@ -668,6 +946,22 @@ await waitFor(
 - `__tests__/contexts/AuthContext.test.tsx` - Context with hooks
 - `__tests__/contexts/AuthContext.backgroundChecks.test.tsx` - Background operations
 - `__tests__/hooks/useLeaderboard.test.ts` - Custom hook
+- `__tests__/hooks/useUserProfile.test.ts` - Hook with service calls
+
+---
+
+## Quick Troubleshooting Checklist
+
+When a test fails, check:
+
+1. ✅ Are all dependencies mocked before importing the component?
+2. ✅ Are all React Native components in the global mock?
+3. ✅ Do mock return values include ALL required properties?
+4. ✅ Are child components mocked using the PostList pattern?
+5. ✅ Is `jest.clearAllMocks()` called in `beforeEach`?
+6. ✅ Are async operations wrapped in `waitFor`?
+7. ✅ Are you using regex for time-based assertions?
+8. ✅ Is the component imported AFTER all mocks?
 
 ---
 

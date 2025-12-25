@@ -79,6 +79,16 @@ jest.mock('expo-linking', () => ({
   openURL: jest.fn(),
 }));
 
+// Mock react-native Linking
+jest.mock('react-native/Libraries/Linking/Linking', () => ({
+  openURL: jest.fn().mockResolvedValue(true),
+  canOpenURL: jest.fn().mockResolvedValue(true),
+  getInitialURL: jest.fn().mockResolvedValue(null),
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn(),
+  createURL: jest.fn((path) => `test://auth/${path}`),
+}));
+
 jest.mock('expo-device', () => {
   const mockDevice = {
     isDevice: true,
@@ -134,6 +144,32 @@ jest.mock('react-native', () => ({
     create: (styles) => styles,
     flatten: jest.fn((style) => style),
   },
+  Animated: {
+    Value: class {
+      constructor(value) {
+        this.value = value;
+      }
+      setValue = jest.fn();
+      interpolate = jest.fn((config) => this);
+      addListener = jest.fn();
+      removeAllListeners = jest.fn();
+    },
+    timing: jest.fn().mockImplementation(() => ({
+      start: jest.fn((callback) => callback && callback({ finished: true })),
+    })),
+    loop: jest.fn().mockImplementation((animation) => ({
+      start: jest.fn((callback) => callback && callback({ finished: true })),
+      stop: jest.fn(),
+      reset: jest.fn(),
+    })),
+    sequence: jest.fn().mockImplementation((animations) => ({
+      start: jest.fn((callback) => callback && callback({ finished: true })),
+    })),
+    delay: jest.fn().mockImplementation((duration) => ({
+      start: jest.fn((callback) => callback && callback({ finished: true })),
+    })),
+    View: 'Animated.View',
+  },
   View: 'View',
   Text: 'Text',
   TouchableOpacity: 'TouchableOpacity',
@@ -154,6 +190,13 @@ jest.mock('react-native', () => ({
   },
   Keyboard: {
     dismiss: jest.fn(),
+  },
+  Linking: {
+    openURL: jest.fn().mockResolvedValue(true),
+    canOpenURL: jest.fn().mockResolvedValue(true),
+    getInitialURL: jest.fn().mockResolvedValue(null),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
   },
 }));
 

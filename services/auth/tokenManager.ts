@@ -138,7 +138,16 @@ export const tokenManager = {
 
             // If token is still valid (with buffer), return it
             if (tokenData.expiresAt > now + bufferTime) {
-                return tokenData.accessToken;
+                const token = tokenData.accessToken?.trim();
+                if (!token) {
+                    log.error('Stored access token is empty or whitespace', {
+                        hasToken: !!tokenData.accessToken,
+                        tokenLength: tokenData.accessToken?.length || 0,
+                        expiresAt: tokenData.expiresAt,
+                    });
+                    return null;
+                }
+                return token;
             }
 
             // Token expired - attempt refresh based on auth method
@@ -151,7 +160,12 @@ export const tokenManager = {
 
             // For Google OAuth, use refresh token
             if (tokenData.refreshToken) {
-                return await this.refreshSession(sessionData);
+                const refreshedToken = await this.refreshSession(sessionData);
+                if (!refreshedToken?.trim()) {
+                    log.error('Refreshed token is empty or whitespace');
+                    return null;
+                }
+                return refreshedToken.trim();
             }
 
             // No valid token and no refresh token
@@ -195,9 +209,16 @@ export const tokenManager = {
             const now = Date.now();
             const expiresIn = data.expires_in || 3600;
 
+            // Validate access token is non-empty
+            if (!data.access_token?.trim()) {
+                log.error('Invalid access token received from token refresh');
+                await this.clearSession();
+                return null;
+            }
+
             const newTokenData: TokenData = {
-                accessToken: data.access_token,
-                refreshToken: data.refresh_token || sessionData.tokenData.refreshToken,
+                accessToken: data.access_token.trim(),
+                refreshToken: (data.refresh_token || sessionData.tokenData.refreshToken)?.trim() || '',
                 expiresIn,
                 expiresAt: now + (expiresIn * 1000),
                 tokenType: data.token_type || 'Bearer',

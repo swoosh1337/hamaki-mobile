@@ -465,9 +465,18 @@ export const authService = {
         const now = Date.now();
         const expiresIn = data.expires_in || 3600;
 
+        // Validate tokens are non-empty
+        if (!data.access_token?.trim()) {
+            throw new Error('Invalid access token received from Google OAuth');
+        }
+
+        if (!data.refresh_token?.trim()) {
+            throw new Error('Invalid refresh token received from Google OAuth');
+        }
+
         return {
-            accessToken: data.access_token,
-            refreshToken: data.refresh_token,
+            accessToken: data.access_token.trim(),
+            refreshToken: data.refresh_token.trim(),
             expiresIn,
             expiresAt: now + (expiresIn * 1000),
             tokenType: data.token_type || 'Bearer',

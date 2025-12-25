@@ -31,6 +31,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [showVideoLikes, setShowVideoLikes] = useState(false);
 
   // Get pending action count for badges (only for Google users)
+  // Hook automatically loads cached data on mount and polls for updates
   const { pendingActionCount, subscriptionStatuses, videoLikeStatuses } = useYouTubeVerification();
 
   // Count pending for each section
@@ -266,7 +267,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* Subscriptions Content */}
           <View style={styles.subscriptionsContent}>
-            <ChannelSubscriptionManager />
+            <ChannelSubscriptionManager initialStatuses={subscriptionStatuses} />
           </View>
         </SafeAreaView>
       </Modal>
@@ -287,13 +288,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               <Ionicons name="arrow-back" size={24} color={Colors.dark.text} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Like Latest Videos</Text>
+            <Text style={styles.headerTitle}> უახლესი ვიდეოები</Text>
             <View style={styles.headerLeft} />
           </View>
 
           {/* Video Likes Content */}
           <View style={styles.subscriptionsContent}>
-            <VideoLikesManager />
+            <VideoLikesManager initialStatuses={videoLikeStatuses} />
           </View>
         </SafeAreaView>
       </Modal>

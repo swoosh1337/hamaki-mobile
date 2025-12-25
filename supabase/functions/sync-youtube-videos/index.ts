@@ -17,7 +17,7 @@ const YOUTUBE_API_KEY = Deno.env.get('YOUTUBE_API_KEY')!;
 
 // Channel configuration with keys matching the mobile app
 const CHANNELS = [
-    { id: Deno.env.get('YOUTUBE_CHANNEL_ID')!, key: 'hamaki', name: 'HamaKi' },
+    { id: 'UCSI5XbaxsX1USijrfFVuJqA', key: 'hamaki', name: 'HamaKi' },
     { id: 'UChJnB_7-JUYXEr-Fv3Y_rGA', key: 'miro', name: 'Miro' },
     { id: 'UCjSZIjLKfQHkdZbZMvYQhAw', key: 'bastos', name: 'Basto' },
     { id: 'UCPCQmO5MrP3S1oVu6p9bxRw', key: 'koro', name: 'Koro' },
@@ -27,6 +27,49 @@ const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+/**
+ * HTML entity mappings for common entities from YouTube API
+ */
+const HTML_ENTITIES: Record<string, string> = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&apos;': "'",
+    '&#x27;': "'",
+    '&nbsp;': ' ',
+    '&#x2F;': '/',
+    '&#x60;': '`',
+    '&#x3D;': '=',
+};
+
+/**
+ * Decodes HTML entities in a string
+ * YouTube API returns HTML-encoded titles (e.g., &quot; for quotes)
+ */
+function decodeHtmlEntities(text: string | null | undefined): string {
+    if (!text) return '';
+
+    let decoded = text;
+
+    // Replace named entities
+    for (const [entity, char] of Object.entries(HTML_ENTITIES)) {
+        decoded = decoded.replaceAll(entity, char);
+    }
+
+    // Handle numeric character references (&#123; or &#x7B;)
+    decoded = decoded.replace(/&#(\d+);/g, (_, code) => {
+        return String.fromCharCode(parseInt(code, 10));
+    });
+
+    decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, code) => {
+        return String.fromCharCode(parseInt(code, 16));
+    });
+
+    return decoded;
+}
 
 interface YouTubeSearchItem {
     id: { videoId: string };
@@ -64,14 +107,14 @@ async function fetchLatestVideo(channelId: string) {
 
     return {
         videoId: item.id.videoId,
-        title: item.snippet.title,
+        title: decodeHtmlEntities(item.snippet.title),
         description: item.snippet.description,
         thumbnail: item.snippet.thumbnails.high.url,
         publishedAt: item.snippet.publishedAt,
     };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
     console.log('[sync-youtube-videos] Request received:', {
         method: req.method,
         url: req.url,
