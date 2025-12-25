@@ -19,16 +19,14 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import type { NoPogodGameState } from '@/features/games/noPogod';
 import { NoPogodEngine } from '@/features/games/noPogod';
-import { NOPOGOD_ASSET_CONFIG, NOPOGOD_GAME_ID } from '@/features/games/noPogod/config/assetConfig';
 import { NOPOGOD_GAME_ASSETS } from '@/features/games/noPogod/utils/assets';
 import { ResponsiveScalingManager } from '@/features/games/noPogod/utils/responsiveScaling';
 import { NoPogodSpriteRenderer } from '@/features/games/noPogod/utils/spriteRenderer';
-import { preloadGameAssets, releaseGameAssets } from '@/features/games/shared';
 import { useGameCooldown } from '@/hooks/useGameCooldown';
 import { userService } from '@/services/supabase';
 import { leaderboardService } from '@/services/supabase/leaderboardService';
 import { createLogger } from '@/utils/logger';
-import { NoPogodGameCanvasAtlas } from './NoPogodGameCanvasAtlas';
+import { NoPogodGameCanvas } from './NoPogodGameCanvas';
 
 const log = createLogger('NoPogodGame');
 
@@ -93,16 +91,8 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   }, []);
 
   // Initialize game engine, sprite renderer, and responsive scaling
-  // Also preload atlas assets
   useEffect(() => {
     if (visible && !gameEngineRef.current) {
-      // Preload atlas assets first (using shared loader with NoPogod config)
-      preloadGameAssets(NOPOGOD_GAME_ID, NOPOGOD_ASSET_CONFIG).then(() => {
-        log.info('Atlas assets preloaded');
-      }).catch(err => {
-        log.error('Failed to preload atlas assets', err);
-      });
-
       gameEngineRef.current = new NoPogodEngine(SCREEN_WIDTH, SCREEN_HEIGHT, NOPOGOD_GAME_ASSETS);
       spriteRendererRef.current = new NoPogodSpriteRenderer(NOPOGOD_GAME_ASSETS, SCREEN_WIDTH, SCREEN_HEIGHT);
       responsiveScalingRef.current = new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -376,7 +366,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     });
   }, [gameState?.phase, gameState?.score, xpAwarded, userProfile, updateUserProfile, isDemoMode, roundsPlayed, startCooldown]);
 
-  // Cleanup on close - including releasing atlas assets
+  // Cleanup on close
   useEffect(() => {
     if (!visible) {
       gameEngineRef.current = null;
@@ -384,10 +374,6 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       responsiveScalingRef.current = null;
       setGameState(null);
       setXpAwarded(false);
-
-      // Release atlas assets to free memory (using game ID)
-      releaseGameAssets(NOPOGOD_GAME_ID);
-      log.debug('Game assets released');
     }
   }, [visible]);
 
@@ -612,8 +598,8 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         ) : (
           <GestureHandlerRootView style={styles.gameContainer}>
             <View style={styles.canvasContainer} {...panResponder.panHandlers}>
-              {/* Skia Canvas with atlas-based sprites and responsive scaling */}
-              <NoPogodGameCanvasAtlas
+              {/* Skia Canvas with proper sprite rendering and responsive scaling */}
+              <NoPogodGameCanvas
                 gameState={gameState}
                 spriteRenderer={spriteRendererRef.current!}
                 responsiveScaling={responsiveScalingRef.current!}
