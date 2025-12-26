@@ -407,9 +407,12 @@ export const authService = {
             } as any);
 
             if (result.type !== 'success') {
-                const errorMsg = result.type === 'error' ? result.error?.message : `Authentication ${result.type}`;
+                const isCancelled = result.type === 'cancel' || result.type === 'dismiss';
+                const errorMsg = isCancelled
+                    ? 'აუტორიზაცია შეჩერდა' // "Authentication cancelled" in Georgian
+                    : (result.type === 'error' ? 'აუტორიზაცია ვერ მოხერხდა' : 'აუტორიზაცია შეჩერდა');
                 log.warn('OAuth failed or cancelled', { type: result.type });
-                return { success: false, error: errorMsg || 'Authentication failed' };
+                return { success: false, error: errorMsg };
             }
 
             const { code } = result.params;

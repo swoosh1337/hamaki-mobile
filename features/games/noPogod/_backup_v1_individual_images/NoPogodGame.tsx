@@ -532,8 +532,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
           </Text>
 
           <Text style={styles.cooldownSubtext}>
-            დარჩენის მოლოდინ{'\n'}
-            შეტყობინება მოგივა
+            შეტყობინებას მიიღებ როცა თამაში ახლიდან შეგეძლება{'\n'}
           </Text>
 
           <View style={styles.cooldownStats}>

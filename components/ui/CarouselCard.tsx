@@ -1,5 +1,6 @@
 import { Colors } from '@/constants/Colors';
 import { trackCarouselTap } from '@/utils/analytics';
+import { isNewPost } from '@/utils/contentSorting';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -58,9 +59,9 @@ export const CarouselCard: React.FC<CarouselCardProps> = ({ post, onPostTap }) =
           <Text style={styles.carouselBadgeText}>{post.metadata.badge}</Text>
         </View>
       )}
-      {post.type === 'video' && (Date.now() - new Date(post.publishedAt).getTime() < 7 * 24 * 60 * 60 * 1000) && (
-        <View style={styles.carouselBadge} testID={`carousel-new-badge-${post.id}`}>
-          <Text style={styles.carouselBadgeText}>NEW</Text>
+      {post.type === 'video' && isNewPost(post.publishedAt) && (
+        <View style={styles.carouselNewBadge} testID={`carousel-new-badge-${post.id}`}>
+          <Text style={styles.carouselNewBadgeText}>ახალი</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -95,6 +96,21 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     fontSize: 8,
     color: Colors.dark.background,
+    fontWeight: 'bold',
+  },
+  carouselNewBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#FF6B6B',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  carouselNewBadgeText: {
+    fontFamily: 'HamakiGeo',
+    fontSize: 8,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
 });

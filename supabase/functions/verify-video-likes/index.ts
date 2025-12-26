@@ -89,27 +89,15 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-        // Get user's access token
-        const authHeader = req.headers.get('Authorization');
-        console.log('[verify-video-likes] Auth header present:', !!authHeader);
-
-        if (!authHeader?.startsWith('Bearer ')) {
-            console.error('[verify-video-likes] Missing or invalid access token');
-            return new Response(
-                JSON.stringify({ error: 'Missing access token' }),
-                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
-        const accessToken = authHeader.replace('Bearer ', '');
-        console.log('[verify-video-likes] Access token extracted (length):', accessToken.length);
-
-        // Parse request body
-        let body: { videos?: VideoToVerify[]; userId?: string };
+        // Parse request body first to get access token (matching verify-subscriptions pattern)
+        let body: { videos?: VideoToVerify[]; userId?: string; accessToken?: string };
         try {
             body = await req.json();
             console.log('[verify-video-likes] Request body:', {
                 videoCount: body?.videos?.length,
                 userId: body?.userId ? 'present' : 'missing',
+                hasAccessToken: !!body?.accessToken,
+                accessTokenLength: body?.accessToken?.length || 0,
             });
         } catch (parseError) {
             console.error('[verify-video-likes] Failed to parse request body:', parseError);
@@ -119,7 +107,7 @@ Deno.serve(async (req: Request) => {
             );
         }
 
-        const { videos, userId } = body;
+        const { videos, userId, accessToken } = body;
 
         if (!videos?.length || !userId) {
             console.error('[verify-video-likes] Missing required fields:', { videos: !!videos?.length, userId: !!userId });
@@ -128,6 +116,20 @@ Deno.serve(async (req: Request) => {
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
+
+        // Validate access token (from body, not header)
+        if (!accessToken?.trim()) {
+            console.error('[verify-video-likes] Missing or empty access token');
+            return new Response(
+                JSON.stringify({ error: 'Missing access token' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        console.log('[verify-video-likes] Access token validated:', {
+            length: accessToken.trim().length,
+            prefix: accessToken.trim().substring(0, 10),
+        });
 
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
         const results: VerificationResult[] = [];

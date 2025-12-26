@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase/client';
+import { sortPostsHybrid } from '@/utils/contentSorting';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 import { createLogger } from '@/utils/logger';
 import { decodeHtmlEntities } from '@/utils/text';
@@ -118,10 +119,8 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // hasNewContent is now calculated automatically based on post age
   };
 
-  // Get featured posts (sorted by featured_order)
-  const featuredPosts = posts
-    .filter(post => post.isFeatured)
-    .sort((a, b) => a.featuredOrder - b.featuredOrder);
+  // Get featured posts with hybrid sorting (using extracted utility)
+  const featuredPosts = sortPostsHybrid(posts.filter(post => post.isFeatured));
 
   // Check if any featured post is newer than 24 hours
   useEffect(() => {

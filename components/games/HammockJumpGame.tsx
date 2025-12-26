@@ -11,8 +11,8 @@ import {
 
 import { useAuth } from '@/contexts/AuthContext';
 import { GameAssets, HammockGameEngine } from '@/features/games/hammockJump/engine/HammockJumpEngine';
-import { userService } from '@/services/supabase';
-import { leaderboardService } from '@/services/supabase/leaderboardService';
+import type { AwardXPResult } from '@/hooks/useMyLeaderboardStatus';
+import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { createLogger } from '@/utils/logger';
 import { GameCanvas } from './GameCanvas';
 
@@ -188,7 +188,6 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
       }
 
       const xpToAward = Math.max(1, Math.floor(gameState.score / 50));
-      const newXP = userProfile.xp_points + xpToAward;
 
       // Check for high score
       if (gameState.score > highScore) {
@@ -203,39 +202,54 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
       }
 
       try {
-        const success = await userService.updateUserXP(userProfile.google_id, newXP);
-        if (!success) {
-          log.warn('updateUserXP returned false; not updating local state or leaderboard');
-          return;
+        // Award XP via Edge Function (handles both user XP and leaderboard atomically)
+        const result = await invokeEdgeFunction<AwardXPResult>({
+          functionName: 'award-xp',
+          body: {
+            userId: userProfile.id,
+            xpType: 'game',
+            amount: xpToAward,
+          },
+          silentFail: true, // Don't crash if Edge Function fails
+        });
+
+        if (result.success && result.data) {
+          // Update local user profile with new XP from server
+          updateUserProfile({ xp_points: result.data.new_total_xp });
+          log.info(`Awarded ${xpToAward} XP for Hammock Jump game`, {
+            newTotal: result.data.new_total_xp,
+            personalRank: result.data.personal_rank,
+          });
+
+          // Record cooldown
+          const { recordGamePlay } = await import('@/utils/gameCooldowns');
+          await recordGamePlay(userProfile.id, 'hammock-jump', isDemoMode);
+
+          // Invalidate XP cache (await, but non-fatal)
+          try {
+            const { invalidateXPStatsCache } = await import('@/utils/xpStatsCache');
+            await invalidateXPStatsCache(userProfile.id);
+          } catch (err) {
+            log.error('Failed to invalidate XP cache', err);
+          }
+
+          // Mark as awarded
+          setXpAwarded(true);
+        } else {
+          // Edge Function failed - update locally as fallback
+          const newXP = userProfile.xp_points + xpToAward;
+          updateUserProfile({ xp_points: newXP });
+          log.warn(`Edge Function failed, updated locally: ${xpToAward} XP`, {
+            error: result.error,
+          });
+          setXpAwarded(true);
         }
-
-        // DB update succeeded → update local state
-        updateUserProfile({ xp_points: newXP });
-
-        // Record cooldown
-        const { recordGamePlay } = await import('@/utils/gameCooldowns');
-        await recordGamePlay(userProfile.id, 'hammock-jump', isDemoMode);
-
-        // Invalidate XP cache (await, but non-fatal)
-        try {
-          const { invalidateXPStatsCache } = await import('@/utils/xpStatsCache');
-          await invalidateXPStatsCache(userProfile.id);
-        } catch (err) {
-          log.error('Failed to invalidate XP cache', err);
-        }
-
-        // Trigger leaderboard update in background only after DB success
-        leaderboardService
-          .updateLeaderboardPoints(userProfile.id, xpToAward)
-          .then((ok: boolean) => {
-            if (!ok) log.warn('Leaderboard update returned false');
-          })
-          .catch((err: Error) => log.error('Leaderboard update error', err));
-
-        // Only now mark as awarded
-        setXpAwarded(true);
       } catch (err) {
-        log.error('Error awarding XP', err);
+        // Network error or other issue - still update locally to prevent data loss
+        const newXP = userProfile.xp_points + xpToAward;
+        log.error('Error awarding XP, updating locally only:', err);
+        updateUserProfile({ xp_points: newXP });
+        setXpAwarded(true);
       }
     };
 

@@ -16,15 +16,15 @@
  *   - XP is awarded once and never revoked
  */
 
-import { leaderboardService, supabase } from '@/services/supabase';
+import { supabase } from '@/services/supabase';
 import type {
     ChannelKey,
     SubscriptionStatus,
     VerifySubscriptionsResult,
 } from '@/types/youtube';
 import { YOUTUBE_CHANNELS as CHANNELS } from '@/types/youtube';
+import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { createLogger } from '@/utils/logger';
-import { retryWithBackoff } from '@/utils/retry';
 
 const log = createLogger('SubscriptionService');
 
@@ -189,70 +189,54 @@ export async function verifyAndAwardSubscriptionXP(
             tokenPrefix: trimmedToken.substring(0, 10),
         });
 
-        const { data, error } = await retryWithBackoff(
-            () => supabase.functions.invoke<EdgeFunctionResult>(
-                'verify-subscriptions',
-                {
-                    body: { channels, userId, accessToken: trimmedToken },
+        // Use unified wrapper with retry + cache fallback
+        const edgeResult = await invokeEdgeFunction<EdgeFunctionResult>({
+            functionName: 'verify-subscriptions',
+            body: { channels, userId, accessToken: trimmedToken },
+            cacheKey: `subscriptions:${userId}`,
+            cacheTTL: 5 * 60 * 1000, // 5 minutes
+            cacheFallback: async () => {
+                // If Edge Function fails, return DB-stored verification statuses
+                log.info('Edge Function failed, using DB verifications as fallback');
+                const dbStatuses = await getSubscriptionStatuses(userId);
+                if (dbStatuses.length > 0) {
+                    return {
+                        success: true,
+                        results: dbStatuses.map(s => ({
+                            channelId: s.channelId,
+                            channelKey: s.channelKey,
+                            subscribed: s.isSubscribed,
+                            xpAwarded: s.xpAwarded ? 1 : 0,
+                            alreadyVerified: s.xpAwarded,
+                        })),
+                        totalXPAwarded: 0,
+                    };
                 }
-            ),
-            {
-                maxRetries: 3,
-                baseDelayMs: 1000,
-                onRetry: (attempt, err) => {
-                    log.warn(`Retry attempt ${attempt} for verify-subscriptions`, err);
-                },
+                return null;
+            },
+            maxRetries: 3,
+            silentFail: true,
+        });
+
+        if (!edgeResult.success || !edgeResult.data) {
+            log.warn('Edge Function failed, using existing DB data');
+            // Return DB statuses as fallback
+            const dbStatuses = await getSubscriptionStatuses(userId);
+            for (const status of dbStatuses) {
+                result.statuses.push(status);
             }
-        );
-
-        if (error) {
-            log.error('Edge Function error:', error);
-
-            // Log full error object to understand structure
-            log.error('Edge Function error (full):', JSON.stringify(error, null, 2));
-
-            log.error('Edge Function error details:', {
-                message: error.message,
-                name: error.name,
-                context: (error as any).context,
-                status: (error as any).status,
-                statusText: (error as any).statusText,
-            });
-
-            // Try to get error response body multiple ways
-            try {
-                // Try reading response body from context
-                const context = (error as any).context;
-
-                if (context) {
-                    // Try to read as text
-                    try {
-                        const response = context as Response;
-                        const clonedResponse = response.clone();
-                        const errorText = await clonedResponse.text();
-                        log.error('Edge Function error body (text):', errorText);
-
-                        try {
-                            const errorJson = JSON.parse(errorText);
-                            log.error('Edge Function error body (parsed):', errorJson);
-                        } catch {
-                            // Not JSON, already logged as text
-                        }
-                    } catch (readError) {
-                        log.error('Could not read response body:', readError);
-                    }
-                }
-            } catch (parseError) {
-                log.error('Could not parse error body:', parseError);
+            result.success = dbStatuses.length > 0;
+            if (!result.success) {
+                result.errors.push(edgeResult.error || 'Edge Function failed');
             }
-
-            result.errors.push(error.message);
             return result;
         }
 
-        if (!data?.success) {
-            log.error('Verification failed:', data?.error);
-            result.errors.push(data?.error || 'Unknown error');
+        const data = edgeResult.data;
+
+        if (!data.success) {
+            log.error('Verification failed:', data.error);
+            result.errors.push(data.error || 'Unknown error');
             return result;
         }
 
@@ -275,15 +259,10 @@ export async function verifyAndAwardSubscriptionXP(
         result.success = true;
         result.totalXPAwarded = data.totalXPAwarded;
 
-        // Update leaderboard if XP was awarded
+        // NOTE: Leaderboard updates are handled by the Edge Function (verify-subscriptions)
+        // which calls the award_xp() SQL function. No need to update here.
         if (data.totalXPAwarded > 0) {
-            log.info(`Awarded ${data.totalXPAwarded} XP for subscriptions`);
-            try {
-                await leaderboardService.updateLeaderboardPoints(userId, data.totalXPAwarded);
-                log.info('Updated leaderboard with subscription XP');
-            } catch (leaderboardError) {
-                log.error('Failed to update leaderboard:', leaderboardError);
-            }
+            log.info(`Awarded ${data.totalXPAwarded} XP for subscriptions (via Edge Function)`);
         }
 
         return result;

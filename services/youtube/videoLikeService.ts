@@ -18,6 +18,7 @@ import type {
     YouTubeChannelState
 } from '@/types/youtube';
 import { VIDEO_LIKE_XP } from '@/types/youtube';
+import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { createLogger } from '@/utils/logger';
 import { decodeHtmlEntities } from '@/utils/text';
 
@@ -175,32 +176,76 @@ export async function verifyAndAwardVideoLikeXP(
         }
 
         // Call Edge Function for verification (only for non-awarded videos)
+        // Using unified wrapper with retry + cache fallback
         log.info(`Verifying ${videos.length} videos via Edge Function (${awardedVideoIds.size} already awarded, skipped)`);
 
-        const { data, error } = await supabase.functions.invoke<EdgeFunctionResult>(
-            'verify-video-likes',
-            {
-                body: { videos, userId },
-                headers: { Authorization: `Bearer ${accessToken}` },
-            }
-        );
-
-        if (error) {
-            log.error('Edge Function error:', error);
-            result.errors.push(error.message);
+        // Pre-flight validation: ensure access token is valid (like subscriptionService)
+        const trimmedToken = accessToken.trim();
+        if (!trimmedToken) {
+            log.error('Access token is empty or whitespace');
+            result.errors.push('Access token is empty');
             return result;
         }
 
-        if (!data?.success) {
-            log.error('Verification failed:', data?.error);
-            result.errors.push(data?.error || 'Unknown error');
+        log.debug('Calling Edge Function with token', {
+            tokenLength: trimmedToken.length,
+            tokenPrefix: trimmedToken.substring(0, 10),
+        });
+
+        const edgeResult = await invokeEdgeFunction<EdgeFunctionResult>({
+            functionName: 'verify-video-likes',
+            body: { videos, userId, accessToken: trimmedToken },  // Pass token in body like subscriptions
+            cacheKey: `video-likes:${userId}`,
+            cacheTTL: 5 * 60 * 1000, // 5 minutes
+            cacheFallback: async () => {
+                // If Edge Function fails, return statuses from DB
+                log.info('Edge Function failed, using DB statuses as fallback');
+                return null; // Will use existing channel states
+            },
+            maxRetries: 3,
+            silentFail: true,
+        });
+
+        if (!edgeResult.success || !edgeResult.data) {
+            log.warn('Edge Function failed, using existing DB data');
+            // Return success with existing DB data (already populated from awardedVideoIds)
+            for (const state of channelStates) {
+                const isAwarded = state.latest_video_id ? awardedVideoIds.has(state.latest_video_id) : false;
+                result.statuses.push({
+                    channelKey: state.channel_key,
+                    channelName: state.channel_name,
+                    latestVideoId: state.latest_video_id,
+                    videoTitle: decodeHtmlEntities(state.latest_video_title),
+                    videoThumbnail: state.latest_video_thumbnail || undefined,
+                    isLiked: isAwarded,
+                    xpReward: VIDEO_LIKE_XP[state.channel_key] || 0,
+                    xpAwarded: isAwarded,
+                    lastChecked: Date.now(),
+                });
+            }
+            result.success = true;
+            return result;
+        }
+
+        const data = edgeResult.data;
+
+        if (!data.success) {
+            log.error('Verification failed:', data.error);
+            result.errors.push(data.error || 'Unknown error');
             return result;
         }
 
         // Convert Edge Function results to VideoLikeStatus
+        // Build a set of video IDs that were just awarded XP in this request
+        const justAwardedVideoIds = new Set(
+            data.results.filter(r => (r.xpAwarded ?? 0) > 0).map(r => r.videoId)
+        );
+
         for (const state of channelStates) {
             const edgeResult = data.results.find(r => r.videoId === state.latest_video_id);
-            const isAwarded = state.latest_video_id ? awardedVideoIds.has(state.latest_video_id) : false;
+            // Check: was it awarded before OR was it just awarded in this request?
+            const wasAlreadyAwarded = state.latest_video_id ? awardedVideoIds.has(state.latest_video_id) : false;
+            const wasJustAwarded = state.latest_video_id ? justAwardedVideoIds.has(state.latest_video_id) : false;
 
             result.statuses.push({
                 channelKey: state.channel_key,
@@ -208,9 +253,9 @@ export async function verifyAndAwardVideoLikeXP(
                 latestVideoId: state.latest_video_id,
                 videoTitle: decodeHtmlEntities(state.latest_video_title),
                 videoThumbnail: state.latest_video_thumbnail || undefined,
-                isLiked: edgeResult?.liked ?? isAwarded,
+                isLiked: edgeResult?.liked ?? wasAlreadyAwarded ?? wasJustAwarded,
                 xpReward: VIDEO_LIKE_XP[state.channel_key] || 0,
-                xpAwarded: (edgeResult?.xpAwarded ?? 0) > 0 || isAwarded,
+                xpAwarded: wasAlreadyAwarded || wasJustAwarded,  // Fixed: correctly includes just-awarded videos
                 lastChecked: Date.now(),
             });
         }

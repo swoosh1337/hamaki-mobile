@@ -11,24 +11,18 @@
  * - Invalid responses
  */
 
-import {
-    getEarnedSubscriptionXP,
-    getSubscriptionStatuses,
-    getTotalPossibleSubscriptionXP,
-    verifyAndAwardSubscriptionXP,
-} from '@/services/youtube/subscriptionService';
 import type { SubscriptionStatus } from '@/types/youtube';
 
 // Mock dependencies
+const mockFrom = jest.fn();
+const mockUpdateLeaderboardPoints = jest.fn();
+
 jest.mock('@/services/supabase', () => ({
     supabase: {
-        from: jest.fn(),
-        functions: {
-            invoke: jest.fn(),
-        },
+        from: (...args: unknown[]) => mockFrom(...args),
     },
     leaderboardService: {
-        updateLeaderboardPoints: jest.fn(),
+        updateLeaderboardPoints: (...args: unknown[]) => mockUpdateLeaderboardPoints(...args),
     },
 }));
 
@@ -41,7 +35,20 @@ jest.mock('@/utils/logger', () => ({
     }),
 }));
 
-import { leaderboardService, supabase } from '@/services/supabase';
+// Mock invokeEdgeFunction
+const mockInvokeEdgeFunction = jest.fn();
+jest.mock('@/utils/edgeFunctionClient', () => ({
+    get invokeEdgeFunction() {
+        return mockInvokeEdgeFunction;
+    },
+}));
+
+import {
+    getEarnedSubscriptionXP,
+    getSubscriptionStatuses,
+    getTotalPossibleSubscriptionXP,
+    verifyAndAwardSubscriptionXP,
+} from '@/services/youtube/subscriptionService';
 
 describe('Subscription Service Edge Cases', () => {
     beforeEach(() => {
@@ -76,7 +83,8 @@ describe('Subscription Service Edge Cases', () => {
         });
 
         it('should trim access token before use', async () => {
-            (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: true,
                     results: [
@@ -87,7 +95,7 @@ describe('Subscription Service Edge Cases', () => {
                     ],
                     totalXPAwarded: 1000,
                 },
-                error: null,
+                fromCache: false,
             });
 
             const result = await verifyAndAwardSubscriptionXP(
@@ -98,9 +106,9 @@ describe('Subscription Service Edge Cases', () => {
             );
 
             expect(result.success).toBe(true);
-            expect(supabase.functions.invoke).toHaveBeenCalledWith(
-                'verify-subscriptions',
+            expect(mockInvokeEdgeFunction).toHaveBeenCalledWith(
                 expect.objectContaining({
+                    functionName: 'verify-subscriptions',
                     body: expect.objectContaining({
                         accessToken: 'valid-token', // Trimmed
                     }),
@@ -122,10 +130,27 @@ describe('Subscription Service Edge Cases', () => {
     });
 
     describe('Edge Function Errors', () => {
-        it('should handle Edge Function returning error', async () => {
-            (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+        it('should fallback to DB data when Edge Function returns error', async () => {
+            // Mock DB fallback data
+            mockFrom.mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({
+                        data: [{
+                            channel_key: 'hamaki',
+                            subscribed: true,
+                            xp_awarded: true,
+                            verified_at: '2024-01-01T00:00:00Z',
+                        }],
+                        error: null,
+                    }),
+                }),
+            });
+
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: false,
                 data: null,
-                error: new Error('Network error'),
+                error: 'Network error',
+                fromCache: false,
             });
 
             const result = await verifyAndAwardSubscriptionXP(
@@ -135,18 +160,20 @@ describe('Subscription Service Edge Cases', () => {
                 false
             );
 
-            expect(result.success).toBe(false);
-            expect(result.errors.length).toBeGreaterThan(0);
+            // Service gracefully falls back to DB data
+            expect(result.success).toBe(true);
+            expect(result.statuses.length).toBeGreaterThan(0);
             expect(result.totalXPAwarded).toBe(0);
         });
 
         it('should handle Edge Function returning success: false', async () => {
-            (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: false,
                     error: 'YouTube API rate limit exceeded',
                 },
-                error: null,
+                fromCache: false,
             });
 
             const result = await verifyAndAwardSubscriptionXP(
@@ -161,10 +188,28 @@ describe('Subscription Service Edge Cases', () => {
             expect(result.totalXPAwarded).toBe(0);
         });
 
-        it('should handle Edge Function timeout', async () => {
-            (supabase.functions.invoke as jest.Mock).mockRejectedValue(
-                new Error('Request timeout')
-            );
+        it('should fallback to DB data on Edge Function timeout', async () => {
+            // Mock DB fallback data
+            mockFrom.mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({
+                        data: [{
+                            channel_key: 'miro',
+                            subscribed: true,
+                            xp_awarded: false,
+                            verified_at: '2024-01-01T00:00:00Z',
+                        }],
+                        error: null,
+                    }),
+                }),
+            });
+
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: false,
+                data: null,
+                error: 'Request timeout',
+                fromCache: false,
+            });
 
             const result = await verifyAndAwardSubscriptionXP(
                 'valid-token',
@@ -173,18 +218,20 @@ describe('Subscription Service Edge Cases', () => {
                 false
             );
 
-            expect(result.success).toBe(false);
-            expect(result.errors.length).toBeGreaterThan(0);
-        }, 10000); // 10 second timeout since retryWithBackoff will retry 3 times
+            // Service gracefully falls back to DB data
+            expect(result.success).toBe(true);
+            expect(result.statuses.length).toBeGreaterThan(0);
+        });
 
         it('should handle malformed Edge Function response', async () => {
-            (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: true,
                     // Missing results array
                     totalXPAwarded: 0,
                 },
-                error: null,
+                fromCache: false,
             });
 
             await expect(
@@ -195,7 +242,7 @@ describe('Subscription Service Edge Cases', () => {
 
     describe('Database Error Handling', () => {
         it('should handle database read errors gracefully', async () => {
-            (supabase.from as jest.Mock).mockReturnValue({
+            mockFrom.mockReturnValue({
                 select: jest.fn().mockReturnValue({
                     eq: jest.fn().mockResolvedValue({
                         data: null,
@@ -213,7 +260,7 @@ describe('Subscription Service Edge Cases', () => {
         });
 
         it('should handle null database response', async () => {
-            (supabase.from as jest.Mock).mockReturnValue({
+            mockFrom.mockReturnValue({
                 select: jest.fn().mockReturnValue({
                     eq: jest.fn().mockResolvedValue({
                         data: null,
@@ -370,10 +417,8 @@ describe('Subscription Service Edge Cases', () => {
 
     describe('Leaderboard Integration', () => {
         it('should update leaderboard when XP is awarded', async () => {
-            const mockUpdateLeaderboard = jest.fn().mockResolvedValue(undefined);
-            (leaderboardService.updateLeaderboardPoints as jest.Mock) = mockUpdateLeaderboard;
-
-            (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: true,
                     results: [
@@ -384,19 +429,19 @@ describe('Subscription Service Edge Cases', () => {
                     ],
                     totalXPAwarded: 1000,
                 },
-                error: null,
+                fromCache: false,
             });
 
-            await verifyAndAwardSubscriptionXP('valid-token', 'user-uuid', 'google-id', false);
+            const result = await verifyAndAwardSubscriptionXP('valid-token', 'user-uuid', 'google-id', false);
 
-            expect(mockUpdateLeaderboard).toHaveBeenCalledWith('user-uuid', 1000);
+            // Edge Function handles leaderboard update internally
+            // We verify the result contains the expected XP info
+            expect(result?.totalXPAwarded).toBe(1000);
         });
 
         it('should not update leaderboard when no XP awarded', async () => {
-            const mockUpdateLeaderboard = jest.fn();
-            (leaderboardService.updateLeaderboardPoints as jest.Mock) = mockUpdateLeaderboard;
-
-            (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: true,
                     results: [
@@ -407,21 +452,21 @@ describe('Subscription Service Edge Cases', () => {
                     ],
                     totalXPAwarded: 0,
                 },
-                error: null,
+                fromCache: false,
             });
 
             await verifyAndAwardSubscriptionXP('valid-token', 'user-uuid', 'google-id', false);
 
-            expect(mockUpdateLeaderboard).not.toHaveBeenCalled();
+            expect(mockUpdateLeaderboardPoints).not.toHaveBeenCalled();
         });
 
         it('should continue even if leaderboard update fails', async () => {
-            const mockUpdateLeaderboard = jest.fn().mockRejectedValue(
+            mockUpdateLeaderboardPoints.mockRejectedValue(
                 new Error('Leaderboard service unavailable')
             );
-            (leaderboardService.updateLeaderboardPoints as jest.Mock) = mockUpdateLeaderboard;
 
-            (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: true,
                     results: [
@@ -432,7 +477,7 @@ describe('Subscription Service Edge Cases', () => {
                     ],
                     totalXPAwarded: 1000,
                 },
-                error: null,
+                fromCache: false,
             });
 
             const result = await verifyAndAwardSubscriptionXP(
@@ -450,7 +495,8 @@ describe('Subscription Service Edge Cases', () => {
 
     describe('Already Verified Handling', () => {
         it('should handle all channels already verified', async () => {
-            (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: true,
                     results: [
@@ -461,7 +507,7 @@ describe('Subscription Service Edge Cases', () => {
                     ],
                     totalXPAwarded: 0,
                 },
-                error: null,
+                fromCache: false,
             });
 
             const result = await verifyAndAwardSubscriptionXP(
@@ -477,7 +523,8 @@ describe('Subscription Service Edge Cases', () => {
         });
 
         it('should handle mixed already verified and new subscriptions', async () => {
-            (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: true,
                     results: [
@@ -488,7 +535,7 @@ describe('Subscription Service Edge Cases', () => {
                     ],
                     totalXPAwarded: 700,
                 },
-                error: null,
+                fromCache: false,
             });
 
             const result = await verifyAndAwardSubscriptionXP(
@@ -507,9 +554,10 @@ describe('Subscription Service Edge Cases', () => {
     describe('Concurrent Request Handling', () => {
         it('should handle multiple simultaneous verification requests', async () => {
             let callCount = 0;
-            (supabase.functions.invoke as jest.Mock).mockImplementation(() => {
+            mockInvokeEdgeFunction.mockImplementation(() => {
                 callCount++;
                 return Promise.resolve({
+                    success: true,
                     data: {
                         success: true,
                         results: [
@@ -520,7 +568,7 @@ describe('Subscription Service Edge Cases', () => {
                         ],
                         totalXPAwarded: 1000,
                     },
-                    error: null,
+                    fromCache: false,
                 });
             });
 

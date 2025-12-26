@@ -1,3 +1,16 @@
+/**
+ * Community Screen
+ *
+ * Displays community posts and allows users to create new posts.
+ *
+ * Architecture:
+ * - usePosts: Data fetching and mutations via postService
+ * - useRealtimeSubscription: Realtime updates for posts (uses unified hook)
+ *
+ * NO direct Supabase imports. NO direct DB queries.
+ * All data comes through hooks which use services.
+ */
+
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
@@ -16,8 +29,7 @@ import { CreatePostModal } from '@/components/ideas/CreatePostModal';
 import { NetworkError } from '@/components/ui/NetworkError';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { usePosts } from '@/hooks/usePosts';
-import { supabase } from '@/services/supabase/client';
+import { usePosts, useRealtimeSubscription } from '@/hooks';
 import { postService } from '@/services/supabase/postService';
 import type { PostSortOption } from '@/types';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
@@ -67,54 +79,28 @@ export default function IdeasScreen() {
     }
   }, [postsError]);
 
-  // Real-time subscriptions
-  useEffect(() => {
-    if (!userProfile?.id) return;
+  // Realtime subscription for approved posts changes (uses unified hook)
+  useRealtimeSubscription<{ id: string; status: string }>({
+    table: 'posts',
+    filter: 'status=eq.approved',
+    event: '*',
+    enabled: !!userProfile?.id,
+    onPayload: (payload) => {
+      log.debug('Posts subscription triggered', { eventType: payload.eventType });
+      refetch();
+    },
+  });
 
-    // Subscribe to posts table changes (for new approved posts or status changes)
-    const postsSubscription = supabase
-      .channel('posts-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'posts',
-          filter: 'status=eq.approved',
-        },
-        (payload) => {
-          log.debug('Posts subscription triggered', payload);
-          // Refresh posts when changes occur
-          refetch();
-        }
-      )
-      .subscribe();
-
-    // Subscribe to post_upvotes changes (for real-time upvote updates)
-    const upvotesSubscription = supabase
-      .channel('post-upvotes-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'post_upvotes',
-        },
-        (payload) => {
-          log.debug('Upvotes subscription triggered', payload);
-          // Refresh posts after successful creation
-          refetch();
-        }
-      )
-      .subscribe();
-
-    // Cleanup subscriptions on unmount
-    return () => {
-      log.debug('Cleaning up real-time subscriptions');
-      supabase.removeChannel(postsSubscription);
-      supabase.removeChannel(upvotesSubscription);
-    };
-  }, [userProfile?.id, refetch]);
+  // Realtime subscription for upvotes changes
+  useRealtimeSubscription<{ post_id: string; user_id: string }>({
+    table: 'post_upvotes',
+    event: '*',
+    enabled: !!userProfile?.id,
+    onPayload: (payload) => {
+      log.debug('Upvotes subscription triggered', { eventType: payload.eventType });
+      refetch();
+    },
+  });
 
   // Refresh posts
   const handleRefresh = useCallback(async () => {
@@ -205,7 +191,6 @@ export default function IdeasScreen() {
       setIsSubmittingPost(false);
     }
   }, [userProfile?.id, refetch]);
-
 
 
 
@@ -424,4 +409,3 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 });
-

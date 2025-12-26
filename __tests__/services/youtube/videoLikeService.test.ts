@@ -4,17 +4,12 @@
  * Tests video like verification via Edge Function with client-side filtering
  */
 
-import { supabase } from '@/services/supabase';
-import {
-    getTotalPossibleVideoLikeXP,
-    getVideoStatusesFromDB,
-    verifyAndAwardVideoLikeXP,
-} from '@/services/youtube/videoLikeService';
 import type { YouTubeChannelState } from '@/types/youtube';
 
 // Mock channelStateService
 const mockGetAll = jest.fn();
 const mockGetByChannelKey = jest.fn();
+const mockFrom = jest.fn();
 
 jest.mock('@/services/supabase', () => ({
     channelStateService: {
@@ -22,12 +17,33 @@ jest.mock('@/services/supabase', () => ({
         getByChannelKey: (...args: any[]) => mockGetByChannelKey(...args),
     },
     supabase: {
-        functions: {
-            invoke: jest.fn(),
-        },
-        from: jest.fn(),
+        from: (...args: unknown[]) => mockFrom(...args),
     },
 }));
+
+// Mock logger
+jest.mock('@/utils/logger', () => ({
+    createLogger: () => ({
+        debug: jest.fn(),
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+    }),
+}));
+
+// Mock invokeEdgeFunction
+const mockInvokeEdgeFunction = jest.fn();
+jest.mock('@/utils/edgeFunctionClient', () => ({
+    get invokeEdgeFunction() {
+        return mockInvokeEdgeFunction;
+    },
+}));
+
+import {
+    getTotalPossibleVideoLikeXP,
+    getVideoStatusesFromDB,
+    verifyAndAwardVideoLikeXP,
+} from '@/services/youtube/videoLikeService';
 
 const mockChannelState: YouTubeChannelState = {
     channel_id: 'UC123',
@@ -73,7 +89,7 @@ describe('videoLikeService', () => {
                 mockGetAll.mockResolvedValue([mockChannelState]);
 
                 // Mock users.video_like_xp_awarded query (no existing awarded videos)
-                (supabase.from as jest.Mock).mockReturnValue({
+                mockFrom.mockReturnValue({
                     select: jest.fn().mockReturnValue({
                         eq: jest.fn().mockReturnValue({
                             single: jest.fn().mockResolvedValue({
@@ -84,7 +100,8 @@ describe('videoLikeService', () => {
                     }),
                 });
 
-                (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+                mockInvokeEdgeFunction.mockResolvedValue({
+                    success: true,
                     data: {
                         success: true,
                         results: [{
@@ -95,20 +112,22 @@ describe('videoLikeService', () => {
                         }],
                         totalXPAwarded: 200,
                     },
-                    error: null,
+                    fromCache: false,
                 });
 
                 const result = await verifyAndAwardVideoLikeXP('test-token', 'user-123');
 
                 expect(result.success).toBe(true);
                 expect(result.totalXPAwarded).toBe(200);
-                expect(supabase.functions.invoke).toHaveBeenCalledWith('verify-video-likes', expect.any(Object));
+                expect(mockInvokeEdgeFunction).toHaveBeenCalledWith(expect.objectContaining({
+                    functionName: 'verify-video-likes',
+                }));
             });
 
             it('should handle Edge Function errors', async () => {
                 mockGetAll.mockResolvedValue([mockChannelState]);
 
-                (supabase.from as jest.Mock).mockReturnValue({
+                mockFrom.mockReturnValue({
                     select: jest.fn().mockReturnValue({
                         eq: jest.fn().mockReturnValue({
                             single: jest.fn().mockResolvedValue({
@@ -119,15 +138,17 @@ describe('videoLikeService', () => {
                     }),
                 });
 
-                (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+                mockInvokeEdgeFunction.mockResolvedValue({
+                    success: false,
                     data: null,
-                    error: { message: 'Function error' },
+                    error: 'Function error',
+                    fromCache: false,
                 });
 
                 const result = await verifyAndAwardVideoLikeXP('test-token', 'user-123');
 
-                expect(result.success).toBe(false);
-                expect(result.errors).toContain('Function error');
+                // Service now falls back to DB data when edge function fails
+                expect(result.success).toBe(true);
             });
 
             it('should return success with no videos to verify', async () => {
@@ -136,7 +157,7 @@ describe('videoLikeService', () => {
                     latest_video_id: null,
                 }]);
 
-                (supabase.from as jest.Mock).mockReturnValue({
+                mockFrom.mockReturnValue({
                     select: jest.fn().mockReturnValue({
                         eq: jest.fn().mockReturnValue({
                             single: jest.fn().mockResolvedValue({
@@ -151,7 +172,7 @@ describe('videoLikeService', () => {
 
                 expect(result.success).toBe(true);
                 expect(result.totalXPAwarded).toBe(0);
-                expect(supabase.functions.invoke).not.toHaveBeenCalled();
+                expect(mockInvokeEdgeFunction).not.toHaveBeenCalled();
             });
         });
 
@@ -163,7 +184,7 @@ describe('videoLikeService', () => {
                 ]);
 
                 // Mock: video-123 already has XP (JSONB format), video-456 does not
-                (supabase.from as jest.Mock).mockReturnValue({
+                mockFrom.mockReturnValue({
                     select: jest.fn().mockReturnValue({
                         eq: jest.fn().mockReturnValue({
                             single: jest.fn().mockResolvedValue({
@@ -174,7 +195,8 @@ describe('videoLikeService', () => {
                     }),
                 });
 
-                (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+                mockInvokeEdgeFunction.mockResolvedValue({
+                    success: true,
                     data: {
                         success: true,
                         results: [{
@@ -185,7 +207,7 @@ describe('videoLikeService', () => {
                         }],
                         totalXPAwarded: 100,
                     },
-                    error: null,
+                    fromCache: false,
                 });
 
                 const result = await verifyAndAwardVideoLikeXP('test-token', 'user-123');
@@ -193,7 +215,7 @@ describe('videoLikeService', () => {
                 expect(result.success).toBe(true);
 
                 // Should only verify video-456, not video-123
-                const invokeCall = (supabase.functions.invoke as jest.Mock).mock.calls[0][1];
+                const invokeCall = mockInvokeEdgeFunction.mock.calls[0][0];
                 expect(invokeCall.body.videos).toHaveLength(1);
                 expect(invokeCall.body.videos[0].videoId).toBe('video-456');
             });
@@ -202,7 +224,7 @@ describe('videoLikeService', () => {
                 mockGetAll.mockResolvedValue([mockChannelState]);
 
                 // Mock: video already has XP (JSONB format)
-                (supabase.from as jest.Mock).mockReturnValue({
+                mockFrom.mockReturnValue({
                     select: jest.fn().mockReturnValue({
                         eq: jest.fn().mockReturnValue({
                             single: jest.fn().mockResolvedValue({
@@ -217,7 +239,7 @@ describe('videoLikeService', () => {
 
                 expect(result.success).toBe(true);
                 expect(result.totalXPAwarded).toBe(0);
-                expect(supabase.functions.invoke).not.toHaveBeenCalled();
+                expect(mockInvokeEdgeFunction).not.toHaveBeenCalled();
                 expect(result.statuses[0].xpAwarded).toBe(true);
             });
 
@@ -225,7 +247,7 @@ describe('videoLikeService', () => {
                 mockGetAll.mockResolvedValue([mockChannelState]);
 
                 // Mock: error querying users table
-                (supabase.from as jest.Mock).mockReturnValue({
+                mockFrom.mockReturnValue({
                     select: jest.fn().mockReturnValue({
                         eq: jest.fn().mockReturnValue({
                             single: jest.fn().mockResolvedValue({
@@ -236,7 +258,8 @@ describe('videoLikeService', () => {
                     }),
                 });
 
-                (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+                mockInvokeEdgeFunction.mockResolvedValue({
+                    success: true,
                     data: {
                         success: true,
                         results: [{
@@ -247,14 +270,14 @@ describe('videoLikeService', () => {
                         }],
                         totalXPAwarded: 200,
                     },
-                    error: null,
+                    fromCache: false,
                 });
 
                 const result = await verifyAndAwardVideoLikeXP('test-token', 'user-123');
 
                 // Should still verify (worst case: re-verify)
                 expect(result.success).toBe(true);
-                expect(supabase.functions.invoke).toHaveBeenCalled();
+                expect(mockInvokeEdgeFunction).toHaveBeenCalled();
             });
         });
 
@@ -265,7 +288,7 @@ describe('videoLikeService', () => {
                     { ...mockChannelState, channel_key: 'koro', latest_video_id: 'video-456' },
                 ]);
 
-                (supabase.from as jest.Mock).mockReturnValue({
+                mockFrom.mockReturnValue({
                     select: jest.fn().mockReturnValue({
                         eq: jest.fn().mockReturnValue({
                             single: jest.fn().mockResolvedValue({
@@ -276,7 +299,8 @@ describe('videoLikeService', () => {
                     }),
                 });
 
-                (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+                mockInvokeEdgeFunction.mockResolvedValue({
+                    success: true,
                     data: {
                         success: true,
                         results: [
@@ -285,7 +309,7 @@ describe('videoLikeService', () => {
                         ],
                         totalXPAwarded: 200,
                     },
-                    error: null,
+                    fromCache: false,
                 });
 
                 const result = await verifyAndAwardVideoLikeXP('test-token', 'user-123');
@@ -299,7 +323,7 @@ describe('videoLikeService', () => {
             it('should handle Edge Function success=false', async () => {
                 mockGetAll.mockResolvedValue([mockChannelState]);
 
-                (supabase.from as jest.Mock).mockReturnValue({
+                mockFrom.mockReturnValue({
                     select: jest.fn().mockReturnValue({
                         eq: jest.fn().mockReturnValue({
                             single: jest.fn().mockResolvedValue({
@@ -310,14 +334,15 @@ describe('videoLikeService', () => {
                     }),
                 });
 
-                (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+                mockInvokeEdgeFunction.mockResolvedValue({
+                    success: true,
                     data: {
                         success: false,
                         error: 'YouTube API error',
                         results: [],
                         totalXPAwarded: 0,
                     },
-                    error: null,
+                    fromCache: false,
                 });
 
                 const result = await verifyAndAwardVideoLikeXP('test-token', 'user-123');

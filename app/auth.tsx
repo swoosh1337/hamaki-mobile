@@ -138,12 +138,12 @@ function AuthScreen() {
       } else {
         // Authentication failed
         log.debug('Authentication failed', { error: result.error });
-        setErrorMessage(result.error || 'Authentication failed. Please try again.');
+        setErrorMessage(result.error || 'აუტორიზაცია ვერ მოხერხდა. სცადე თავიდან.');
       }
     } catch (error) {
       log.error('Sign in error', error);
       isAuthenticating.current = false;
-      setErrorMessage('An unexpected error occurred. Please try again.');
+      setErrorMessage('მოულოდნელი შეცდომა. სცადე თავიდან.');
     }
   };
 

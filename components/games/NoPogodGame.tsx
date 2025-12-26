@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { DISABLE_GAME_COOLDOWN } from '@/config/featureFlags';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import type { NoPogodGameState } from '@/features/games/noPogod';
@@ -25,8 +26,8 @@ import { ResponsiveScalingManager } from '@/features/games/noPogod/utils/respons
 import { NoPogodSpriteRenderer } from '@/features/games/noPogod/utils/spriteRenderer';
 import { preloadGameAssets, releaseGameAssets } from '@/features/games/shared';
 import { useGameCooldown } from '@/hooks/useGameCooldown';
-import { userService } from '@/services/supabase';
-import { leaderboardService } from '@/services/supabase/leaderboardService';
+import type { AwardXPResult } from '@/hooks/useMyLeaderboardStatus';
+import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { createLogger } from '@/utils/logger';
 import { NoPogodGameCanvasAtlas } from './NoPogodGameCanvasAtlas';
 
@@ -79,8 +80,9 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const touchDirectionRef = useRef<'LEFT' | 'RIGHT' | null>(null);
 
   // Show cooldown screen if on cooldown when modal opens
+  // Skip if DISABLE_GAME_COOLDOWN flag is enabled
   useEffect(() => {
-    if (visible && isOnCooldown && !isDemoMode) {
+    if (visible && isOnCooldown && !isDemoMode && !DISABLE_GAME_COOLDOWN) {
       setShowCooldownScreen(true);
     }
   }, [visible, isOnCooldown, isDemoMode]);
@@ -300,16 +302,25 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         const xpToAward = Math.floor(gameState.score / 10);
 
         if (xpToAward > 0) {
-          const newXP = userProfile.xp_points + xpToAward;
-
           try {
-            // Update XP in database with error handling
-            const success = await userService.updateUserXP(userProfile.google_id, newXP);
+            // Award XP via Edge Function (handles both user XP and leaderboard atomically)
+            const result = await invokeEdgeFunction<AwardXPResult>({
+              functionName: 'award-xp',
+              body: {
+                userId: userProfile.id,
+                xpType: 'game',
+                amount: xpToAward,
+              },
+              silentFail: true, // Don't crash if Edge Function fails
+            });
 
-            if (success) {
-              // Update local user profile
-              updateUserProfile({ xp_points: newXP });
-              log.info(`Awarded ${xpToAward} XP for No Pogodi game`);
+            if (result.success && result.data) {
+              // Update local user profile with new XP from server
+              updateUserProfile({ xp_points: result.data.new_total_xp });
+              log.info(`Awarded ${xpToAward} XP for No Pogodi game`, {
+                newTotal: result.data.new_total_xp,
+                personalRank: result.data.personal_rank,
+              });
 
               // Invalidate XP stats cache so profile refreshes
               try {
@@ -319,28 +330,17 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
               } catch (error) {
                 log.error('Error invalidating XP cache:', error);
               }
-
-              // Update leaderboard entries (weekly and all-time) - non-blocking
-              // Run in background, don't wait for completion
-              leaderboardService.updateLeaderboardPoints(userProfile.id, xpToAward)
-                .then((success: boolean) => {
-                  if (success) {
-                    log.info(`Updated leaderboard with ${xpToAward} points`);
-                  } else {
-                    log.warn('Leaderboard update failed, but XP was saved');
-                  }
-                })
-                .catch((error: Error) => {
-                  log.error('Leaderboard update error (non-critical):', error);
-                  // Don't throw - leaderboard update is not critical
-                });
             } else {
-              // Silently update local profile even if server update fails
+              // Edge Function failed - update locally as fallback
+              const newXP = userProfile.xp_points + xpToAward;
               updateUserProfile({ xp_points: newXP });
-              log.warn(`XP update failed on server, but updated locally: ${xpToAward} XP`);
+              log.warn(`Edge Function failed, updated locally: ${xpToAward} XP`, {
+                error: result.error,
+              });
             }
           } catch (error) {
             // Network error or other issue - still update locally to prevent data loss
+            const newXP = userProfile.xp_points + xpToAward;
             log.error('Error awarding XP, updating locally only:', error);
             updateUserProfile({ xp_points: newXP });
           }
@@ -351,7 +351,8 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         setRoundsPlayed(newRoundsPlayed);
 
         // Check if user has reached max rounds (only for non-demo users)
-        if (!isDemoMode && newRoundsPlayed >= MAX_ROUNDS) {
+        // Skip cooldown if DISABLE_GAME_COOLDOWN flag is enabled
+        if (!isDemoMode && !DISABLE_GAME_COOLDOWN && newRoundsPlayed >= MAX_ROUNDS) {
           log.info(`Max rounds reached (${MAX_ROUNDS}). Starting cooldown...`);
 
           // Start the cooldown using the hook (persists to AsyncStorage)
@@ -546,8 +547,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
           </Text>
 
           <Text style={styles.cooldownSubtext}>
-            დარჩენის მოლოდინ{'\n'}
-            შეტყობინება მოგივა
+            შეტყობინებას მიიღებ როცა თამაში ახლიდან შეგეძლება{'\n'}
           </Text>
 
           <View style={styles.cooldownStats}>

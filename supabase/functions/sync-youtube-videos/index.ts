@@ -182,6 +182,60 @@ Deno.serve(async (req: Request) => {
                 throw error;
             }
 
+            // Also upsert to content_posts for Home screen carousel
+            // This ensures new videos appear in the featured section
+            // First check if this video already exists (by metadata->videoId)
+            const { data: existingPost } = await supabase
+                .from('content_posts')
+                .select('id')
+                .eq('metadata->>videoId', latest.videoId)
+                .maybeSingle();
+
+            if (!existingPost) {
+                // Un-feature old videos from this channel (keep only 1 per channel in carousel)
+                const { error: unfeatError } = await supabase
+                    .from('content_posts')
+                    .update({ is_featured: false })
+                    .eq('type', 'video')
+                    .eq('metadata->>channelKey', channel.key)
+                    .eq('is_featured', true);
+
+                if (unfeatError) {
+                    console.error(`[${channel.name}] Failed to un-feature old videos:`, unfeatError);
+                } else {
+                    console.log(`[${channel.name}] Un-featured old videos from this channel`);
+                }
+
+                // Insert new content post with auto-generated UUID
+                const { error: contentError } = await supabase
+                    .from('content_posts')
+                    .insert({
+                        type: 'video',
+                        title: latest.title,
+                        excerpt: `${channel.name}-ს ახალი ვიდეო`, // "New video from [channel]" in Georgian
+                        content: latest.description || '',
+                        thumbnail: latest.thumbnail,
+                        is_published: true,
+                        published_at: latest.publishedAt,
+                        is_featured: true,  // Shows in carousel
+                        featured_order: 100, // Auto-ranked (admin can set 1-99 to pin)
+                        metadata: {
+                            videoId: latest.videoId,
+                            channelKey: channel.key,
+                            channelName: channel.name,
+                        },
+                    });
+
+                if (contentError) {
+                    console.error(`[${channel.name}] Failed to insert content_posts:`, contentError);
+                    // Don't fail the whole sync, just log the error
+                } else {
+                    console.log(`[${channel.name}] Content post created for video ${latest.videoId}`);
+                }
+            } else {
+                console.log(`[${channel.name}] Content post already exists for video ${latest.videoId}`);
+            }
+
             console.log(`[${channel.name}] Updated → ${latest.title}`);
             results.updated.push(channel.name);
 

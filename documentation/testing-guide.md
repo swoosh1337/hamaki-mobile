@@ -272,6 +272,193 @@ describe('userService', () => {
 - Test both success and error cases
 - Use `mockResolvedValue` for async operations
 
+### Service with Multiple Supabase Queries
+
+When your service makes multiple Supabase queries (e.g., checking existing data then inserting), mock each query separately:
+
+**Example:** `videoLikeService.test.ts`
+
+```typescript
+import { supabase } from '@/services/supabase';
+import { verifyAndAwardVideoLikeXP } from '@/services/youtube/videoLikeService';
+
+// Mock Supabase client
+jest.mock('@/services/supabase', () => ({
+    supabase: {
+        functions: {
+            invoke: jest.fn(),
+        },
+        from: jest.fn(),
+    },
+}));
+
+describe('verifyAndAwardVideoLikeXP', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('should skip videos that already have XP awarded', async () => {
+        // Mock: First query checks user_video_likes table
+        (supabase.from as jest.Mock).mockReturnValue({
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockResolvedValue({
+                    data: [{ video_id: 'video-123', xp_awarded: true }],
+                    error: null,
+                }),
+            }),
+        });
+
+        const result = await verifyAndAwardVideoLikeXP('test-token', 'user-123');
+
+        expect(result.success).toBe(true);
+        expect(result.totalXPAwarded).toBe(0);
+        // Should NOT call Edge Function since video already has XP
+        expect(supabase.functions.invoke).not.toHaveBeenCalled();
+    });
+
+    it('should call Edge Function for videos without XP', async () => {
+        // Mock: Query returns no existing likes
+        (supabase.from as jest.Mock).mockReturnValue({
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+        });
+
+        // Mock: Edge Function call
+        (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+            data: {
+                success: true,
+                results: [{ videoId: 'video-123', xpAwarded: 200 }],
+                totalXPAwarded: 200,
+            },
+            error: null,
+        });
+
+        const result = await verifyAndAwardVideoLikeXP('test-token', 'user-123');
+
+        expect(result.success).toBe(true);
+        expect(result.totalXPAwarded).toBe(200);
+    });
+});
+```
+
+**Key Points:**
+- Use `(supabase.from as jest.Mock).mockReturnValue({...})` pattern (matches other tests)
+- Mock each query's chain separately
+- For multiple `from()` calls in one test, use `mockReturnValueOnce()`:
+  ```typescript
+  (supabase.from as jest.Mock)
+      .mockReturnValueOnce({ select: ... })  // First from() call
+      .mockReturnValueOnce({ insert: ... })  // Second from() call
+      .mockReturnValueOnce({ update: ... }); // Third from() call
+  ```
+- Test the optimization: verify Edge Function is NOT called when data exists
+
+### Service with Edge Function Client (invokeEdgeFunction)
+
+When testing services that use `invokeEdgeFunction`, mock the utility:
+
+**Example:** Testing a service that uses the Edge Function client
+
+```typescript
+import { verifyAndAwardVideoLikeXP } from '@/services/youtube/videoLikeService';
+
+// Mock the Edge Function client
+jest.mock('@/utils/edgeFunctionClient', () => ({
+    invokeEdgeFunction: jest.fn(),
+}));
+
+// Mock Supabase for DB calls
+jest.mock('@/services/supabase', () => ({
+    supabase: { from: jest.fn() },
+}));
+
+const { invokeEdgeFunction } = require('@/utils/edgeFunctionClient');
+
+describe('Service with Edge Function', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('should handle Edge Function success', async () => {
+        // Mock DB calls (channel states, user data)
+        (supabase.from as jest.Mock)
+            .mockReturnValueOnce({
+                select: jest.fn().mockResolvedValue({
+                    data: [{ channel_key: 'hamaki', latest_video_id: 'vid123' }],
+                    error: null,
+                }),
+            })
+            .mockReturnValueOnce({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockReturnValue({
+                        single: jest.fn().mockResolvedValue({
+                            data: { video_like_xp_awarded: {} },
+                            error: null,
+                        }),
+                    }),
+                }),
+            });
+
+        // Mock Edge Function success
+        (invokeEdgeFunction as jest.Mock).mockResolvedValue({
+            success: true,
+            data: {
+                success: true,
+                results: [{ videoId: 'vid123', liked: true, xpAwarded: 100 }],
+                totalXPAwarded: 100,
+            },
+            fromCache: false,
+        });
+
+        const result = await verifyAndAwardVideoLikeXP('token', 'user-id');
+
+        expect(result.success).toBe(true);
+        expect(result.totalXPAwarded).toBe(100);
+        expect(invokeEdgeFunction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                functionName: 'verify-video-likes',
+                body: expect.objectContaining({
+                    accessToken: 'token',
+                    userId: 'user-id',
+                }),
+            })
+        );
+    });
+
+    it('should handle Edge Function failure with fallback', async () => {
+        // Mock DB calls
+        (supabase.from as jest.Mock).mockReturnValue({
+            select: jest.fn().mockResolvedValue({
+                data: [{ channel_key: 'hamaki', latest_video_id: 'vid123' }],
+                error: null,
+            }),
+        });
+
+        // Mock Edge Function failure
+        (invokeEdgeFunction as jest.Mock).mockResolvedValue({
+            success: false,
+            data: null,
+            error: 'Edge Function failed',
+            fromCache: false,
+        });
+
+        const result = await verifyAndAwardVideoLikeXP('token', 'user-id');
+
+        // Should still succeed with fallback data
+        expect(result.success).toBe(true);
+        expect(result.totalXPAwarded).toBe(0);
+    });
+});
+```
+
+**Key Points:**
+- Mock `invokeEdgeFunction` from `@/utils/edgeFunctionClient`
+- Test both success and failure (with fallback) scenarios
+- Verify the function is called with correct body (including accessToken)
+- Edge Function failures should gracefully fall back to DB data
+
+
 ---
 
 ## Context/Hook Testing
@@ -973,4 +1160,4 @@ When a test fails, check:
 
 ---
 
-**Last Updated:** December 23, 2025
+**Last Updated:** December 25, 2025

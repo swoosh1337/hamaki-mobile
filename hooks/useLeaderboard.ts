@@ -72,22 +72,44 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}): UseLeaderbo
 
             if (period === 'weekly') {
                 const weeklyData = await leaderboardService.getWeeklyLeaderboard(limit);
-                data = weeklyData.map((entry, index) => ({
-                    userId: entry.user_id,
-                    fullName: entry.user?.full_name || 'Unknown',
-                    avatarUrl: entry.user?.avatar_url,
-                    points: entry.points,
-                    rank: index + 1,
-                }));
+                // Deduplicate by user_id (keep first occurrence = highest rank)
+                const seenUserIds = new Set<string>();
+                data = weeklyData
+                    .filter(entry => {
+                        if (seenUserIds.has(entry.user_id)) {
+                            log.warn('Duplicate user_id in weekly leaderboard', { userId: entry.user_id });
+                            return false;
+                        }
+                        seenUserIds.add(entry.user_id);
+                        return true;
+                    })
+                    .map((entry, index) => ({
+                        userId: entry.user_id,
+                        fullName: entry.user?.full_name || 'Unknown',
+                        avatarUrl: entry.user?.avatar_url,
+                        points: entry.points,
+                        rank: index + 1,
+                    }));
             } else {
                 const allTimeData = await leaderboardService.getLeaderboard(limit);
-                data = allTimeData.map((user, index) => ({
-                    userId: user.id,
-                    fullName: user.full_name || 'Unknown',
-                    avatarUrl: user.avatar_url,
-                    points: user.xp_points || 0,
-                    rank: index + 1,
-                }));
+                // Deduplicate by user id (keep first occurrence = highest rank)
+                const seenUserIds = new Set<string>();
+                data = allTimeData
+                    .filter(user => {
+                        if (seenUserIds.has(user.id)) {
+                            log.warn('Duplicate user_id in all-time leaderboard', { userId: user.id });
+                            return false;
+                        }
+                        seenUserIds.add(user.id);
+                        return true;
+                    })
+                    .map((user, index) => ({
+                        userId: user.id,
+                        fullName: user.full_name || 'Unknown',
+                        avatarUrl: user.avatar_url,
+                        points: user.xp_points || 0,
+                        rank: index + 1,
+                    }));
             }
 
             setEntries(data);

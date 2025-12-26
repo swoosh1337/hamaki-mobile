@@ -201,7 +201,14 @@ export const tokenManager = {
             const data = await response.json();
 
             if (!response.ok) {
-                log.error('Token refresh failed', data);
+                log.error('Token refresh failed', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    error: data.error,
+                    errorDescription: data.error_description,
+                    hasRefreshToken: !!sessionData.tokenData.refreshToken,
+                    refreshTokenLength: sessionData.tokenData.refreshToken?.length || 0,
+                });
                 await this.clearSession();
                 return null;
             }

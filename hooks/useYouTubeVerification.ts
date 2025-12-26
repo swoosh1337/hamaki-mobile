@@ -227,7 +227,22 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
         try {
             const accessToken = await tokenManager.getValidAccessToken();
             if (!accessToken) {
-                throw new Error('No valid access token');
+                // Token refresh failed - gracefully fall back to cached data
+                log.warn('Token refresh failed, using cached video like data');
+                const cachedStatuses = await verificationCacheService.getCachedVideoLikeStatuses();
+                if (cachedStatuses.length > 0) {
+                    setVideoLikeStatuses(cachedStatuses);
+                    log.info(`Loaded ${cachedStatuses.length} cached video statuses`);
+                } else {
+                    // No cache - load from DB (shows XP awarded status but can't verify new likes)
+                    const dbStatuses = await getVideoStatusesFromDB(userProfile.id);
+                    setVideoLikeStatuses(dbStatuses);
+                    log.info(`Loaded ${dbStatuses.length} video statuses from DB`);
+                }
+                // Don't throw - silently use fallback data
+                // User can re-authenticate to refresh
+                setIsLoadingVideoLikes(false);
+                return;
             }
 
             // Add timeout to prevent infinite loading

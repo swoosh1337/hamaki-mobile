@@ -2,8 +2,8 @@
  * Subscription Service Tests
  *
  * Tests subscription verification via Edge Function
- * 
- * NOTE: Service now calls Edge Function, not YouTube API directly
+ *
+ * NOTE: Service now calls Edge Function via invokeEdgeFunction wrapper
  * Subscriptions are GATES - verified once, never auto-rechecked
  */
 
@@ -29,17 +29,21 @@ const mockFrom = jest.fn();
 const mockUpdateLeaderboardPoints = jest.fn();
 jest.mock('@/services/supabase', () => ({
     supabase: {
-        from: (...args: any[]) => mockFrom(...args),
-        functions: {
-            invoke: jest.fn(),
-        },
+        from: (...args: unknown[]) => mockFrom(...args),
     },
     leaderboardService: {
-        updateLeaderboardPoints: (...args: any[]) => mockUpdateLeaderboardPoints(...args),
+        updateLeaderboardPoints: (...args: unknown[]) => mockUpdateLeaderboardPoints(...args),
     },
 }));
 
-import { supabase } from '@/services/supabase';
+// Mock invokeEdgeFunction
+const mockInvokeEdgeFunction = jest.fn();
+jest.mock('@/utils/edgeFunctionClient', () => ({
+    get invokeEdgeFunction() {
+        return mockInvokeEdgeFunction;
+    },
+}));
+
 import {
     getEarnedSubscriptionXP,
     getSubscriptionStatuses,
@@ -47,8 +51,6 @@ import {
     verifyAndAwardSubscriptionXP,
 } from '@/services/youtube/subscriptionService';
 import type { SubscriptionStatus } from '@/types/youtube';
-
-const mockInvoke = supabase.functions.invoke as jest.Mock;
 
 describe('subscriptionService', () => {
     beforeEach(() => {
@@ -128,7 +130,8 @@ describe('subscriptionService', () => {
 
     describe('verifyAndAwardSubscriptionXP', () => {
         it('should call Edge Function and return results', async () => {
-            mockInvoke.mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: true,
                     results: [
@@ -137,7 +140,7 @@ describe('subscriptionService', () => {
                     ],
                     totalXPAwarded: 1700,
                 },
-                error: null,
+                fromCache: false,
             });
 
             const result = await verifyAndAwardSubscriptionXP(
@@ -148,11 +151,14 @@ describe('subscriptionService', () => {
 
             expect(result.success).toBe(true);
             expect(result.totalXPAwarded).toBe(1700);
-            expect(mockInvoke).toHaveBeenCalledWith('verify-subscriptions', expect.any(Object));
+            expect(mockInvokeEdgeFunction).toHaveBeenCalledWith(expect.objectContaining({
+                functionName: 'verify-subscriptions',
+            }));
         });
 
         it('should update leaderboard when XP is awarded', async () => {
-            mockInvoke.mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: true,
                     results: [
@@ -160,16 +166,19 @@ describe('subscriptionService', () => {
                     ],
                     totalXPAwarded: 1000,
                 },
-                error: null,
+                fromCache: false,
             });
 
-            await verifyAndAwardSubscriptionXP('test-token', 'user-123', 'google-123');
+            const result = await verifyAndAwardSubscriptionXP('test-token', 'user-123', 'google-123');
 
-            expect(mockUpdateLeaderboardPoints).toHaveBeenCalledWith('user-123', 1000);
+            // Edge Function handles leaderboard update internally, so we verify the result contains XP info
+            expect(result?.totalXPAwarded).toBe(1000);
+            // Note: updateLeaderboardPoints is no longer called directly - Edge Function handles this
         });
 
         it('should not update leaderboard when no XP is awarded', async () => {
-            mockInvoke.mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: true,
                     results: [
@@ -177,7 +186,7 @@ describe('subscriptionService', () => {
                     ],
                     totalXPAwarded: 0,
                 },
-                error: null,
+                fromCache: false,
             });
 
             await verifyAndAwardSubscriptionXP('test-token', 'user-123', 'google-123');
@@ -185,10 +194,27 @@ describe('subscriptionService', () => {
             expect(mockUpdateLeaderboardPoints).not.toHaveBeenCalled();
         });
 
-        it('should handle Edge Function errors', async () => {
-            mockInvoke.mockResolvedValue({
+        it('should fallback to DB data when Edge Function errors', async () => {
+            // Mock DB fallback data
+            mockFrom.mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockResolvedValue({
+                        data: [{
+                            channel_key: 'hamaki',
+                            subscribed: true,
+                            xp_awarded: true,
+                            verified_at: '2024-01-01T00:00:00Z',
+                        }],
+                        error: null,
+                    }),
+                }),
+            });
+
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: false,
                 data: null,
-                error: { message: 'Function error' },
+                error: 'Function error',
+                fromCache: false,
             });
 
             const result = await verifyAndAwardSubscriptionXP(
@@ -197,12 +223,14 @@ describe('subscriptionService', () => {
                 'google-123'
             );
 
-            expect(result.success).toBe(false);
-            expect(result.errors).toContain('Function error');
+            // Service gracefully falls back to DB data
+            expect(result.success).toBe(true);
+            expect(result.statuses.length).toBeGreaterThan(0);
         });
 
         it('should return alreadyVerified=true for previously verified channels', async () => {
-            mockInvoke.mockResolvedValue({
+            mockInvokeEdgeFunction.mockResolvedValue({
+                success: true,
                 data: {
                     success: true,
                     results: [
@@ -210,7 +238,7 @@ describe('subscriptionService', () => {
                     ],
                     totalXPAwarded: 0,
                 },
-                error: null,
+                fromCache: false,
             });
 
             const result = await verifyAndAwardSubscriptionXP(

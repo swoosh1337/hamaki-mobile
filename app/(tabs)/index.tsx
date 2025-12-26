@@ -8,6 +8,7 @@ import { InlineError } from '@/components/ui/InlineError';
 import { CarouselSkeleton, PostSkeleton } from '@/components/ui/SkeletonLoader';
 import { useContent } from '@/contexts/ContentContext';
 import { trackPostClose, trackPostOpen } from '@/utils/analytics';
+import { isNewPost, sortPostsHybrid } from '@/utils/contentSorting';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('Home');
@@ -49,6 +50,8 @@ export default function HomeScreen() {
   const scrollViewRef = React.useRef<ScrollView>(null);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
+  // Sort posts using extracted utility
+  const sortedPosts = React.useMemo(() => sortPostsHybrid(posts), [posts]);
 
   const handleCarouselPostTap = async (post: Post) => {
     if (post.type === 'video' && post.metadata.videoId) {
@@ -112,11 +115,6 @@ export default function HomeScreen() {
       {/* Featured Carousel Section */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>გამორჩეული</Text>
-        {hasNewContent && (
-          <View style={styles.newIndicator}>
-            <Text style={styles.newIndicatorText}>NEW</Text>
-          </View>
-        )}
       </View>
 
       {isLoading && (
@@ -165,7 +163,7 @@ export default function HomeScreen() {
             onRetry={handleRetry}
           />
         ) : (
-          posts.map((post) => (
+          sortedPosts.map((post) => (
             <PostCard
               key={post.id}
               post={post}
@@ -233,15 +231,23 @@ function PostCard({ post, isExpanded, onToggleExpand }: { post: Post; isExpanded
         {post.type === 'hiring' && post.metadata.company && (
           <Text style={styles.postCompany}>{post.metadata.company}</Text>
         )}
-        {/* Watch button for video posts */}
+        {/* Watch button and NEW badge for video posts */}
         {post.type === 'video' && post.metadata.videoId && (
-          <TouchableOpacity
-            style={styles.postWatchButton}
-            onPress={handleWatchVideo}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.postWatchText}>ყურება</Text>
-          </TouchableOpacity>
+          <View style={styles.postButtonRow}>
+            <TouchableOpacity
+              style={styles.postWatchButton}
+              onPress={handleWatchVideo}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.postWatchText}>ყურება</Text>
+            </TouchableOpacity>
+            {/* NEW badge for posts published within 24 hours */}
+            {isNewPost(post.publishedAt) && (
+              <View style={styles.postNewBadge}>
+                <Text style={styles.postNewBadgeText}>ახალი</Text>
+              </View>
+            )}
+          </View>
         )}
         {/* Apply button for hiring posts */}
         {post.type === 'hiring' && post.metadata.applicationUrl && (
@@ -356,15 +362,15 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   newIndicator: {
-    backgroundColor: Colors.dark.tint,
+    backgroundColor: '#FF6B6B',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
   },
   newIndicatorText: {
-    fontFamily: 'HamakiEng',
+    fontFamily: 'HamakiGeo',
     fontSize: 10,
-    color: Colors.dark.background,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   videoCard: {
@@ -571,6 +577,20 @@ const styles = StyleSheet.create({
     color: Colors.dark.background,
     fontWeight: 'bold',
   },
+  postNewBadge: {
+    backgroundColor: '#FF6B6B',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  postNewBadgeText: {
+    fontFamily: 'HamakiEng',
+    fontSize: 9,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
   postFullContent: {
     color: Colors.dark.text,
     fontSize: 14,
@@ -585,14 +605,18 @@ const styles = StyleSheet.create({
     marginTop: 12,
     alignItems: 'center',
   },
+  postButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 8,
+    gap: 10,
+  },
   postWatchButton: {
     backgroundColor: Colors.dark.tint,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    marginBottom: 8,
   },
   postWatchText: {
     fontFamily: 'HamakiGeo',

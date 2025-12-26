@@ -363,7 +363,7 @@ describeOrSkip('Monthly Leaderboard Reset System', () => {
                 }),
             });
 
-            const result1 = await response.json();
+            const result1 = await response1.json();
             const checksum1 = result1.checksum;
 
             const response2 = await fetch(FUNCTION_URL, {
@@ -378,7 +378,7 @@ describeOrSkip('Monthly Leaderboard Reset System', () => {
                 }),
             });
 
-            const result2 = await response.json();
+            const result2 = await response2.json();
             const checksum2 = result2.checksum;
 
             expect(checksum1).toBe(checksum2);

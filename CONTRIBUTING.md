@@ -135,7 +135,8 @@ hamaki-mobile/
 │   └── youtube.ts               # YouTube API helpers
 │
 ├── constants/                    # App constants
-│   └── Colors.ts                # Theme colors
+│   ├── Colors.ts                # Theme colors
+│   └── content.ts               # Content thresholds (e.g., NEW_BADGE_DURATION_MS)
 │
 └── __tests__/                    # Test files
     ├── services/                # Service tests
@@ -967,6 +968,116 @@ const { isOnCooldown, timeRemaining } = await checkGameCooldown('no_pogod', user
 // Set cooldown after game ends
 await setGameCooldown('no_pogod', userId);
 ```
+
+#### `utils/edgeFunctionClient.ts`
+
+**Resilient Edge Function calls with retry and cache fallback.**
+
+```typescript
+import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
+
+// Basic usage
+const result = await invokeEdgeFunction<MyResponse>({
+  functionName: 'my-edge-function',
+  body: { userId },
+});
+
+// With cache fallback (recommended for critical calls)
+const result = await invokeEdgeFunction<MyResponse>({
+  functionName: 'verify-subscriptions',
+  body: { userId },
+  cacheKey: `subscriptions:${userId}`,
+  cacheFallback: () => getFromDatabase(userId),
+  maxRetries: 3,
+  silentFail: true,
+});
+
+if (result.success) {
+  console.log(result.data);
+  if (result.fromCache) {
+    console.log('Using cached data');
+  }
+}
+```
+
+See [Edge Function Client Documentation](./documentation/edge-function-client.md) for full API reference.
+
+> **⚠️ IMPORTANT:** When passing OAuth tokens to Edge Functions, always include them in the **request body**, not in headers. The Supabase functions.invoke() method may not properly forward custom headers:
+> ```typescript
+> // ✅ CORRECT - Token in body
+> body: { userId, accessToken: trimmedToken }
+> 
+> // ❌ WRONG - Token in header may not work
+> headers: { Authorization: `Bearer ${accessToken}` }
+> ```
+
+#### `constants/content.ts`
+
+**Extract magic numbers and thresholds to constants:**
+
+```typescript
+import { ADMIN_FEATURED_ORDER_THRESHOLD, NEW_BADGE_DURATION_MS } from '@/constants/content';
+
+// Check if content is "new" (within 24 hours)
+const isNew = Date.now() - publishedAt < NEW_BADGE_DURATION_MS;
+
+// Check if admin pinned content (featured_order < threshold)
+const isAdminPinned = post.featured_order < ADMIN_FEATURED_ORDER_THRESHOLD;
+```
+
+**Why constants?** Avoid duplicating magic numbers across files. When thresholds change, update in one place. Makes code more readable and self-documenting.
+
+#### `utils/contentSorting.ts`
+
+**Reusable content sorting utilities:**
+
+```typescript
+import { sortPostsHybrid, isNewPost } from '@/utils/contentSorting';
+
+// Sort featured posts with admin pins first
+const sorted = sortPostsHybrid(posts);
+
+// Check if a post should show "NEW" badge
+const showNewBadge = isNewPost(post.publishedAt);
+```
+
+#### Localization (Georgian Text)
+
+**All user-facing UI text must be in Georgian.** Error messages, button labels, confirmations, etc.
+
+```typescript
+// ✅ CORRECT - Georgian text
+return { success: false, error: 'აუტორიზაცია შეჩერდა' };
+Alert.alert('ცვლილებების გაუქმება', 'ნამდვილად გსურთ ცვლილებების გაუქმება?');
+
+// ❌ WRONG - English text for user-facing content
+return { success: false, error: 'Authentication cancelled' };
+```
+
+**Exceptions:** Log messages can remain in English for debugging purposes.
+
+#### `hooks/useRealtimeSubscription.ts`
+
+**Reusable realtime subscription abstraction:**
+
+```typescript
+import { useRealtimeInsert } from '@/hooks/useRealtimeSubscription';
+
+// Subscribe to new post inserts
+useRealtimeInsert({
+  table: 'posts',
+  filter: 'status=eq.approved',
+  channelName: 'my-posts-subscription',
+  onEvent: (newPost) => {
+    // Handle new post
+  },
+});
+```
+
+**Key benefits:**
+- Automatic cleanup on unmount
+- Reconnection handling for network interruptions
+- Low log noise (uses `warn` not `error` for expected reconnection events)
 
 #### `utils/xpStatsCache.ts`
 ```typescript
