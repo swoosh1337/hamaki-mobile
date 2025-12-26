@@ -21,6 +21,21 @@ export const TIMING = {
 } as const;
 
 // =============================================================================
+// MULTI-THROW CONFIGURATION
+// =============================================================================
+
+export const MULTI_THROW = {
+    /** Chance of burst throw (0-1), 50% = half the throws are burst throws */
+    CHANCE: 0.5,
+    /** Minimum items in a burst throw */
+    MIN_ITEMS: 2,
+    /** Maximum items in a burst throw */
+    MAX_ITEMS: 3,
+    /** Delay between sequential throws in ms (rapid fire - items thrown quickly one after another) */
+    BURST_DELAY_MS: 100,
+} as const;
+
+// =============================================================================
 // SCORING CONFIGURATION
 // =============================================================================
 

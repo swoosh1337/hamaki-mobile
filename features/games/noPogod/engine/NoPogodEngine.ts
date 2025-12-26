@@ -360,12 +360,13 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
     }
 
     private updateItemSpawning(currentTime: number): void {
-        if (ItemSpawner.shouldSpawnItem(this.spawnerState, currentTime)) {
+        // Check if it's time to spawn (handles both regular and burst timing)
+        if (ItemSpawner.shouldSpawnNextItem(this.spawnerState, currentTime)) {
             // Trigger throw animation
             this.gameState.shonzika = ShonzikaAI.triggerThrow(this.gameState.shonzika);
 
-            // Spawn item
-            const { item, newState } = ItemSpawner.spawnItem(
+            // Spawn item (may start a burst sequence - 40% chance for 2-3 items)
+            const { item, newState } = ItemSpawner.spawnWithBurst(
                 this.spawnerState,
                 this.gameState.shonzika,
                 currentTime

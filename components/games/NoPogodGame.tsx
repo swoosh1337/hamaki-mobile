@@ -494,7 +494,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         {isNewHighScore && (
           <View style={styles.highScoreBanner}>
             <Text style={styles.highScoreText}>🏆 NEW HIGH SCORE! 🏆</Text>
-            <Text style={styles.highScoreCongrats}>Congratulations!</Text>
+            <Text style={styles.highScoreCongrats}>გილოცავ!</Text>
           </View>
         )}
 
