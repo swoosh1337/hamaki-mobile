@@ -5,8 +5,18 @@
  * This is a pure logic module with no React dependencies.
  */
 
-import { ITEM_DEFINITIONS, MULTI_THROW, PHYSICS, SIZES, SPAWN_WEIGHTS, TIMING } from './config';
+import { DIFFICULTY, ITEM_DEFINITIONS, MULTI_THROW, PHYSICS, SIZES, SPAWN_WEIGHTS, TIMING } from './config';
 import type { FallingItem, ItemType, ShonzikaState } from './types';
+
+/**
+ * Difficulty settings for current game phase
+ */
+export interface DifficultySettings {
+    spawnInterval: number;
+    fallSpeed: number;
+    shonzikaY: number;
+    phase: number;
+}
 
 /**
  * State for managing item spawning
@@ -35,11 +45,38 @@ export function createInitialSpawnerState(): SpawnerState {
 }
 
 /**
- * Generates the next spawn time with random variance
+ * Gets difficulty settings based on elapsed game time.
+ * Difficulty increases every 10 seconds.
+ * 
+ * @param elapsedMs - Time elapsed since game start in milliseconds
  */
-export function calculateNextSpawnTime(currentTime: number): number {
+export function getDifficultySettings(elapsedMs: number): DifficultySettings {
+    const elapsedSec = elapsedMs / 1000;
+
+    // Find which phase we're in
+    let phaseIndex = 0;
+    for (let i = DIFFICULTY.PHASES.length - 1; i >= 0; i--) {
+        if (elapsedSec >= DIFFICULTY.PHASES[i]) {
+            phaseIndex = i;
+            break;
+        }
+    }
+
+    return {
+        spawnInterval: DIFFICULTY.SPAWN_INTERVALS[phaseIndex],
+        fallSpeed: DIFFICULTY.FALL_SPEEDS[phaseIndex],
+        shonzikaY: DIFFICULTY.SHONZIKA_Y[phaseIndex],
+        phase: phaseIndex,
+    };
+}
+
+/**
+ * Generates the next spawn time with random variance, using difficulty-adjusted interval
+ */
+export function calculateNextSpawnTime(currentTime: number, spawnInterval?: number): number {
+    const interval = spawnInterval ?? TIMING.ITEM_SPAWN_INTERVAL;
     const variance = (Math.random() - 0.5) * 2 * TIMING.ITEM_SPAWN_VARIANCE;
-    return currentTime + TIMING.ITEM_SPAWN_INTERVAL + variance;
+    return currentTime + interval + variance;
 }
 
 /**
@@ -79,12 +116,15 @@ export function generateItemId(spawnerState: SpawnerState): string {
 
 /**
  * Creates a new falling item at the Shonzika's hand position
+ * 
+ * @param fallSpeed - Optional fall speed override for difficulty scaling
  */
 export function createFallingItem(
     itemType: ItemType,
     spawnX: number,
     spawnY: number,
-    itemId: string
+    itemId: string,
+    fallSpeed?: number
 ): FallingItem {
     const definition = ITEM_DEFINITIONS[itemType];
 
@@ -94,7 +134,7 @@ export function createFallingItem(
         x: spawnX,
         y: spawnY,
         velocityX: 0,  // Straight down drop
-        velocityY: PHYSICS.ITEM_FALL_SPEED,
+        velocityY: fallSpeed ?? PHYSICS.ITEM_FALL_SPEED,
         sprite: null,  // Will be set by renderer
         points: definition.points,
         isBad: definition.isBad,
@@ -192,6 +232,45 @@ export function spawnWithBurst(
 
     // No burst, normal spawn
     return { item, newState };
+}
+
+/**
+ * Spawns item with difficulty-adjusted settings.
+ * Uses elapsed game time to determine difficulty phase.
+ * 
+ * @param elapsedMs - Time elapsed since game start in milliseconds
+ */
+export function spawnWithDifficulty(
+    spawnerState: SpawnerState,
+    shonzika: ShonzikaState,
+    currentTime: number,
+    elapsedMs: number
+): { item: FallingItem; newState: SpawnerState; difficulty: DifficultySettings } {
+    const difficulty = getDifficultySettings(elapsedMs);
+
+    // Spawn the item using existing burst logic
+    const { item, newState } = spawnWithBurst(spawnerState, shonzika, currentTime);
+
+    // Apply difficulty-adjusted fall speed to the item
+    const adjustedItem: FallingItem = {
+        ...item,
+        velocityY: difficulty.fallSpeed,
+    };
+
+    // Apply difficulty-adjusted spawn interval to next spawn time
+    const adjustedState: SpawnerState = {
+        ...newState,
+        // Only adjust nextSpawnTime if not in burst (burst has its own timing)
+        nextSpawnTime: newState.burstPendingCount > 0
+            ? newState.nextSpawnTime
+            : calculateNextSpawnTime(currentTime, difficulty.spawnInterval),
+    };
+
+    return {
+        item: adjustedItem,
+        newState: adjustedState,
+        difficulty,
+    };
 }
 
 /**

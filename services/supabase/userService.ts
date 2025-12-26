@@ -271,7 +271,7 @@ export const userService = {
      */
     async getUserXPStats(googleId: string): Promise<XPStats | null> {
         try {
-            // Get user's total XP
+            // Get user's profile for fallback
             const userProfile = await this.getUserProfile(googleId);
             if (!userProfile) {
                 return null;
@@ -290,20 +290,25 @@ export const userService = {
             weekEnd.setDate(weekStart.getDate() + 6);
             weekEnd.setHours(23, 59, 59, 999);
 
-            // Get XP from leaderboard_entries table (current total XP)
-            const { data: leaderboardEntry, error: leaderboardError } = await supabase
+            // Fetch BOTH monthly and weekly entries
+            const { data: leaderboardEntries, error: leaderboardError } = await supabase
                 .from('leaderboard_entries')
-                .select('total_xp, game_xp, subscription_xp, video_like_xp')
+                .select('period_type, total_xp, game_xp, subscription_xp, video_like_xp')
                 .eq('user_id', userProfile.id)
-                .single();
+                .in('period_type', ['monthly', 'weekly']);
 
             if (leaderboardError && leaderboardError.code !== 'PGRST116') {
                 log.error('Error fetching leaderboard XP:', leaderboardError);
             }
 
-            // Use leaderboard total_xp if available, otherwise fall back to user xp_points
-            const totalXP = leaderboardEntry?.total_xp || userProfile.xp_points;
-            const weeklyXP = leaderboardEntry?.game_xp || 0; // Game XP = weekly competitive XP
+            // Find monthly and weekly entries
+            const monthlyEntry = leaderboardEntries?.find(e => e.period_type === 'monthly');
+            const weeklyEntry = leaderboardEntries?.find(e => e.period_type === 'weekly');
+
+            // Total XP comes from monthly entry (the "main" leaderboard)
+            // Weekly XP comes from weekly entry's game_xp (resets each week)
+            const totalXP = monthlyEntry?.total_xp || userProfile.xp_points || 0;
+            const weeklyXP = weeklyEntry?.game_xp || 0;
 
             return {
                 totalXP,

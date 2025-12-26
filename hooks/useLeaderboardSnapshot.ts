@@ -91,8 +91,8 @@ export interface LeaderboardSnapshot {
 interface UseLeaderboardSnapshotOptions {
     /** Maximum entries to fetch (default: 100 for mobile optimization) */
     limit?: number;
-    /** Period type to filter refresh events (default: 'all_time') */
-    periodType?: 'weekly' | 'monthly' | 'all_time';
+    /** Period type to filter refresh events (default: 'monthly') */
+    periodType?: 'weekly' | 'monthly';
     /** Auto-fetch on mount (default: true) */
     autoFetch?: boolean;
     /** Enable periodic refresh interval (default: true) */
@@ -114,7 +114,7 @@ export function useLeaderboardSnapshot(
 ): LeaderboardSnapshot {
     const {
         limit = 100,
-        periodType = 'all_time',
+        periodType = 'monthly',
         autoFetch = true,
         enableInterval = true,
         enableForegroundRefresh = true,
@@ -169,9 +169,7 @@ export function useLeaderboardSnapshot(
             setError(null);
             log.info('Fetching leaderboard snapshot', { reason, limit, periodType });
 
-            // Map monthly to weekly for service compatibility
-            const servicePeriodType = periodType === 'monthly' ? 'weekly' : periodType;
-            const snapshot = await leaderboardService.getLeaderboardSnapshot(limit, servicePeriodType);
+            const snapshot = await leaderboardService.getLeaderboardSnapshot(limit, periodType);
 
             if (isMountedRef.current) {
                 setEntries(snapshot.entries);

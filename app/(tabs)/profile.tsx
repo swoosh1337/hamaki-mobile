@@ -37,13 +37,16 @@ export default function ProfileScreen() {
   // Get pending XP count for settings badge (with refresh function)
   const { pendingActionCount: pendingXPCount, refreshAll } = useYouTubeVerification();
 
-  // Refresh verification data when Profile screen is focused
+  // Refresh verification data and XP stats when Profile screen is focused
   useFocusEffect(
     useCallback(() => {
+      // Always refetch profile/XP stats when tab gains focus
+      refetchProfile();
+
       if (authMethod === 'google') {
         refreshAll();
       }
-    }, [authMethod, refreshAll])
+    }, [authMethod, refreshAll, refetchProfile])
   );
 
   // UI state management

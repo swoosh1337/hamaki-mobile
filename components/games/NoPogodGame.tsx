@@ -26,7 +26,13 @@ import { ResponsiveScalingManager } from '@/features/games/noPogod/utils/respons
 import { NoPogodSpriteRenderer } from '@/features/games/noPogod/utils/spriteRenderer';
 import { preloadGameAssets, releaseGameAssets } from '@/features/games/shared';
 import { useGameCooldown } from '@/hooks/useGameCooldown';
-import type { AwardXPResult } from '@/hooks/useMyLeaderboardStatus';
+import { edgeFunctionQueueService } from '@/services/queue';
+import type { AwardXPResult } from '@/types/leaderboard';
+import {
+  generateSessionId,
+  generateXPIdempotencyKey,
+  isRetryableError,
+} from '@/types/edgeFunctionQueue';
 import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { createLogger } from '@/utils/logger';
 import { NoPogodGameCanvasAtlas } from './NoPogodGameCanvasAtlas';
@@ -78,6 +84,9 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const gamePhaseRef = useRef<string>('MENU');
   const isTouchingRef = useRef(false);
   const touchDirectionRef = useRef<'LEFT' | 'RIGHT' | null>(null);
+
+  // Session ID for idempotency - generated once per game session
+  const sessionIdRef = useRef<string | null>(null);
 
   // Show cooldown screen if on cooldown when modal opens
   // Skip if DISABLE_GAME_COOLDOWN flag is enabled
@@ -155,6 +164,10 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   // Game control functions
   const startGame = useCallback(() => {
     if (gameEngineRef.current) {
+      // Generate a new session ID for idempotency
+      sessionIdRef.current = generateSessionId();
+      log.debug('New game session', { sessionId: sessionIdRef.current });
+
       gameEngineRef.current.startGame();
       updateGameState();
     }
@@ -302,24 +315,37 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         const xpToAward = Math.floor(gameState.score / 10);
 
         if (xpToAward > 0) {
+          // Generate idempotency key for exactly-once XP awarding
+          const sessionId = sessionIdRef.current || generateSessionId();
+          const idempotencyKey = generateXPIdempotencyKey(
+            userProfile.id,
+            NOPOGOD_GAME_ID,
+            sessionId,
+            xpToAward
+          );
+
           try {
-            // Award XP via Edge Function (handles both user XP and leaderboard atomically)
+            // Award XP via Edge Function with idempotency key
             const result = await invokeEdgeFunction<AwardXPResult>({
               functionName: 'award-xp',
               body: {
                 userId: userProfile.id,
                 xpType: 'game',
                 amount: xpToAward,
+                gameId: NOPOGOD_GAME_ID,
+                sessionId,
+                idempotencyKey,
               },
-              silentFail: true, // Don't crash if Edge Function fails
+              silentFail: true,
             });
 
             if (result.success && result.data) {
-              // Update local user profile with new XP from server
+              // Update local user profile with server XP (handles duplicates correctly)
               updateUserProfile({ xp_points: result.data.new_total_xp });
               log.info(`Awarded ${xpToAward} XP for No Pogodi game`, {
                 newTotal: result.data.new_total_xp,
                 personalRank: result.data.personal_rank,
+                duplicate: result.data.duplicate,
               });
 
               // Invalidate XP stats cache so profile refreshes
@@ -327,22 +353,61 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
                 const { invalidateXPStatsCache } = await import('@/utils/xpStatsCache');
                 await invalidateXPStatsCache(userProfile.id);
                 log.debug('XP stats cache invalidated after game');
-              } catch (error) {
-                log.error('Error invalidating XP cache:', error);
+              } catch (cacheError) {
+                log.error('Error invalidating XP cache:', cacheError);
               }
             } else {
-              // Edge Function failed - update locally as fallback
-              const newXP = userProfile.xp_points + xpToAward;
-              updateUserProfile({ xp_points: newXP });
-              log.warn(`Edge Function failed, updated locally: ${xpToAward} XP`, {
-                error: result.error,
-              });
+              // Edge Function failed - check if retryable
+              if (isRetryableError(result.status)) {
+                // Add to queue for retry (optimistic XP derived from queue)
+                await edgeFunctionQueueService.addToQueue({
+                  id: `xp-${sessionId}-${xpToAward}`,
+                  idempotencyKey,
+                  category: 'xp',
+                  functionName: 'award-xp',
+                  body: {
+                    userId: userProfile.id,
+                    xpType: 'game',
+                    amount: xpToAward,
+                    gameId: NOPOGOD_GAME_ID,
+                    sessionId,
+                    idempotencyKey,
+                  },
+                  amount: xpToAward,
+                  createdAt: Date.now(),
+                });
+                log.info('XP award queued for retry', {
+                  idempotencyKey,
+                  amount: xpToAward,
+                  status: result.status,
+                });
+              } else {
+                // Permanent error (400, 401, 403, 404, 422) - log and discard
+                log.error('Permanent XP award failure, not queuing', {
+                  status: result.status,
+                  error: result.error,
+                });
+              }
             }
           } catch (error) {
-            // Network error or other issue - still update locally to prevent data loss
-            const newXP = userProfile.xp_points + xpToAward;
-            log.error('Error awarding XP, updating locally only:', error);
-            updateUserProfile({ xp_points: newXP });
+            // Unexpected error - add to queue for safety
+            log.error('Unexpected error awarding XP, queuing for retry:', error);
+            await edgeFunctionQueueService.addToQueue({
+              id: `xp-${sessionId}-${xpToAward}`,
+              idempotencyKey,
+              category: 'xp',
+              functionName: 'award-xp',
+              body: {
+                userId: userProfile.id,
+                xpType: 'game',
+                amount: xpToAward,
+                gameId: NOPOGOD_GAME_ID,
+                sessionId,
+                idempotencyKey,
+              },
+              amount: xpToAward,
+              createdAt: Date.now(),
+            });
           }
         }
 
@@ -364,8 +429,8 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
             setTimeout(() => {
               setShowCooldownScreen(true);
             }, 2000); // 2 second delay to let user see final score
-          } catch (error) {
-            log.error('Error starting game cooldown:', error);
+          } catch (cooldownError) {
+            log.error('Error starting game cooldown:', cooldownError);
           }
         }
       }

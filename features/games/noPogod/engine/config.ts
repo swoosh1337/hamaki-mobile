@@ -25,8 +25,8 @@ export const TIMING = {
 // =============================================================================
 
 export const MULTI_THROW = {
-    /** Chance of burst throw (0-1), 50% = half the throws are burst throws */
-    CHANCE: 0.5,
+    /** Chance of burst throw (0-1), 30% = roughly 1 in 3 throws are burst throws */
+    CHANCE: 0.3,
     /** Minimum items in a burst throw */
     MIN_ITEMS: 2,
     /** Maximum items in a burst throw */
@@ -55,6 +55,30 @@ export const PHYSICS = {
     ITEM_FALL_SPEED: 3.5,
     /** Fall acceleration (original value: 0.05 for slight speed increase over time) */
     ITEM_FALL_ACCELERATION: 0.05,
+} as const;
+
+// =============================================================================
+// DIFFICULTY PROGRESSION
+// =============================================================================
+
+/**
+ * Time-based difficulty scaling.
+ * Game gets progressively harder every 10 seconds.
+ * Phase 0 (0-10s): Easy start
+ * Phase 5 (50-60s): Maximum difficulty
+ */
+export const DIFFICULTY = {
+    /** Phase boundaries in seconds */
+    PHASES: [0, 10, 20, 30, 40, 50] as const,
+
+    /** Spawn interval per phase (ms) - decreases over time = more items */
+    SPAWN_INTERVALS: [1500, 1300, 1100, 1000, 900, 800] as const,
+
+    /** Item fall speed per phase - increases over time = faster */
+    FALL_SPEEDS: [3.5, 3.8, 4.2, 4.6, 5.0, 5.5] as const,
+
+    /** Shonzika Y position per phase (% from top) - moves closer to player */
+    SHONZIKA_Y: [0.35, 0.38, 0.41, 0.44, 0.47, 0.50] as const,
 } as const;
 
 // =============================================================================

@@ -121,7 +121,7 @@ describe('useLeaderboardSnapshot', () => {
                 expect(result.current.isLoading).toBe(false);
             });
 
-            expect(mockLeaderboardService.getLeaderboardSnapshot).toHaveBeenCalledWith(100, 'all_time');
+            expect(mockLeaderboardService.getLeaderboardSnapshot).toHaveBeenCalledWith(100, 'monthly');
             expect(result.current.entries).toHaveLength(2);
             expect(result.current.entries[0].fullName).toBe('Top Player');
         });
@@ -135,7 +135,7 @@ describe('useLeaderboardSnapshot', () => {
                 expect(result.current.isLoading).toBe(false);
             });
 
-            expect(mockLeaderboardService.getLeaderboardSnapshot).toHaveBeenCalledWith(50, 'all_time');
+            expect(mockLeaderboardService.getLeaderboardSnapshot).toHaveBeenCalledWith(50, 'monthly');
         });
     });
 

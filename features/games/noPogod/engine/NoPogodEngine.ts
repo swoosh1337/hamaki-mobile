@@ -365,12 +365,23 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
             // Trigger throw animation
             this.gameState.shonzika = ShonzikaAI.triggerThrow(this.gameState.shonzika);
 
-            // Spawn item (may start a burst sequence - 40% chance for 2-3 items)
-            const { item, newState } = ItemSpawner.spawnWithBurst(
+            // Calculate elapsed time for difficulty scaling
+            const elapsedMs = currentTime - this.gameStartTime;
+
+            // Spawn item with difficulty-adjusted settings (30% chance for burst)
+            const { item, newState, difficulty } = ItemSpawner.spawnWithDifficulty(
                 this.spawnerState,
                 this.gameState.shonzika,
-                currentTime
+                currentTime,
+                elapsedMs
             );
+
+            // Update Shonzika Y position based on difficulty phase
+            // (moves closer to player as difficulty increases)
+            this.gameState.shonzika = {
+                ...this.gameState.shonzika,
+                y: this.getScreenHeight() * difficulty.shonzikaY,
+            };
 
             this.spawnerState = newState;
             this.items.push(item);

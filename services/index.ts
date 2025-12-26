@@ -22,6 +22,9 @@ export {
 // YouTube services
 export * from './youtube';
 
+// Queue services
+export * from './queue';
+
 // Re-export types for convenience
 export type {
     CreatePostInput, LeaderboardEntry,

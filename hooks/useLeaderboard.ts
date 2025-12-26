@@ -1,7 +1,7 @@
 /**
  * useLeaderboard Hook
  * 
- * Manages leaderboard data including all-time and weekly rankings.
+ * Manages leaderboard data including monthly and weekly rankings.
  */
 
 import { leaderboardService } from '@/services/supabase/leaderboardService';
@@ -20,7 +20,7 @@ interface LeaderboardEntry {
 }
 
 interface UseLeaderboardOptions {
-    /** Period type: 'all_time' or 'weekly' */
+    /** Period type: 'monthly' or 'weekly' */
     period?: LeaderboardPeriod;
     /** Number of entries to fetch */
     limit?: number;
@@ -47,7 +47,7 @@ interface UseLeaderboardReturn {
 
 export function useLeaderboard(options: UseLeaderboardOptions = {}): UseLeaderboardReturn {
     const {
-        period = 'all_time',
+        period = 'monthly',
         limit = 10,
         autoFetch = true,
         currentUserId,
@@ -97,7 +97,7 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}): UseLeaderbo
                 data = allTimeData
                     .filter(user => {
                         if (seenUserIds.has(user.id)) {
-                            log.warn('Duplicate user_id in all-time leaderboard', { userId: user.id });
+                            log.warn('Duplicate user_id in monthly leaderboard', { userId: user.id });
                             return false;
                         }
                         seenUserIds.add(user.id);
