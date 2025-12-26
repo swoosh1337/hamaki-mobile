@@ -1,12 +1,12 @@
+import { Colors } from '@/constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
+  ActivityIndicator,
   StyleSheet,
   Text,
   View,
-  ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
 
 interface XPDisplayProps {
   totalXP: number;
@@ -32,10 +32,10 @@ export const XPDisplay: React.FC<XPDisplayProps> = ({
   if (isLoading) {
     return (
       <View style={styles.container} testID="xp-display-container">
-        <Text style={styles.title}>Experience Points</Text>
+        <Text style={styles.title}>XP ქულები</Text>
         <View style={styles.loadingContainer} testID="xp-display-loading">
           <ActivityIndicator size="large" color={Colors.dark.tint} />
-          <Text style={styles.loadingText}>Loading XP stats...</Text>
+          <Text style={styles.loadingText}>იტვირთება XP სტატისტიკა...</Text>
         </View>
       </View>
     );
@@ -43,11 +43,11 @@ export const XPDisplay: React.FC<XPDisplayProps> = ({
 
   return (
     <View style={styles.container} testID="xp-display-container">
-      <Text style={styles.title}>Experience Points</Text>
-      
+      <Text style={styles.title}>XP ქულები</Text>
+
       <View style={styles.statsContainer}>
         {/* Total XP */}
-        <View 
+        <View
           style={styles.statItem}
           testID="total-xp-display"
           accessibilityLabel={`Total XP: ${totalXP} points`}
@@ -66,7 +66,7 @@ export const XPDisplay: React.FC<XPDisplayProps> = ({
         </View>
 
         {/* Weekly XP */}
-        <View 
+        <View
           style={styles.statItem}
           testID="weekly-xp-display"
           accessibilityLabel={`Weekly XP: ${weeklyXP} points`}
@@ -79,19 +79,27 @@ export const XPDisplay: React.FC<XPDisplayProps> = ({
               color={Colors.dark.tint}
               testID="weekly-xp-icon"
             />
-            <Text style={styles.statLabel}>This Week</Text>
+            <Text style={styles.statLabel}>კვირის</Text>
           </View>
-          <Text 
-            style={styles.weeklyXPValue} 
+          <Text
+            style={styles.weeklyXPValue}
             testID="weekly-xp-value"
           >
             {formatNumber(weeklyXP)}
           </Text>
-          
+
           {/* Weekly Progress Indicator */}
-          <View 
+          <View
             style={styles.progressContainer}
             testID="weekly-progress-indicator"
+            accessibilityRole="progressbar"
+            accessibilityValue={{
+              min: 0,
+              max: 100,
+              now: weeklyProgressPercentage,
+              text: `${weeklyProgressPercentage}%`
+            }}
+            accessibilityLabel={`კვირის XP პროგრესი: ${weeklyXP} out of ${WEEKLY_XP_GOAL} XP`}
           >
             <View style={styles.progressTrack}>
               <View
@@ -103,7 +111,7 @@ export const XPDisplay: React.FC<XPDisplayProps> = ({
               />
             </View>
             <Text style={styles.progressText}>
-              Goal: {formatNumber(WEEKLY_XP_GOAL)} XP
+              კვირის მიზანი: {formatNumber(WEEKLY_XP_GOAL)} XP
             </Text>
           </View>
         </View>

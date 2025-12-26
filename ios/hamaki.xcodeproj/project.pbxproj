@@ -7,26 +7,26 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		034779CAC7521E0BDD6190A3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D4B195B590869AE001930317 /* PrivacyInfo.xcprivacy */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		3FBD78E76FC85363952A74EA /* libPods-hamaki.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6FE86A9F0B198F629DF023F2 /* libPods-hamaki.a */; };
-		5817F4C46D4D683DFA995FDD /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = D925840F32396B94349277EC /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		C9F6BA90D7982CA5DC72555E /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C6A7B60ACD8A926AB9C8770 /* ExpoModulesProvider.swift */; };
+		EF137A9AAAB371438A7E25DE /* libPods-hamaki.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A6F5CC664A97F3B53E694D2C /* libPods-hamaki.a */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		F9DA3D9499C90656413BFBB6 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 927C00DCA50B37997581DE89 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		13B07F961A680F5B00A75B9A /* hamaki.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = hamaki.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = hamaki/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = hamaki/Info.plist; sourceTree = "<group>"; };
-		5A4F8BD9301F76B7C587BA08 /* Pods-hamaki.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-hamaki.debug.xcconfig"; path = "Target Support Files/Pods-hamaki/Pods-hamaki.debug.xcconfig"; sourceTree = "<group>"; };
-		6C069C103AB906FC462BD1BC /* Pods-hamaki.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-hamaki.release.xcconfig"; path = "Target Support Files/Pods-hamaki/Pods-hamaki.release.xcconfig"; sourceTree = "<group>"; };
-		6FE86A9F0B198F629DF023F2 /* libPods-hamaki.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-hamaki.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3C6A7B60ACD8A926AB9C8770 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-hamaki/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		927C00DCA50B37997581DE89 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = hamaki/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A6F5CC664A97F3B53E694D2C /* libPods-hamaki.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-hamaki.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = hamaki/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		D4B195B590869AE001930317 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = hamaki/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		D925840F32396B94349277EC /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-hamaki/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		BB3CBAD58874719140C73633 /* Pods-hamaki.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-hamaki.release.xcconfig"; path = "Target Support Files/Pods-hamaki/Pods-hamaki.release.xcconfig"; sourceTree = "<group>"; };
+		CEB8DA3F3CDB07BE2A13AF2E /* Pods-hamaki.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-hamaki.debug.xcconfig"; path = "Target Support Files/Pods-hamaki/Pods-hamaki.debug.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = hamaki/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* hamaki-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "hamaki-Bridging-Header.h"; path = "hamaki/hamaki-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -37,13 +37,21 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3FBD78E76FC85363952A74EA /* libPods-hamaki.a in Frameworks */,
+				EF137A9AAAB371438A7E25DE /* libPods-hamaki.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		09FAFC20B317F10B937EA2F0 /* hamaki */ = {
+			isa = PBXGroup;
+			children = (
+				3C6A7B60ACD8A926AB9C8770 /* ExpoModulesProvider.swift */,
+			);
+			name = hamaki;
+			sourceTree = "<group>";
+		};
 		13B07FAE1A68108700A75B9A /* hamaki */ = {
 			isa = PBXGroup;
 			children = (
@@ -53,23 +61,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				D4B195B590869AE001930317 /* PrivacyInfo.xcprivacy */,
-			);
-			name = hamaki;
-			sourceTree = "<group>";
-		};
-		194C361C1A3EC995330E36EE /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				2ADE739FA700A2C7300A6B69 /* hamaki */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
-		2ADE739FA700A2C7300A6B69 /* hamaki */ = {
-			isa = PBXGroup;
-			children = (
-				D925840F32396B94349277EC /* ExpoModulesProvider.swift */,
+				927C00DCA50B37997581DE89 /* PrivacyInfo.xcprivacy */,
 			);
 			name = hamaki;
 			sourceTree = "<group>";
@@ -78,16 +70,16 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				6FE86A9F0B198F629DF023F2 /* libPods-hamaki.a */,
+				A6F5CC664A97F3B53E694D2C /* libPods-hamaki.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		7A8E05593F94C76B57FEC163 /* Pods */ = {
+		75606124069A53F32BB8F041 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				5A4F8BD9301F76B7C587BA08 /* Pods-hamaki.debug.xcconfig */,
-				6C069C103AB906FC462BD1BC /* Pods-hamaki.release.xcconfig */,
+				CEB8DA3F3CDB07BE2A13AF2E /* Pods-hamaki.debug.xcconfig */,
+				BB3CBAD58874719140C73633 /* Pods-hamaki.release.xcconfig */,
 			);
 			name = Pods;
 			path = Pods;
@@ -107,8 +99,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				7A8E05593F94C76B57FEC163 /* Pods */,
-				194C361C1A3EC995330E36EE /* ExpoModulesProviders */,
+				75606124069A53F32BB8F041 /* Pods */,
+				85B936B6F64E4E12327382A6 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -121,6 +113,14 @@
 				13B07F961A680F5B00A75B9A /* hamaki.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		85B936B6F64E4E12327382A6 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				09FAFC20B317F10B937EA2F0 /* hamaki */,
+			);
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
@@ -140,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "hamaki" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				512B3CF39CD6215266BA7DDC /* [Expo] Configure project */,
+				E5F1CE24763B886B61509351 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				FD256EBF4EF9A48B17F1D79C /* [CP] Embed Pods Frameworks */,
+				BCEDE3C229502C03136A7D12 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -166,7 +166,9 @@
 				LastUpgradeCheck = 1130;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
+						DevelopmentTeam = D52VX5574L;
 						LastSwiftMigration = 1250;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -196,7 +198,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				034779CAC7521E0BDD6190A3 /* PrivacyInfo.xcprivacy in Resources */,
+				F9DA3D9499C90656413BFBB6 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -239,25 +241,6 @@
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
-		};
-		512B3CF39CD6215266BA7DDC /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-hamaki/expo-configure-project.sh\"\n";
 		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -309,7 +292,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-hamaki/Pods-hamaki-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		FD256EBF4EF9A48B17F1D79C /* [CP] Embed Pods Frameworks */ = {
+		BCEDE3C229502C03136A7D12 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -327,6 +310,25 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-hamaki/Pods-hamaki-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		E5F1CE24763B886B61509351 /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-hamaki/expo-configure-project.sh\"\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -335,7 +337,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				5817F4C46D4D683DFA995FDD /* ExpoModulesProvider.swift in Sources */,
+				C9F6BA90D7982CA5DC72555E /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -344,12 +346,15 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5A4F8BD9301F76B7C587BA08 /* Pods-hamaki.debug.xcconfig */;
+			baseConfigurationReference = CEB8DA3F3CDB07BE2A13AF2E /* Pods-hamaki.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = hamaki/hamaki.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D52VX5574L;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
@@ -380,12 +385,15 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6C069C103AB906FC462BD1BC /* Pods-hamaki.release.xcconfig */;
+			baseConfigurationReference = BB3CBAD58874719140C73633 /* Pods-hamaki.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = hamaki/hamaki.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D52VX5574L;
 				INFOPLIST_FILE = hamaki/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (

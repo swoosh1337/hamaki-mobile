@@ -2,17 +2,18 @@ export default {
   expo: {
     name: "hamaki",
     slug: "hamaki",
-    version: "1.0.0",
+    version: "1.0.3",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
-    scheme: "com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3",
+    icon: "./assets/images/hamaki-logo.png",
+    // Multiple schemes: hamaki for magic links, Google scheme for OAuth
+    scheme: ["hamaki", "com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3"],
     userInterfaceStyle: "dark",
     backgroundColor: "#0B0C1A",
-    splash: {
-      image: "./assets/images/logo-transparent.png",
-      resizeMode: "contain",
-      backgroundColor: "#0B0C1A"
-    },
+    // splash: {
+    //   image: "./assets/images/hamaki-logo.png",
+    //   resizeMode: "contain",
+    //   backgroundColor: "#0B0C1A"
+    // },
     newArchEnabled: true,
     ios: {
       supportsTablet: true,
@@ -40,7 +41,7 @@ export default {
     web: {
       bundler: "metro",
       output: "static",
-      favicon: "./assets/images/favicon.png"
+      favicon: "./assets/images/hamaki-logo.png"
     },
     plugins: [
       "expo-router",
@@ -49,9 +50,11 @@ export default {
         {
           backgroundColor: "#0B0C1A",
           image: "./assets/images/logo-transparent.png",
+          imageWidth: 250,
           dark: {
             backgroundColor: "#0B0C1A",
-            image: "./assets/images/logo-transparent.png"
+            image: "./assets/images/logo-transparent.png",
+            imageWidth: 250
           }
         }
       ],
@@ -68,6 +71,9 @@ export default {
       typedRoutes: true
     },
     extra: {
+      eas: {
+        projectId: "0d720c0f-ee9a-4dbf-ad18-707be00e7765"
+      },
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
       youtubeApiKey: process.env.EXPO_PUBLIC_YOUTUBE_API_KEY,

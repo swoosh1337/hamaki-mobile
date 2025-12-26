@@ -1,0 +1,63 @@
+{
+  "frames": {
+    "bomb": {
+      "x": 0,
+      "y": 0,
+      "width": 288,
+      "height": 512,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "electricShock": {
+      "x": 288,
+      "y": 0,
+      "width": 288,
+      "height": 512,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "egg": {
+      "x": 576,
+      "y": 0,
+      "width": 288,
+      "height": 512,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "tomato": {
+      "x": 864,
+      "y": 0,
+      "width": 288,
+      "height": 512,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "pepper": {
+      "x": 1152,
+      "y": 0,
+      "width": 288,
+      "height": 512,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "image": "items.webp",
+    "size": {
+      "width": 1450,
+      "height": 514
+    },
+    "scale": 1,
+    "generatedAt": "2025-12-25T07:25:26.010Z"
+  }
+}

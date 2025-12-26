@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import { Colors } from '@/constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
 
 interface EditableUsernameProps {
   currentUsername: string;
@@ -34,19 +34,19 @@ export const EditableUsername: React.FC<EditableUsernameProps> = ({
 
   const validateUsername = (username: string): string | null => {
     const trimmed = username.trim();
-    
+
     if (trimmed.length < 2 || trimmed.length > 30) {
       return 'Username must be between 2 and 30 characters';
     }
-    
+
     if (!/^[a-zA-Z0-9\s]+$/.test(trimmed)) {
       return 'Username can only contain letters, numbers, and spaces';
     }
-    
+
     if (trimmed === currentUsername.trim()) {
       return 'Please enter a different username';
     }
-    
+
     return null;
   };
 
@@ -67,12 +67,12 @@ export const EditableUsername: React.FC<EditableUsernameProps> = ({
   const handleSave = () => {
     const trimmedValue = inputValue.trim();
     const validationError = validateUsername(trimmedValue);
-    
+
     if (validationError) {
       setError(validationError);
       return;
     }
-    
+
     setError(null);
     onSave(trimmedValue);
   };
@@ -95,7 +95,7 @@ export const EditableUsername: React.FC<EditableUsernameProps> = ({
             style={styles.editButton}
             onPress={handleEdit}
             testID="edit-username-button"
-            accessibilityLabel="Edit username"
+            accessibilityLabel="რედაქტირება"
             accessibilityRole="button"
             disabled={isLoading}
           >
@@ -128,13 +128,13 @@ export const EditableUsername: React.FC<EditableUsernameProps> = ({
           maxLength={30}
           autoFocus
         />
-        
+
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={[styles.actionButton, styles.cancelButton]}
             onPress={handleCancel}
             testID="cancel-username-button"
-            accessibilityLabel="Cancel editing"
+            accessibilityLabel="გაუქმება"
             accessibilityRole="button"
             disabled={isLoading}
           >
@@ -144,7 +144,7 @@ export const EditableUsername: React.FC<EditableUsernameProps> = ({
               color={Colors.dark.text}
             />
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[
               styles.actionButton,
@@ -153,13 +153,13 @@ export const EditableUsername: React.FC<EditableUsernameProps> = ({
             ]}
             onPress={handleSave}
             testID="save-username-button"
-            accessibilityLabel="Save username"
+            accessibilityLabel="შენახვა"
             accessibilityRole="button"
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator 
-                size="small" 
+              <ActivityIndicator
+                size="small"
                 color={Colors.dark.background}
                 testID="username-save-loading"
               />
@@ -173,7 +173,7 @@ export const EditableUsername: React.FC<EditableUsernameProps> = ({
           </TouchableOpacity>
         </View>
       </View>
-      
+
       {error && (
         <Text style={styles.errorText} testID="username-error">
           {error}

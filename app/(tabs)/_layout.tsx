@@ -3,8 +3,9 @@ import React from 'react';
 
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
+// Use flat background instead of custom component for now
 import { Colors } from '@/constants/Colors';
+import { trackTabTap } from '@/utils/analytics';
 
 export default function TabLayout() {
 
@@ -15,7 +16,7 @@ export default function TabLayout() {
         tabBarInactiveTintColor: Colors.dark.tabIconDefault,
         headerShown: false,
         tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
+        // Flat background (no custom component)
         tabBarStyle: {
           backgroundColor: Colors.dark.background,
           borderTopColor: Colors.dark.tint,
@@ -31,6 +32,9 @@ export default function TabLayout() {
           title: 'Home',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="house.fill" color={color} />,
         }}
+        listeners={{
+          tabPress: () => trackTabTap('Home'),
+        }}
       />
       <Tabs.Screen
         name="games"
@@ -38,12 +42,28 @@ export default function TabLayout() {
           title: 'Games',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="gamecontroller.fill" color={color} />,
         }}
+        listeners={{
+          tabPress: () => trackTabTap('Games'),
+        }}
       />
       <Tabs.Screen
-        name="ideas"
+        name="leaderboard"
         options={{
-          title: 'Ideas',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="lightbulb.fill" color={color} />,
+          title: 'Leaderboard',
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="trophy.fill" color={color} />,
+        }}
+        listeners={{
+          tabPress: () => trackTabTap('Leaderboard'),
+        }}
+      />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: 'Community',
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.3.fill" color={color} />,
+        }}
+        listeners={{
+          tabPress: () => trackTabTap('Community'),
         }}
       />
       <Tabs.Screen
@@ -52,12 +72,8 @@ export default function TabLayout() {
           title: 'Profile',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.fill" color={color} />,
         }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="gearshape.fill" color={color} />,
+        listeners={{
+          tabPress: () => trackTabTap('Profile'),
         }}
       />
     </Tabs>

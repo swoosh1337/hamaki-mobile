@@ -43,6 +43,16 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
+// Mock expo-linking
+jest.mock('expo-linking', () => ({
+  createURL: jest.fn((path) => `test://auth/${path}`),
+  getInitialURL: jest.fn(),
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn(),
+  openURL: jest.fn(),
+  canOpenURL: jest.fn(),
+}));
+
 // Mock Expo modules
 jest.mock('expo-auth-session', () => ({
   makeRedirectUri: jest.fn(() => 'test://redirect'),
@@ -67,6 +77,16 @@ jest.mock('@expo/vector-icons', () => ({
 
 jest.mock('expo-linking', () => ({
   openURL: jest.fn(),
+}));
+
+// Mock react-native Linking
+jest.mock('react-native/Libraries/Linking/Linking', () => ({
+  openURL: jest.fn().mockResolvedValue(true),
+  canOpenURL: jest.fn().mockResolvedValue(true),
+  getInitialURL: jest.fn().mockResolvedValue(null),
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn(),
+  createURL: jest.fn((path) => `test://auth/${path}`),
 }));
 
 jest.mock('expo-device', () => {
@@ -109,6 +129,75 @@ jest.mock('react-native/Libraries/Utilities/Platform', () => ({
   isPad: false,
   isTesting: true,
   select: jest.fn((platforms) => platforms.ios || platforms.default),
+}));
+
+// Mock react-native for Platform access
+jest.mock('react-native', () => ({
+  Platform: {
+    OS: 'ios',
+    Version: '15.0',
+    isPad: false,
+    isTesting: true,
+    select: jest.fn((platforms) => platforms.ios || platforms.default),
+  },
+  StyleSheet: {
+    create: (styles) => styles,
+    flatten: jest.fn((style) => style),
+  },
+  Animated: {
+    Value: class {
+      constructor(value) {
+        this.value = value;
+      }
+      setValue = jest.fn();
+      interpolate = jest.fn((config) => this);
+      addListener = jest.fn();
+      removeAllListeners = jest.fn();
+    },
+    timing: jest.fn().mockImplementation(() => ({
+      start: jest.fn((callback) => callback && callback({ finished: true })),
+    })),
+    loop: jest.fn().mockImplementation((animation) => ({
+      start: jest.fn((callback) => callback && callback({ finished: true })),
+      stop: jest.fn(),
+      reset: jest.fn(),
+    })),
+    sequence: jest.fn().mockImplementation((animations) => ({
+      start: jest.fn((callback) => callback && callback({ finished: true })),
+    })),
+    delay: jest.fn().mockImplementation((duration) => ({
+      start: jest.fn((callback) => callback && callback({ finished: true })),
+    })),
+    View: 'Animated.View',
+  },
+  View: 'View',
+  Text: 'Text',
+  TouchableOpacity: 'TouchableOpacity',
+  TouchableWithoutFeedback: 'TouchableWithoutFeedback',
+  Image: 'Image',
+  ActivityIndicator: 'ActivityIndicator',
+  TextInput: 'TextInput',
+  Modal: 'Modal',
+  SafeAreaView: 'SafeAreaView',
+  KeyboardAvoidingView: 'KeyboardAvoidingView',
+  ScrollView: 'ScrollView',
+  RefreshControl: 'RefreshControl',
+  Dimensions: {
+    get: jest.fn(() => ({ width: 375, height: 812 })),
+  },
+  Alert: {
+    alert: jest.fn(),
+  },
+  Keyboard: {
+    dismiss: jest.fn(),
+  },
+  Linking: {
+    openURL: jest.fn().mockResolvedValue(true),
+    canOpenURL: jest.fn().mockResolvedValue(true),
+    getInitialURL: jest.fn().mockResolvedValue(null),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+  },
 }));
 
 // Set up environment variables for tests

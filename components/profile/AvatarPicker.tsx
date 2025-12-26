@@ -1,13 +1,15 @@
+import { Colors } from '@/constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
 
 interface AvatarPickerProps {
   selectedAvatar: string;
@@ -18,13 +20,28 @@ interface AvatarPickerProps {
 interface AvatarOption {
   id: string;
   title: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  source: any; // Local require() source
 }
 
 const avatarOptions: AvatarOption[] = [
-  { id: 'avatar-1', title: 'Avatar 1', icon: 'person-circle' },
-  { id: 'avatar-2', title: 'Avatar 2', icon: 'happy' },
-  { id: 'avatar-3', title: 'Avatar 3', icon: 'star' },
+  { id: 'avatar-1', title: 'Avatar 1', source: require('@/assets/avatars/1.jpg') },
+  { id: 'avatar-2', title: 'Avatar 2', source: require('@/assets/avatars/2.jpg') },
+  { id: 'avatar-3', title: 'Avatar 3', source: require('@/assets/avatars/3.jpg') },
+  { id: 'avatar-4', title: 'Avatar 4', source: require('@/assets/avatars/4.jpg') },
+  { id: 'avatar-5', title: 'Avatar 5', source: require('@/assets/avatars/5.jpg') },
+  { id: 'avatar-6', title: 'Avatar 6', source: require('@/assets/avatars/6.jpg') },
+  { id: 'avatar-7', title: 'Avatar 7', source: require('@/assets/avatars/7.jpg') },
+  { id: 'avatar-8', title: 'Avatar 8', source: require('@/assets/avatars/8.jpg') },
+  { id: 'avatar-9', title: 'Avatar 9', source: require('@/assets/avatars/9.jpg') },
+  { id: 'avatar-10', title: 'Avatar 10', source: require('@/assets/avatars/Layer_2.jpg') },
+  { id: 'avatar-11', title: 'Avatar 11', source: require('@/assets/avatars/Layer_3.jpg') },
+  { id: 'avatar-12', title: 'Avatar 12', source: require('@/assets/avatars/Layer_4.jpg') },
+  { id: 'avatar-13', title: 'Avatar 13', source: require('@/assets/avatars/Layer_5.jpg') },
+  { id: 'avatar-14', title: 'Avatar 14', source: require('@/assets/avatars/Layer_6.jpg') },
+  { id: 'avatar-15', title: 'Avatar 15', source: require('@/assets/avatars/Layer_7.jpg') },
+  { id: 'avatar-16', title: 'Avatar 16', source: require('@/assets/avatars/Layer_8.jpg') },
+  { id: 'avatar-17', title: 'Avatar 17', source: require('@/assets/avatars/Layer_9.jpg') },
+  { id: 'avatar-18', title: 'Avatar 18', source: require('@/assets/avatars/Layer_10.jpg') },
 ];
 
 export const AvatarPicker: React.FC<AvatarPickerProps> = ({
@@ -32,13 +49,6 @@ export const AvatarPicker: React.FC<AvatarPickerProps> = ({
   onSelect,
   isLoading = false,
 }) => {
-  const handleAvatarPress = (avatarId: string) => {
-    if (isLoading || avatarId === selectedAvatar) {
-      return;
-    }
-    onSelect(avatarId);
-  };
-
   if (isLoading) {
     return (
       <View style={styles.container} testID="avatar-picker-container">
@@ -54,53 +64,58 @@ export const AvatarPicker: React.FC<AvatarPickerProps> = ({
   return (
     <View style={styles.container} testID="avatar-picker-container">
       <Text style={styles.title}>Choose Your Avatar</Text>
-      <View style={styles.avatarGrid}>
-        {avatarOptions.map((avatar) => {
-          const isSelected = avatar.id === selectedAvatar;
-          
-          return (
-            <TouchableOpacity
-              key={avatar.id}
-              style={[
-                styles.avatarOption,
-                isSelected && styles.selectedAvatarOption,
-              ]}
-              onPress={() => handleAvatarPress(avatar.id)}
-              activeOpacity={0.8}
-              testID={`avatar-option-${avatar.id}`}
-              accessibilityLabel={`Select ${avatar.title}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-            >
-              <View style={styles.avatarIconContainer}>
-                <Ionicons
-                  name={avatar.icon}
-                  size={48}
-                  color={isSelected ? Colors.dark.tint : Colors.dark.icon}
-                />
-                {isSelected && (
-                  <View 
-                    style={styles.selectedIndicator}
-                    testID={`selected-indicator-${avatar.id}`}
-                  >
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={20}
-                      color={Colors.dark.tint}
-                    />
-                  </View>
-                )}
-              </View>
-              <Text style={[
-                styles.avatarTitle,
-                isSelected && styles.selectedAvatarTitle,
-              ]}>
-                {avatar.title}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.avatarGrid}>
+          {avatarOptions.map((avatar) => {
+            const isSelected = avatar.id === selectedAvatar;
+            const isDisabled = isSelected || isLoading;
+
+            return (
+              <TouchableOpacity
+                key={avatar.id}
+                style={[
+                  styles.avatarOption,
+                  isSelected && styles.selectedAvatarOption,
+                  isDisabled && styles.disabledAvatarOption,
+                ]}
+                onPress={() => onSelect(avatar.id)}
+                activeOpacity={isDisabled ? 1 : 0.8}
+                disabled={isDisabled}
+                testID={`avatar-option-${avatar.id}`}
+                accessibilityLabel={`ავატარის არჩევა ${avatar.title}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected, disabled: isDisabled }}
+              >
+                <View style={styles.avatarIconContainer}>
+                  <Image source={avatar.source} style={styles.avatarImage} />
+                  {isSelected && (
+                    <View
+                      style={styles.selectedIndicator}
+                      testID={`selected-indicator-${avatar.id}`}
+                    >
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color={Colors.dark.tint}
+                      />
+                    </View>
+                  )}
+                </View>
+                <Text style={[
+                  styles.avatarTitle,
+                  isSelected && styles.selectedAvatarTitle,
+                ]}>
+                  {avatar.title}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
     </View>
   );
 };
@@ -111,6 +126,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginVertical: 16,
+    maxHeight: 500,
+  },
+  scrollView: {
+    maxHeight: 400,
+  },
+  scrollContent: {
+    paddingBottom: 10,
   },
   title: {
     color: Colors.dark.text,
@@ -121,17 +143,18 @@ const styles = StyleSheet.create({
   },
   avatarGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    gap: 12,
   },
   avatarOption: {
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
     borderRadius: 12,
     borderWidth: 2,
     borderColor: 'transparent',
     backgroundColor: 'rgba(245, 245, 245, 0.05)',
-    minWidth: 90,
+    width: '30%',
   },
   selectedAvatarOption: {
     borderColor: Colors.dark.tint,
@@ -142,9 +165,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  disabledAvatarOption: {
+    opacity: 0.6,
+  },
   avatarIconContainer: {
     position: 'relative',
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  avatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(245,245,245,0.05)'
   },
   selectedIndicator: {
     position: 'absolute',
@@ -155,7 +187,7 @@ const styles = StyleSheet.create({
   },
   avatarTitle: {
     color: Colors.dark.text,
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: '500',
     textAlign: 'center',
   },

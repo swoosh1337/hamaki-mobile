@@ -1,21 +1,55 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Image, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { AvatarPicker } from '@/components/profile/AvatarPicker';
+import { StatsCard } from '@/components/profile/StatsCard';
+import { SettingsModal } from '@/components/ui/SettingsModal';
+import { ProfilePostSkeleton } from '@/components/ui/SkeletonLoader';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserPost, userService, XPStats } from '@/utils/supabase';
+import { useUserProfile } from '@/hooks/useUserProfile';
+import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
+import { postService } from '@/services/supabase/postService';
+import type { Post as UserPost } from '@/types/post';
+import type { XPStats } from '@/types/user';
+import { getAvatarSource } from '@/utils/avatars';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('Profile');
 
 export default function ProfileScreen() {
-  const { userProfile } = useAuth();
-  
-  // State management
+  const { userProfile, updateUserProfile, isDemoMode, authMethod } = useAuth();
+
+  // Use profile hook for XP stats
+  const {
+    xpStats,
+    isLoading: isXpLoading,
+    refetch: refetchProfile,
+    updateAvatar: updateAvatarViaHook,
+    updateUsername: updateUsernameViaHook,
+  } = useUserProfile({
+    googleId: userProfile?.google_id,
+    autoFetch: true,
+  });
+
+  // Get pending XP count for settings badge (with refresh function)
+  const { pendingActionCount: pendingXPCount, refreshAll } = useYouTubeVerification();
+
+  // Refresh verification data when Profile screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      if (authMethod === 'google') {
+        refreshAll();
+      }
+    }, [authMethod, refreshAll])
+  );
+
+  // UI state management
   const [selectedAvatar, setSelectedAvatar] = useState<string>('avatar-1');
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const [isUsernameLoading, setIsUsernameLoading] = useState(false);
-  const [xpStats, setXpStats] = useState<XPStats | null>(null);
-  const [isXpLoading, setIsXpLoading] = useState(true);
   const [userPosts, setUserPosts] = useState<(UserPost & { isUpvoted?: boolean })[]>([]);
   const [isPostsLoading, setIsPostsLoading] = useState(true);
   const [hasMorePosts, setHasMorePosts] = useState(true);
@@ -23,15 +57,66 @@ export default function ProfileScreen() {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const POSTS_PER_PAGE = 10;
 
-  // Initialize data on mount
+  // Demo data for demo mode
+  const demoXPStats: XPStats = {
+    totalXP: 1250,
+    weeklyXP: 350,
+    weeklyStartDate: new Date().toISOString(),
+    weeklyEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+
+  const demoPosts: (UserPost & { isUpvoted?: boolean })[] = [
+    {
+      id: 'demo-post-1',
+      title: 'Mobile App Tutorial Series',
+      content: 'What if we created a step-by-step mobile app development tutorial series covering React Native?',
+      upvotes: 23,
+      user_id: 'demo-user-id',
+      status: 'approved',
+      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      category: 'tutorial',
+      isUpvoted: false,
+    },
+    {
+      id: 'demo-post-2',
+      title: 'Advanced JavaScript Concepts',
+      content: 'Could you cover advanced JS concepts like closures, prototypes, and async/await in detail?',
+      upvotes: 18,
+      user_id: 'demo-user-id',
+      status: 'approved',
+      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      updated_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      category: 'content',
+      isUpvoted: true,
+    },
+  ];
+
+  // Initialize data only when the user identity changes (not on avatar/name updates)
   useEffect(() => {
-    if (userProfile) {
+    if (userProfile?.google_id) {
       initializeProfileData();
     }
-  }, [userProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.google_id]);
+
+  // Only load XP stats on initial mount, not on every focus
+  // This allows caching to work properly
+  // User can pull-to-refresh to force update
+
+  // Pull-to-refresh handler
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handlePullToRefresh = async () => {
+    log.debug('Pull-to-refresh triggered');
+    setIsRefreshing(true);
+    await refetchProfile(); // Refresh profile and XP stats
+    setIsRefreshing(false);
+  };
 
   const initializeProfileData = async () => {
     if (!userProfile?.google_id) return;
@@ -41,25 +126,8 @@ export default function ProfileScreen() {
       setSelectedAvatar(userProfile.avatar_url);
     }
 
-    // Load XP stats
-    await loadXPStats();
-    
     // Load user posts
     await loadUserPosts(0, true);
-  };
-
-  const loadXPStats = async () => {
-    if (!userProfile?.google_id) return;
-
-    try {
-      setIsXpLoading(true);
-      const stats = await userService.getUserXPStats(userProfile.google_id);
-      setXpStats(stats);
-    } catch (error) {
-      console.error('Error loading XP stats:', error);
-    } finally {
-      setIsXpLoading(false);
-    }
   };
 
   const loadUserPosts = async (page: number = 0, reset: boolean = false) => {
@@ -71,7 +139,23 @@ export default function ProfileScreen() {
         setUserPosts([]);
       }
 
-      const posts = await userService.getUserPosts(
+      if (isDemoMode) {
+        // Use demo data for demo mode
+        setTimeout(() => {
+          if (reset) {
+            setUserPosts(demoPosts);
+          } else {
+            // For demo, don't add more posts on pagination
+            setUserPosts(prev => [...prev]);
+          }
+          setHasMorePosts(false); // Demo has limited posts
+          setCurrentPage(page);
+          setIsPostsLoading(false);
+        }, 600); // Simulate loading delay
+        return;
+      }
+
+      const posts = await postService.getUserPosts(
         userProfile.id,
         POSTS_PER_PAGE,
         page * POSTS_PER_PAGE
@@ -86,9 +170,11 @@ export default function ProfileScreen() {
       setHasMorePosts(posts.length === POSTS_PER_PAGE);
       setCurrentPage(page);
     } catch (error) {
-      console.error('Error loading user posts:', error);
+      log.error('Error loading user posts', error);
     } finally {
-      setIsPostsLoading(false);
+      if (!isDemoMode) {
+        setIsPostsLoading(false);
+      }
     }
   };
 
@@ -98,16 +184,18 @@ export default function ProfileScreen() {
 
     try {
       setIsAvatarLoading(true);
-      const updatedProfile = await userService.updateUserAvatar(userProfile.google_id, avatarId);
-      
-      if (updatedProfile) {
+      const success = await updateAvatarViaHook(avatarId);
+
+      if (success) {
         setSelectedAvatar(avatarId);
+        // reflect immediately in global state so header image updates
+        updateUserProfile({ avatar_url: avatarId });
         Alert.alert('Success', 'Avatar updated successfully!');
       } else {
         Alert.alert('Error', 'Failed to update avatar. Please try again.');
       }
     } catch (error) {
-      console.error('Error updating avatar:', error);
+      log.error('Error updating avatar', error);
       if (error instanceof Error) {
         Alert.alert('Error', error.message);
       } else {
@@ -134,65 +222,28 @@ export default function ProfileScreen() {
 
     try {
       setIsUsernameLoading(true);
-      const updatedProfile = await userService.updateUsername(userProfile.google_id, editedName.trim());
-      
-      if (updatedProfile) {
+      const success = await updateUsernameViaHook(editedName.trim());
+
+      if (success) {
         setIsEditingName(false);
-        Alert.alert('Success', 'Name updated successfully!');
-        // Note: In a real app, you'd want to update the AuthContext to reflect this change
+        updateUserProfile({ full_name: editedName.trim() });
+        Alert.alert('Success', 'სახელი წარმატებით შეიცვალა!');
       } else {
-        Alert.alert('Error', 'Failed to update name. Please try again.');
+        Alert.alert('Error', 'სახელის ცვლილება ვერ მოხერხდა');
       }
     } catch (error) {
-      console.error('Error updating name:', error);
+      log.error('Error updating name', error);
       if (error instanceof Error) {
         Alert.alert('Error', error.message);
       } else {
-        Alert.alert('Error', 'Failed to update name. Please try again.');
+        Alert.alert('Error', 'სახელის ცვლილება ვერ მოხერხდა. გთხოვთ ახლიდან სცადოთ.');
       }
     } finally {
       setIsUsernameLoading(false);
     }
   };
 
-  // Handle post upvote
-  const handlePostUpvote = async (postId: string) => {
-    if (!userProfile?.id) return;
-
-    try {
-      const postIndex = userPosts.findIndex(p => p.id === postId);
-      if (postIndex === -1) return;
-
-      const post = userPosts[postIndex];
-      const isCurrentlyUpvoted = post.isUpvoted;
-
-      // Optimistic update
-      const updatedPosts = [...userPosts];
-      updatedPosts[postIndex] = {
-        ...post,
-        upvotes: isCurrentlyUpvoted ? post.upvotes - 1 : post.upvotes + 1,
-        isUpvoted: !isCurrentlyUpvoted,
-      };
-      setUserPosts(updatedPosts);
-
-      // Make API call
-      if (isCurrentlyUpvoted) {
-        await userService.downvotePost(postId, userProfile.id);
-      } else {
-        await userService.upvotePost(postId, userProfile.id);
-      }
-    } catch (error) {
-      console.error('Error updating post upvote:', error);
-      // Revert optimistic update on error
-      await loadUserPosts(0, true);
-      
-      if (error instanceof Error) {
-        Alert.alert('Error', error.message);
-      } else {
-        Alert.alert('Error', 'Failed to update upvote. Please try again.');
-      }
-    }
-  };
+  // Note: Users cannot upvote their own posts, so no upvote handler needed
 
   // Handle load more posts
   const handleLoadMorePosts = async () => {
@@ -212,22 +263,50 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView 
+    <SafeAreaView style={styles.container}>
+      {/* Settings Button */}
+      <TouchableOpacity
+        style={styles.settingsButton}
+        onPress={() => setShowSettingsModal(true)}
+      >
+        <Ionicons name="settings-outline" size={24} color={Colors.dark.text} />
+        {pendingXPCount > 0 && (
+          <View style={styles.settingsBadge}>
+            <Text style={styles.settingsBadgeText}>{pendingXPCount}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      {/* Demo Mode Indicator */}
+      {isDemoMode && (
+        <View style={styles.demoModeIndicator}>
+          <Text style={styles.demoModeText}>Demo Mode</Text>
+        </View>
+      )}
+
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handlePullToRefresh}
+            colors={[Colors.dark.tint]}
+            tintColor={Colors.dark.tint}
+          />
+        }
       >
         {/* Profile Header Section */}
         <View style={styles.profileSection}>
           {/* Avatar - Google Profile Photo */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.avatarContainer}
             onPress={() => setShowAvatarPicker(!showAvatarPicker)}
             disabled={isAvatarLoading}
           >
             {userProfile.avatar_url ? (
-              <Image source={{ uri: userProfile.avatar_url }} style={styles.avatar} />
+              <Image source={getAvatarSource(userProfile.avatar_url)} style={styles.avatar} />
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Ionicons name="person-circle" size={80} color={Colors.dark.tint} />
@@ -239,7 +318,7 @@ export default function ProfileScreen() {
           {!isEditingName ? (
             <View style={styles.nameRow}>
               <Text style={styles.userName}>{userProfile.full_name}</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.editButton}
                 onPress={handleEditName}
                 disabled={isUsernameLoading}
@@ -259,24 +338,24 @@ export default function ProfileScreen() {
                 maxLength={30}
               />
               <View style={styles.editButtons}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.cancelButton}
                   onPress={handleCancelEdit}
                   disabled={isUsernameLoading}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                  <Text style={styles.cancelButtonText}>გაუქმება</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.saveButton}
                   onPress={handleSaveName}
                   disabled={isUsernameLoading}
                 >
-                  <Text style={styles.saveButtonText}>Save</Text>
+                  <Text style={styles.saveButtonText}>შენახვა</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
-          
+
           <Text style={styles.email}>{userProfile.email}</Text>
         </View>
 
@@ -294,34 +373,25 @@ export default function ProfileScreen() {
 
         {/* Points Section */}
         <View style={styles.pointsSection}>
-          <Text style={styles.sectionTitle}>Posts</Text>
-          
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>This Week:</Text>
-            <Text style={styles.statValue}>
-              {isXpLoading ? '...' : `${(xpStats?.weeklyXP || 0).toLocaleString()} XP`}
-            </Text>
-          </View>
-          
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Total:</Text>
-            <Text style={styles.statValue}>
-              {isXpLoading ? '...' : `${(xpStats?.totalXP || 0).toLocaleString()} XP`}
-            </Text>
-          </View>
+          <StatsCard xpStats={xpStats} isLoading={isXpLoading} />
         </View>
 
         {/* My Posts Section */}
         <View style={styles.postsSection}>
-          <Text style={styles.sectionTitle}>My Posts</Text>
-          
+          <Text style={styles.sectionTitle}>ჩემი პოსტები</Text>
+
           {isPostsLoading ? (
-            <View style={styles.loadingContainer}>
-              <Text style={styles.loadingText}>Loading posts...</Text>
-            </View>
+            <ScrollView style={styles.postsScrollView} nestedScrollEnabled>
+              {[...Array(3)].map((_, index) => (
+                <ProfilePostSkeleton key={`profile-post-skeleton-${index}`} />
+              ))}
+            </ScrollView>
           ) : userPosts.length === 0 ? (
             <View style={styles.emptyPostsContainer}>
-              <Text style={styles.emptyPostsText}>You haven&apos;t submitted any ideas yet.</Text>
+              <Text style={styles.emptyPostsText}>ჯერ არ გაქვს დადასტურებული პოსტები.</Text>
+              {/* <Text style={styles.emptyPostsSubtext}>
+                Submit ideas in the Community tab. Once approved by admins, they&apos;ll appear here!
+              </Text> */}
             </View>
           ) : (
             <ScrollView style={styles.postsScrollView} nestedScrollEnabled>
@@ -329,28 +399,23 @@ export default function ProfileScreen() {
                 <View key={post.id} style={styles.postItem}>
                   <Text style={styles.postTitle}>{post.title}</Text>
                   <View style={styles.postMeta}>
-                    <TouchableOpacity 
-                      style={styles.upvoteButton}
-                      onPress={() => handlePostUpvote(post.id)}
-                    >
-                      <Ionicons 
-                        name={post.isUpvoted ? "heart" : "heart-outline"} 
-                        size={16} 
-                        color={post.isUpvoted ? Colors.dark.tint : Colors.dark.tabIconDefault} 
+                    {/* Show upvote count but make it non-interactive for own posts */}
+                    <View style={styles.upvoteDisplay}>
+                      <Ionicons
+                        name="heart-outline"
+                        size={16}
+                        color={Colors.dark.tabIconDefault}
                       />
-                      <Text style={[
-                        styles.upvoteCount,
-                        post.isUpvoted && { color: Colors.dark.tint }
-                      ]}>
+                      <Text style={styles.upvoteCount}>
                         {post.upvotes}
                       </Text>
-                    </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               ))}
-              
+
               {hasMorePosts && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.loadMoreButton}
                   onPress={handleLoadMorePosts}
                   disabled={isPostsLoading}
@@ -362,7 +427,13 @@ export default function ProfileScreen() {
           )}
         </View>
       </ScrollView>
-    </View>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        visible={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+      />
+    </SafeAreaView>
   );
 }
 
@@ -370,6 +441,53 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.background,
+  },
+  settingsButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(245, 245, 245, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  settingsBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  demoModeIndicator: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(196, 255, 0, 0.9)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.dark.tint,
+  },
+  demoModeText: {
+    fontSize: 12,
+    fontFamily: 'HamakiEng',
+    color: Colors.dark.background,
+    fontWeight: 'bold',
   },
   scrollView: {
     flex: 1,
@@ -391,7 +509,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: 'center',
   },
-  
+
   // Profile Header Section
   profileSection: {
     alignItems: 'center',
@@ -416,7 +534,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   // Name + Edit Section
   nameRow: {
     flexDirection: 'row',
@@ -425,7 +543,7 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 24,
-    fontFamily: 'HamakiENG',
+    fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
     fontWeight: 'bold',
     marginRight: 8,
@@ -444,6 +562,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 18,
+    fontFamily: 'SpaceMono',
     color: Colors.dark.text,
     borderWidth: 2,
     borderColor: Colors.dark.tint,
@@ -484,40 +603,20 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     textAlign: 'center',
   },
-  
+
   // Section Titles
   sectionTitle: {
     fontSize: 28,
-    fontFamily: 'HamakiENG',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.tint,
     marginBottom: 20,
     textAlign: 'center',
   },
-  
+
   // Points Section
   pointsSection: {
     marginBottom: 40,
   },
-  statItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(196, 255, 0, 0.2)',
-  },
-  statLabel: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.text,
-  },
-  statValue: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.tint,
-    fontWeight: 'bold',
-  },
-  
   // Posts Section
   postsSection: {
     flex: 1,
@@ -529,7 +628,7 @@ const styles = StyleSheet.create({
   loadingText: {
     color: Colors.dark.text,
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
   },
   emptyPostsContainer: {
     alignItems: 'center',
@@ -538,7 +637,7 @@ const styles = StyleSheet.create({
   emptyPostsText: {
     color: Colors.dark.text,
     fontSize: 16,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     opacity: 0.7,
     textAlign: 'center',
   },
@@ -563,12 +662,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
-  upvoteButton: {
+  upvoteDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
     gap: 4,
+    opacity: 0.7, // Make it look disabled
   },
   upvoteCount: {
     color: Colors.dark.tabIconDefault,

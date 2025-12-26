@@ -1,36 +1,45 @@
+import { channelStateService } from '@/services/supabase';
+import type { YouTubeChannelState } from '@/types/youtube';
+import { createLogger } from '@/utils/logger';
+import { decodeHtmlEntities } from '@/utils/text';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
+import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '../utils/errorHandling';
 import { checkForNewVideos } from '../utils/notifications';
-import { fetchHamakiVideos, YouTubeVideo } from '../utils/youtube';
 import { useAuth } from './AuthContext';
+
+const log = createLogger('Video');
 
 
 const VIDEO_FETCH_LIMIT = 3;
 
 interface VideoContextType {
-  videos: YouTubeVideo[];
+  videos: YouTubeChannelState[];
   isLoading: boolean;
   error: string | null;
   refreshVideos: () => Promise<void>;
   hasNewVideos: boolean;
+  isNetworkError: boolean;
 }
 
 const VideoContext = createContext<VideoContextType>({
   videos: [],
   isLoading: true,
   error: null,
-  refreshVideos: async () => {},
+  refreshVideos: async () => { },
   hasNewVideos: false,
+  isNetworkError: false,
 });
 
 export const useVideos = () => useContext(VideoContext);
 
 export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isSubscribed } = useAuth();
-  const [videos, setVideos] = useState<YouTubeVideo[]>([]);
+  const [videos, setVideos] = useState<YouTubeChannelState[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasNewVideos, setHasNewVideos] = useState(false);
+  const [isNetworkError, setIsNetworkError] = useState(false);
 
   // Load initial videos
   const loadVideos = async () => {
@@ -43,12 +52,23 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       setIsLoading(true);
       setError(null);
-      const fetchedVideos = await fetchHamakiVideos(VIDEO_FETCH_LIMIT);
-      setVideos(fetchedVideos);
-      console.log(`Loaded ${fetchedVideos.length} videos`);
+      setIsNetworkError(false);
+      // Fetch videos from database (synced by server)
+      const channelStates = await channelStateService.getAll();
+
+      // Decode HTML entities in video titles (YouTube API returns encoded entities)
+      const decodedChannelStates = channelStates.map(state => ({
+        ...state,
+        latest_video_title: decodeHtmlEntities(state.latest_video_title),
+      }));
+
+      setVideos(decodedChannelStates);
+      log.info(`Loaded ${decodedChannelStates.length} videos from database`);
     } catch (err) {
-      console.error('Failed to load videos:', err);
-      setError('Failed to load videos. Please check your connection.');
+      log.error('Failed to load videos:', err);
+      const isNetwork = checkNetworkError(err);
+      setIsNetworkError(isNetwork);
+      setError(getUserFriendlyErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -65,18 +85,25 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!isAuthenticated || !isSubscribed) return;
 
     try {
-      console.log('Checking for new videos in background...');
+      log.debug('Checking for new videos in background...');
       const newVideos = await checkForNewVideos();
-      
+
       if (newVideos.length > 0) {
-        // Update video list with new videos
-        const updatedVideos = await fetchHamakiVideos(3);
-        setVideos(updatedVideos);
+        // Update video list from database
+        const updatedVideos = await channelStateService.getAll();
+
+        // Decode HTML entities in video titles
+        const decodedVideos = updatedVideos.map(state => ({
+          ...state,
+          latest_video_title: decodeHtmlEntities(state.latest_video_title),
+        }));
+
+        setVideos(decodedVideos);
         setHasNewVideos(true);
-        console.log(`Updated feed with ${newVideos.length} new video(s)`);
+        log.info('Updated feed with new videos', { count: newVideos.length });
       }
     } catch (error) {
-      console.error('Background video update failed:', error);
+      log.error('Background video update failed:', error);
     }
   };
 
@@ -118,6 +145,7 @@ export const VideoProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         error,
         refreshVideos,
         hasNewVideos,
+        isNetworkError,
       }}
     >
       {children}

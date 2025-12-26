@@ -1,14 +1,17 @@
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { fetchHamakiVideos, YouTubeVideo } from './youtube';
+import { channelStateService, supabase } from '@/services/supabase';
+import type { YouTubeChannelState } from '@/types/youtube';
+import { createLogger } from './logger';
+
+const log = createLogger('Notifications');
 
 // Configuration
 const LAST_VIDEO_CHECK_KEY = 'hamaki_last_video_check';
 const KNOWN_VIDEOS_KEY = 'hamaki_known_videos';
-const VIDEO_CHECK_INTERVAL = 15 * 60 * 1000; // Check every 15 minutes
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -30,48 +33,78 @@ Notifications.setNotificationHandler({
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   let token = null;
 
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('hamaki-videos', {
-      name: 'New Videos',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#C4FF00',
-      sound: 'default',
-    });
-  }
+  try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('hamaki-videos', {
+        name: 'ახალი ვიდეოები!',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#C4FF00',
+        sound: 'default',
+      });
+    }
 
-  if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    if (Device.isDevice) {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') {
+        log.warn('Failed to get push token for push notifications - permission denied');
+        return null;
+      }
+
+      token = (await Notifications.getExpoPushTokenAsync()).data;
+      log.info('Push notification token generated');
+    } else {
+      log.info('Non-physical device detected, skipping push token generation');
     }
-    
-    if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notifications!');
-      return null;
-    }
-    
-    token = (await Notifications.getExpoPushTokenAsync()).data;
-    console.log('Push notification token:', token);
-  } else {
-    console.log('Must use physical device for Push Notifications');
+  } catch (error) {
+    // Silently handle permission errors (e.g., missing aps-environment entitlement in development)
+    log.debug('Push notifications not available in this environment', { error });
   }
 
   return token;
 }
 
 /**
+ * Save push token to database for server-sent notifications
+ */
+export async function savePushTokenToDatabase(
+  userId: string,
+  token: string
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ expo_push_token: token })
+      .eq('id', userId);
+
+    if (error) {
+      log.error('Failed to save push token to database', error);
+    } else {
+      log.info('Push token saved to database');
+    }
+  } catch (error) {
+    log.error('Error saving push token to database:', error);
+  }
+}
+
+/**
  * Store known video IDs to track new uploads
  */
-async function storeKnownVideos(videos: YouTubeVideo[]): Promise<void> {
+async function storeKnownVideos(videos: YouTubeChannelState[]): Promise<void> {
   try {
-    const videoIds = videos.map(video => video.id);
-    await AsyncStorage.setItem(KNOWN_VIDEOS_KEY, JSON.stringify(videoIds));
+    const videoIds = videos
+      .filter(v => v.latest_video_id)
+      .map(v => v.latest_video_id!);
+    await SecureStore.setItemAsync(KNOWN_VIDEOS_KEY, JSON.stringify(videoIds));
   } catch (error) {
-    console.error('Error storing known videos:', error);
+    log.error('Error storing known videos:', error);
   }
 }
 
@@ -80,48 +113,63 @@ async function storeKnownVideos(videos: YouTubeVideo[]): Promise<void> {
  */
 async function getKnownVideos(): Promise<string[]> {
   try {
-    const knownVideosJson = await AsyncStorage.getItem(KNOWN_VIDEOS_KEY);
+    const knownVideosJson = await SecureStore.getItemAsync(KNOWN_VIDEOS_KEY);
     return knownVideosJson ? JSON.parse(knownVideosJson) : [];
   } catch (error) {
-    console.error('Error getting known videos:', error);
+    log.error('Error getting known videos:', error);
     return [];
   }
 }
 
 /**
  * Check for new videos and send notifications
+ * ✅ Uses database (channelStateService) instead of YouTube API
+ * ✅ First-time users: initialize known videos WITHOUT notifications
  */
-export async function checkForNewVideos(): Promise<YouTubeVideo[]> {
+export async function checkForNewVideos(): Promise<YouTubeChannelState[]> {
   try {
-    console.log('Checking for new HamaKi Studio videos...');
-    
-    // Fetch latest videos
-    const latestVideos = await fetchHamakiVideos(5);
+    log.info('Checking for new HamaKi Studio videos...');
+
+    // Fetch latest videos from database (synced by server)
+    const channelStates = await channelStateService.getAll();
     const knownVideoIds = await getKnownVideos();
-    
+
+    // FIRST TIME USER: If no known videos stored, this is first run
+    // Store current videos WITHOUT sending notifications
+    if (knownVideoIds.length === 0) {
+      log.info('First time check - storing current videos without notifications');
+      await storeKnownVideos(channelStates);
+      await SecureStore.setItemAsync(LAST_VIDEO_CHECK_KEY, Date.now().toString());
+      return []; // Return empty - no "new" videos for first-time users
+    }
+
     // Find new videos (not in known list)
-    const newVideos = latestVideos.filter(video => !knownVideoIds.includes(video.id));
-    
+    const newVideos = channelStates.filter(
+      state => state.latest_video_id && !knownVideoIds.includes(state.latest_video_id)
+    );
+
     if (newVideos.length > 0) {
-      console.log(`Found ${newVideos.length} new video(s):`, newVideos.map(v => v.title));
-      
+      log.info(`Found ${newVideos.length} new video(s)`, {
+        titles: newVideos.map(v => v.latest_video_title)
+      });
+
       // Send notification for each new video
       for (const video of newVideos) {
         await sendNewVideoNotification(video);
       }
-      
+
       // Update known videos
-      await storeKnownVideos(latestVideos);
+      await storeKnownVideos(channelStates);
     } else {
-      console.log('No new videos found');
+      log.info('No new videos found since last check');
     }
-    
+
     // Update last check time
-    await AsyncStorage.setItem(LAST_VIDEO_CHECK_KEY, Date.now().toString());
-    
+    await SecureStore.setItemAsync(LAST_VIDEO_CHECK_KEY, Date.now().toString());
+
     return newVideos;
   } catch (error) {
-    console.error('Error checking for new videos:', error);
+    log.error('Error checking for new videos:', error);
     return [];
   }
 }
@@ -129,84 +177,94 @@ export async function checkForNewVideos(): Promise<YouTubeVideo[]> {
 /**
  * Send notification for a new video
  */
-async function sendNewVideoNotification(video: YouTubeVideo): Promise<void> {
+async function sendNewVideoNotification(video: YouTubeChannelState): Promise<void> {
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🎬 New HamaKi Video!',
-        body: video.title,
+        title: '🎬 ახალი ვიდეო დაიდოოო!',
+        body: video.latest_video_title || 'New video from ' + video.channel_name,
         data: {
-          videoId: video.videoId,
-          videoTitle: video.title,
+          videoId: video.latest_video_id,
+          videoTitle: video.latest_video_title,
+          channelName: video.channel_name,
           type: 'new_video',
+        },
+        sound: Platform.OS === 'android' ? 'default' : true,
+      },
+      trigger: null, // Send immediately
+    });
+    log.info('New video notification sent', { title: video.latest_video_title });
+  } catch (error) {
+    log.error('Error sending new video notification:', error);
+  }
+}
+
+
+/**
+ * Send subscription verification result notification
+ */
+export async function sendSubscriptionVerificationNotification(
+  isSubscribed: boolean,
+  channelName: string = 'YouTube'
+): Promise<void> {
+  try {
+    const title = isSubscribed ? '✅ გამოწერა დადასტურდა' : '❌ გამოწერა ვერ მოიძებნა';
+    const body = isSubscribed
+      ? `${channelName} გამოწერა წარმატებით დადასტურდა. დამატებითი XP მოგემატად!`
+      : `${channelName} გამოწერა ვერ მოიძებნა. შეგიძლიათ ხელით შეამოწმოთ პარამეტრებში.`;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: {
+          type: 'subscription_verification',
+          isSubscribed,
+          channelName,
         },
         sound: 'default',
       },
       trigger: null, // Send immediately
     });
-    
-    console.log('Notification sent for new video:', video.title);
-  } catch (error) {
-    console.error('Error sending notification:', error);
-  }
-}
 
-/**
- * Check if enough time has passed since last video check
- */
-export async function shouldCheckForVideos(): Promise<boolean> {
-  try {
-    const lastCheckString = await AsyncStorage.getItem(LAST_VIDEO_CHECK_KEY);
-    if (!lastCheckString) return true;
-    
-    const lastCheck = parseInt(lastCheckString);
-    const timeSinceLastCheck = Date.now() - lastCheck;
-    
-    return timeSinceLastCheck >= VIDEO_CHECK_INTERVAL;
+    log.info('Subscription verification notification sent', {
+      isSubscribed,
+      channelName
+    });
   } catch (error) {
-    console.error('Error checking video check timing:', error);
-    return true;
+    log.error('Error sending subscription verification notification:', error);
   }
 }
 
 /**
  * Initialize notification system
+ * Note: Push notifications require proper Apple Developer setup for iOS
+ * Will gracefully fail in development/Expo Go builds
  */
 export async function initializeNotifications(): Promise<void> {
   try {
-    // Register for push notifications
-    await registerForPushNotificationsAsync();
-    
+    // Register for push notifications (may fail in development without proper entitlements)
+    const token = await registerForPushNotificationsAsync();
+
+    if (token) {
+      log.info('Notification system initialized with push token');
+    } else {
+      log.info('Notification system initialized (push token not available)');
+    }
+
     // Set up notification received listener
     Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification received:', notification);
+      log.debug('Notification received', { notification });
     });
-    
+
     // Set up notification response listener (when user taps notification)
     Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
       if (data.type === 'new_video' && data.videoId) {
-        // Handle opening the video when notification is tapped
-        console.log('User tapped notification for video:', data.videoId);
-        // You can navigate to the video or home screen here
+        log.info('User tapped notification for video', { videoId: data.videoId });
       }
     });
-    
-    console.log('Notification system initialized');
   } catch (error) {
-    console.error('Error initializing notifications:', error);
-  }
-}
-
-/**
- * Background video checking (called when app becomes active)
- */
-export async function backgroundVideoCheck(): Promise<void> {
-  try {
-    if (await shouldCheckForVideos()) {
-      await checkForNewVideos();
-    }
-  } catch (error) {
-    console.error('Background video check failed:', error);
+    log.warn('Push notifications not available', { error });
   }
 }
