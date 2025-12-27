@@ -20,6 +20,7 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import type { NoPogodGameState } from '@/features/games/noPogod';
 import { NoPogodEngine } from '@/features/games/noPogod';
+import { NoPogodAudioManager } from '@/features/games/noPogod/audio';
 import { NOPOGOD_ASSET_CONFIG, NOPOGOD_GAME_ID } from '@/features/games/noPogod/config/assetConfig';
 import { NOPOGOD_GAME_ASSETS } from '@/features/games/noPogod/utils/assets';
 import { ResponsiveScalingManager } from '@/features/games/noPogod/utils/responsiveScaling';
@@ -27,12 +28,12 @@ import { NoPogodSpriteRenderer } from '@/features/games/noPogod/utils/spriteRend
 import { preloadGameAssets, releaseGameAssets } from '@/features/games/shared';
 import { useGameCooldown } from '@/hooks/useGameCooldown';
 import { edgeFunctionQueueService } from '@/services/queue';
-import type { AwardXPResult } from '@/types/leaderboard';
 import {
   generateSessionId,
   generateXPIdempotencyKey,
   isRetryableError,
 } from '@/types/edgeFunctionQueue';
+import type { AwardXPResult } from '@/types/leaderboard';
 import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { createLogger } from '@/utils/logger';
 import { NoPogodGameCanvasAtlas } from './NoPogodGameCanvasAtlas';
@@ -56,6 +57,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const gameEngineRef = useRef<NoPogodEngine | null>(null);
   const spriteRendererRef = useRef<NoPogodSpriteRenderer | null>(null);
   const responsiveScalingRef = useRef<ResponsiveScalingManager | null>(null);
+  const audioManagerRef = useRef<NoPogodAudioManager | null>(null);
   const [gameState, setGameState] = useState<NoPogodGameState | null>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const [xpAwarded, setXpAwarded] = useState(false);
@@ -103,7 +105,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     loadHighScore();
   }, []);
 
-  // Initialize game engine, sprite renderer, and responsive scaling
+  // Initialize game engine, sprite renderer, responsive scaling, and audio
   // Also preload atlas assets
   useEffect(() => {
     if (visible && !gameEngineRef.current) {
@@ -117,6 +119,41 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       gameEngineRef.current = new NoPogodEngine(SCREEN_WIDTH, SCREEN_HEIGHT, NOPOGOD_GAME_ASSETS);
       spriteRendererRef.current = new NoPogodSpriteRenderer(NOPOGOD_GAME_ASSETS, SCREEN_WIDTH, SCREEN_HEIGHT);
       responsiveScalingRef.current = new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT);
+
+      // Initialize audio manager and load sounds
+      audioManagerRef.current = new NoPogodAudioManager();
+      audioManagerRef.current.loadSounds().then(() => {
+        log.info('Game audio loaded');
+        // Start background music when entering start menu
+        if (audioManagerRef.current) {
+          audioManagerRef.current.playBackground();
+        }
+      }).catch(err => {
+        log.error('Failed to load game audio', err);
+      });
+
+      // Set up callback for catch sound and Miro quotes
+      gameEngineRef.current.onItemCaught = (itemType: string) => {
+        if (audioManagerRef.current) {
+          // Play item-specific sounds
+          if (itemType === 'PEPPER') {
+            audioManagerRef.current.playCatchPepperSound();
+          } else if (itemType === 'ELECTRIC_SHOCK') {
+            audioManagerRef.current.playCatchShockerSound();
+          } else {
+            audioManagerRef.current.playCatchItemSound();
+          }
+          audioManagerRef.current.playMiroQuote(); // Play random Miro quote on good item catch
+        }
+      };
+
+      // Set up callback for throw sound (Shonzika quotes)
+      gameEngineRef.current.onItemThrown = () => {
+        if (audioManagerRef.current) {
+          audioManagerRef.current.playShonzikaQuote(); // Play random Shonzika quote on throw
+        }
+      };
+
       setGameState(gameEngineRef.current.getState());
     }
   }, [visible]);
@@ -170,6 +207,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
       gameEngineRef.current.startGame();
       updateGameState();
+      // Background music already playing from menu
     }
   }, [updateGameState]);
 
@@ -185,6 +223,11 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     if (gameEngineRef.current) {
       gameEngineRef.current.pauseGame();
       updateGameState();
+
+      // Pause background music
+      if (audioManagerRef.current) {
+        audioManagerRef.current.pauseBackground();
+      }
     }
   }, [updateGameState]);
 
@@ -192,6 +235,11 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     if (gameEngineRef.current) {
       gameEngineRef.current.resumeGame();
       updateGameState();
+
+      // Resume background music
+      if (audioManagerRef.current) {
+        audioManagerRef.current.resumeBackground();
+      }
     }
   }, [updateGameState]);
 
@@ -200,6 +248,11 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       setXpAwarded(false);
       gameEngineRef.current.startGame();
       updateGameState();
+
+      // Start background music again
+      if (audioManagerRef.current) {
+        audioManagerRef.current.playBackground();
+      }
     }
   }, [updateGameState]);
 
@@ -307,6 +360,11 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     const awardXP = async () => {
       if (gameState?.phase === 'GAME_OVER' && !xpAwarded && userProfile && gameState.score > 0) {
         setXpAwarded(true);
+
+        // Stop background music
+        if (audioManagerRef.current) {
+          audioManagerRef.current.stopBackground();
+        }
 
         // Check for high score
         await checkAndSaveHighScore(gameState.score);
@@ -442,7 +500,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     });
   }, [gameState?.phase, gameState?.score, xpAwarded, userProfile, updateUserProfile, isDemoMode, roundsPlayed, startCooldown]);
 
-  // Cleanup on close - including releasing atlas assets
+  // Cleanup on close - including releasing atlas assets and audio
   useEffect(() => {
     if (!visible) {
       gameEngineRef.current = null;
@@ -450,6 +508,14 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       responsiveScalingRef.current = null;
       setGameState(null);
       setXpAwarded(false);
+
+      // Stop and unload audio
+      if (audioManagerRef.current) {
+        audioManagerRef.current.unloadSounds().then(() => {
+          log.debug('Game audio unloaded');
+        });
+        audioManagerRef.current = null;
+      }
 
       // Release atlas assets to free memory (using game ID)
       releaseGameAssets(NOPOGOD_GAME_ID);
@@ -508,6 +574,8 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
     const isSpeedBoostActive = gameEngineRef.current?.isSpeedBoostActive() || false;
     const speedBoostTimeRemaining = gameEngineRef.current?.getSpeedBoostTimeRemainingSeconds() || 0;
+    const isSlowdownActive = gameEngineRef.current?.isSlowdownActive() || false;
+    const slowdownTimeRemaining = gameEngineRef.current?.getSlowdownTimeRemainingSeconds() || 0;
 
     return (
       <View style={styles.gameUI}>
@@ -519,6 +587,12 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
             <View style={styles.speedBoostContainer}>
               <Text style={styles.speedBoostText}>⚡ SPEED BOOST ⚡</Text>
               <Text style={styles.speedBoostTimer}>{speedBoostTimeRemaining}s</Text>
+            </View>
+          )}
+          {isSlowdownActive && (
+            <View style={styles.slowdownContainer}>
+              <Text style={styles.slowdownText}>🐌 SLOWED DOWN 🐌</Text>
+              <Text style={styles.slowdownTimer}>{slowdownTimeRemaining}s</Text>
             </View>
           )}
         </View>
@@ -540,7 +614,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
             <Text style={styles.buttonText}>RESUME</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.exitButton} onPress={exitGame} activeOpacity={0.8}>
-            <Text style={styles.buttonText}>EXIT</Text>
+            <Text style={styles.exitButtonText}>EXIT</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -581,14 +655,19 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         )}
 
         <View style={styles.gameOverButtons}>
-          {/* Only show Try Again if under max rounds or in demo mode */}
-          {(isDemoMode || roundsPlayed < MAX_ROUNDS) && (
-            <TouchableOpacity style={styles.startButton} onPress={restartGame} activeOpacity={0.8}>
-              <Text style={styles.buttonText}>ახლიდან ცდა</Text>
-            </TouchableOpacity>
-          )}
+          {/* Try Again button - always visible */}
+          <TouchableOpacity style={styles.startButton} onPress={() => {
+            // Reset rounds if at max
+            if (roundsPlayed >= MAX_ROUNDS) {
+              setRoundsPlayed(0);
+              setXpAwarded(false);
+            }
+            restartGame();
+          }} activeOpacity={0.8}>
+            <Text style={styles.buttonText}>TRY AGAIN</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.exitButton} onPress={exitGame} activeOpacity={0.8}>
-            <Text style={styles.buttonText}>გამოსვლა</Text>
+            <Text style={styles.exitButtonText}>EXIT</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -791,20 +870,48 @@ const styles = StyleSheet.create({
     minWidth: 160,
   },
   exitButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(220, 53, 69, 0.85)',
     paddingHorizontal: 40,
     paddingVertical: 16,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: Colors.dark.tint,
+    borderColor: '#FF6B6B',
     minWidth: 160,
   },
   buttonText: {
-    fontSize: 20,
-    fontFamily: 'hamaki-eng',
+    fontSize: 18,
+    fontFamily: 'FiraGO-SemiBold',
     color: Colors.dark.background,
     textAlign: 'center',
-    fontWeight: 'bold',
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  exitButtonText: {
+    fontSize: 18,
+    fontFamily: 'FiraGO-SemiBold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  restartButton: {
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 12,
+    minWidth: 160,
+    marginTop: 12,
+  },
+  restartButtonText: {
+    fontSize: 18,
+    fontFamily: 'FiraGO-SemiBold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '600',
     paddingHorizontal: 8,
     includeFontPadding: false,
     textAlignVertical: 'center',
@@ -875,6 +982,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'SpaceMono',
     color: '#FFD700',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  slowdownContainer: {
+    marginTop: 8,
+    backgroundColor: 'rgba(148, 103, 189, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#9467BD',
+  },
+  slowdownText: {
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+    color: '#9467BD',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    textShadowColor: 'rgba(148, 103, 189, 0.8)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
+  },
+  slowdownTimer: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    color: '#9467BD',
     fontWeight: 'bold',
     textAlign: 'center',
     marginTop: 2,

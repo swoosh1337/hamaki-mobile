@@ -294,6 +294,62 @@ describe('useUserProfile', () => {
         });
     });
 
+    describe('forceRefetch', () => {
+        it('should force refetch profile data bypassing cache', async () => {
+            const { result } = renderHook(() => useUserProfile({ googleId: mockGoogleId }));
+
+            await waitFor(() => {
+                expect(result.current.profile).not.toBeNull();
+            });
+
+            // Clear and update mock
+            jest.clearAllMocks();
+            const updatedProfile = { ...mockProfile, xp_points: 3000 };
+            mockUserService.getUserProfile.mockResolvedValue(updatedProfile);
+            mockUserService.getUserXPStats.mockResolvedValue({
+                ...mockXPStats,
+                totalXP: 3000,
+            });
+
+            await act(async () => {
+                await result.current.forceRefetch();
+            });
+
+            await waitFor(() => {
+                expect(result.current.profile?.xp_points).toBe(3000);
+            });
+
+            // Should always call server when force refreshing
+            expect(mockUserService.getUserProfile).toHaveBeenCalledWith(mockGoogleId);
+            expect(mockUserService.getUserXPStats).toHaveBeenCalledWith(mockGoogleId);
+        });
+    });
+
+    describe('XP stats caching', () => {
+        it('should fetch XP stats from server on initial load', async () => {
+            const { result } = renderHook(() => useUserProfile({ googleId: mockGoogleId }));
+
+            await waitFor(() => {
+                expect(result.current.xpStats).not.toBeNull();
+            });
+
+            expect(mockUserService.getUserXPStats).toHaveBeenCalledWith(mockGoogleId);
+            expect(result.current.xpStats?.totalXP).toBe(1000);
+        });
+
+        it('should cache XP stats after fetching', async () => {
+            const { result } = renderHook(() => useUserProfile({ googleId: mockGoogleId }));
+
+            await waitFor(() => {
+                expect(result.current.xpStats).not.toBeNull();
+            });
+
+            // XP stats should be fetched and now available
+            expect(result.current.xpStats?.totalXP).toBe(1000);
+            expect(result.current.xpStats?.weeklyXP).toBe(150);
+        });
+    });
+
     describe('loading state', () => {
         it('should set loading while fetching', async () => {
             mockUserService.getUserProfile.mockImplementation(

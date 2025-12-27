@@ -32,8 +32,16 @@ jest.mock('@expo/vector-icons', () => ({
   Ionicons: 'Ionicons',
 }));
 
+// Store the focus effect callback so tests can trigger it
+let focusEffectCallback: (() => void) | null = null;
+
 jest.mock('expo-router', () => ({
-  useFocusEffect: jest.fn(),
+  useFocusEffect: jest.fn((callback) => {
+    // Store callback for tests to invoke
+    focusEffectCallback = callback;
+    // Immediately invoke to simulate initial focus
+    callback();
+  }),
   router: {
     push: jest.fn(),
     replace: jest.fn(),
@@ -46,6 +54,13 @@ jest.mock('expo-linking', () => ({
   addEventListener: jest.fn(),
   getInitialURL: jest.fn().mockResolvedValue(null),
 }));
+
+jest.mock('@/hooks/useYouTubeVerification', () => ({
+  useYouTubeVerification: jest.fn(),
+}));
+
+import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
+const mockUseYouTubeVerification = useYouTubeVerification as jest.Mock;
 
 jest.mock('@/components/profile/AvatarPicker', () => ({
   AvatarPicker: ({ onSelect }: any) => {
@@ -135,6 +150,7 @@ describe('ProfileScreen', () => {
   const mockUpdateUsernameViaHook = jest.fn();
   const mockUpdateAvatarViaHook = jest.fn();
   const mockRefetchProfile = jest.fn();
+  const mockRefreshAll = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -171,6 +187,14 @@ describe('ProfileScreen', () => {
     });
 
     mockPostService.getUserPosts.mockResolvedValue([]);
+
+    // Mock useYouTubeVerification
+    mockUseYouTubeVerification.mockReturnValue({
+      pendingActionCount: 0,
+      refreshAll: mockRefreshAll,
+      isLoading: false,
+      error: null,
+    });
   });
 
   describe('Profile Display', () => {
@@ -217,12 +241,12 @@ describe('ProfileScreen', () => {
       const Ionicons = require('@expo/vector-icons').Ionicons;
       const icons = UNSAFE_getAllByType(Ionicons);
       const editIcon = icons.find((icon: any) => icon.props.name === 'pencil');
-      
+
       fireEvent.press(editIcon);
 
       // Should show input field
       expect(getByPlaceholderText('Enter your name')).toBeTruthy();
-      
+
       // Should show save and cancel buttons
       expect(getByText('შენახვა')).toBeTruthy();
       expect(getByText('გაუქმება')).toBeTruthy();
@@ -549,9 +573,43 @@ describe('ProfileScreen', () => {
 
       const Ionicons = require('@expo/vector-icons').Ionicons;
       const icons = UNSAFE_getAllByType(Ionicons);
-      
+
       // Profile screen should render Ionicons (for avatar placeholder, settings, etc.)
       expect(icons.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Focus Effect - XP Stats Refresh', () => {
+    it('should call useFocusEffect to set up refresh behavior', () => {
+      const { useFocusEffect } = require('expo-router');
+
+      render(<ProfileScreen />);
+
+      // useFocusEffect should have been called to set up focus handling
+      expect(useFocusEffect).toHaveBeenCalled();
+    });
+
+    it('should render correctly with xpStats from refetched data', () => {
+      const { getByTestId } = render(<ProfileScreen />);
+
+      // StatsCard should be rendered with xpStats
+      expect(getByTestId('stats-card')).toBeTruthy();
+    });
+
+    it('should set up useYouTubeVerification for google auth', () => {
+      render(<ProfileScreen />);
+
+      // useYouTubeVerification should be called
+      expect(mockUseYouTubeVerification).toHaveBeenCalled();
+    });
+
+    it('should use useUserProfile hook for XP stats', () => {
+      render(<ProfileScreen />);
+
+      // useUserProfile should be called with googleId
+      expect(mockUseUserProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ googleId: 'google_123' })
+      );
     });
   });
 });

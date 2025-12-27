@@ -20,6 +20,8 @@ export interface CollisionOutcome {
     isGameOver: boolean;
     /** Whether speed boost should be activated */
     activateSpeedBoost: boolean;
+    /** Whether slowdown should be activated (from shocker) */
+    activateSlowdown: boolean;
     /** The item type that was caught */
     itemType: FallingItem['type'];
 }
@@ -121,6 +123,7 @@ export function processItemCatch(item: FallingItem): CollisionOutcome {
                 livesLost: 0,
                 isGameOver: false,
                 activateSpeedBoost: false,
+                activateSlowdown: false,
                 itemType: item.type,
             };
 
@@ -130,6 +133,7 @@ export function processItemCatch(item: FallingItem): CollisionOutcome {
                 livesLost: 0,
                 isGameOver: false,
                 activateSpeedBoost: true,  // Pepper gives speed boost!
+                activateSlowdown: false,
                 itemType: item.type,
             };
 
@@ -139,6 +143,7 @@ export function processItemCatch(item: FallingItem): CollisionOutcome {
                 livesLost: 1,
                 isGameOver: false,
                 activateSpeedBoost: false,
+                activateSlowdown: true,  // Shocker slows you down!
                 itemType: item.type,
             };
 
@@ -148,6 +153,7 @@ export function processItemCatch(item: FallingItem): CollisionOutcome {
                 livesLost: 0,  // No lives lost - instant game over
                 isGameOver: true,
                 activateSpeedBoost: false,
+                activateSlowdown: false,
                 itemType: item.type,
             };
 
@@ -158,6 +164,7 @@ export function processItemCatch(item: FallingItem): CollisionOutcome {
                 livesLost: 0,
                 isGameOver: false,
                 activateSpeedBoost: false,
+                activateSlowdown: false,
                 itemType: item.type,
             };
     }
@@ -174,6 +181,7 @@ export function processItemMiss(item: FallingItem): CollisionOutcome {
         livesLost: 0,
         isGameOver: false,
         activateSpeedBoost: false,
+        activateSlowdown: false,
         itemType: item.type,
     };
 }
@@ -215,12 +223,14 @@ export function aggregateOutcomes(outcomes: CollisionOutcome[]): {
     totalLivesLost: number;
     shouldGameOver: boolean;
     shouldActivateSpeedBoost: boolean;
+    shouldActivateSlowdown: boolean;
 } {
     const initial = {
         totalPoints: 0,
         totalLivesLost: 0,
         shouldGameOver: false,
         shouldActivateSpeedBoost: false,
+        shouldActivateSlowdown: false,
     };
 
     return outcomes.reduce((acc, outcome) => ({
@@ -228,5 +238,6 @@ export function aggregateOutcomes(outcomes: CollisionOutcome[]): {
         totalLivesLost: acc.totalLivesLost + outcome.livesLost,
         shouldGameOver: acc.shouldGameOver || outcome.isGameOver,
         shouldActivateSpeedBoost: acc.shouldActivateSpeedBoost || outcome.activateSpeedBoost,
+        shouldActivateSlowdown: acc.shouldActivateSlowdown || outcome.activateSlowdown,
     }), initial);
 }

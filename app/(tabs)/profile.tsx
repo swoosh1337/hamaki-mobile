@@ -26,7 +26,7 @@ export default function ProfileScreen() {
   const {
     xpStats,
     isLoading: isXpLoading,
-    refetch: refetchProfile,
+    forceRefetch: forceRefetchProfile,
     updateAvatar: updateAvatarViaHook,
     updateUsername: updateUsernameViaHook,
   } = useUserProfile({
@@ -37,16 +37,14 @@ export default function ProfileScreen() {
   // Get pending XP count for settings badge (with refresh function)
   const { pendingActionCount: pendingXPCount, refreshAll } = useYouTubeVerification();
 
-  // Refresh verification data and XP stats when Profile screen is focused
+  // Refresh YouTube verification data when Profile screen is focused (Google users only)
+  // Note: XP stats now use caching in useUserProfile, so we don't need to refetch on every focus
   useFocusEffect(
     useCallback(() => {
-      // Always refetch profile/XP stats when tab gains focus
-      refetchProfile();
-
       if (authMethod === 'google') {
         refreshAll();
       }
-    }, [authMethod, refreshAll, refetchProfile])
+    }, [authMethod, refreshAll])
   );
 
   // UI state management
@@ -117,7 +115,7 @@ export default function ProfileScreen() {
   const handlePullToRefresh = async () => {
     log.debug('Pull-to-refresh triggered');
     setIsRefreshing(true);
-    await refetchProfile(); // Refresh profile and XP stats
+    await forceRefetchProfile(); // Force refresh profile and XP stats (bypass cache)
     setIsRefreshing(false);
   };
 
