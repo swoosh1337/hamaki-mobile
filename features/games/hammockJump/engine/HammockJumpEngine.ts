@@ -437,9 +437,9 @@ export class HammockGameEngine {
     // Track grounded frames to prevent flicker
     if (p.isGrounded) {
       p.groundedFrames++;
-      // Only set to not grounded after a few frames of being airborne
-      // This prevents flicker when bouncing off platforms
-      if (p.vy < 0 && p.groundedFrames > 2) {
+      // Only set to not grounded after enough frames of being airborne
+      // This prevents flicker when bouncing off platforms (increased from 2 to 8)
+      if (p.vy < 0 && p.groundedFrames > 8) {
         p.isGrounded = false;
         p.groundedFrames = 0;
       }

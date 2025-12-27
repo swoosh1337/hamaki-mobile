@@ -11,6 +11,7 @@ import {
 
 import { useAuth } from '@/contexts/AuthContext';
 import { GameAssets, HammockGameEngine } from '@/features/games/hammockJump/engine/HammockJumpEngine';
+import { HAMMOCK_JUMP_ASSETS } from '@/features/games/hammockJump/utils/assets';
 import type { AwardXPResult } from '@/hooks/useMyLeaderboardStatus';
 import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { createLogger } from '@/utils/logger';
@@ -20,10 +21,10 @@ const log = createLogger('HammockJumpGame');
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Import game assets
+// Use optimized WebP assets from hammockJump assets module
 const GAME_ASSETS: GameAssets = {
-  background: require('@/assets/background.png'),
-  player: require('@/assets/images/person-3-idle.png'),
+  background: HAMMOCK_JUMP_ASSETS.background,
+  player: HAMMOCK_JUMP_ASSETS.player,
 };
 
 interface HammockJumpGameProps {

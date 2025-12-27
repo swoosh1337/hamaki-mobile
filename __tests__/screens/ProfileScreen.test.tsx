@@ -181,6 +181,7 @@ describe('ProfileScreen', () => {
       isLoading: false,
       error: null,
       refetch: mockRefetchProfile,
+      forceRefetch: jest.fn(),
       updateAvatar: mockUpdateAvatarViaHook,
       updateUsername: mockUpdateUsernameViaHook,
       addXP: jest.fn(),

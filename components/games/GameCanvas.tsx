@@ -27,31 +27,29 @@ const GameUI = memo(({
 
   return (
     <View style={styles.gameUI} pointerEvents="box-none">
-      <View style={styles.topRightUI}>
-        <View>
-          <Text style={styles.scoreText}>Score: {score}</Text>
-          <View style={styles.livesContainer}>
-            <Text style={styles.livesText}>Height: {platformsClimbed}m</Text>
-          </View>
-        </View>
-
-        <View style={{ alignItems: 'flex-end' }}>
-          {combo > 1 && (
-            <View style={styles.comboContainer}>
-              <Text style={styles.comboText}>Combo x{combo}!</Text>
-            </View>
-          )}
-          {canDoubleJump && !isGrounded && (
-            <View style={styles.doubleJumpIndicator}>
-              <Text style={styles.doubleJumpText}>⚡ Double Tap!</Text>
-            </View>
-          )}
+      {/* Score and Height - fixed position */}
+      <View style={styles.scoreContainer}>
+        <Text style={styles.scoreText}>Score: {score}</Text>
+        <View style={styles.livesContainer}>
+          <Text style={styles.livesText}>Height: {platformsClimbed}m</Text>
         </View>
       </View>
 
-      {/* Tilt indicator */}
-      <View style={styles.tiltIndicator} />
+      {/* Combo and Double Jump indicators - absolutely positioned to avoid layout shift */}
+      <View style={styles.indicatorsContainer}>
+        {combo > 1 && (
+          <View style={styles.comboContainer}>
+            <Text style={styles.comboText}>Combo x{combo}!</Text>
+          </View>
+        )}
+        {canDoubleJump && !isGrounded && (
+          <View style={styles.doubleJumpIndicator}>
+            <Text style={styles.doubleJumpText}>⚡ Double Tap!</Text>
+          </View>
+        )}
+      </View>
 
+      {/* Pause button - fixed position */}
       <Pressable style={styles.pauseButton} onPress={onPause}>
         <Text style={styles.pauseButtonText}>⏸️</Text>
       </Pressable>
@@ -156,10 +154,10 @@ export const GameCanvas = React.memo(({
         <Text style={styles.pausedTitle}>Game Paused</Text>
         <View style={styles.pausedButtons}>
           <Pressable style={styles.resumeButton} onPress={handleResumeGame}>
-            <Text style={styles.buttonText}>გაგრძელება</Text>
+            <Text style={styles.buttonText}>CONTINUE</Text>
           </Pressable>
           <Pressable style={styles.exitButton} onPress={onExitGame}>
-            <Text style={styles.buttonText}>გამოსვლა</Text>
+            <Text style={styles.exitButtonText}>EXIT</Text>
           </Pressable>
         </View>
       </View>
@@ -175,23 +173,23 @@ export const GameCanvas = React.memo(({
 
         {isNewHighScore && (
           <View style={styles.highScoreBanner}>
-            <Text style={styles.highScoreText}>🏆 ახალი მაქსიმალური ქულა! 🏆</Text>
-            <Text style={styles.highScoreCongrats}>გილოცავთ!</Text>
+            <Text style={styles.highScoreText}>🏆 NEW HIGH SCORE! 🏆</Text>
+            <Text style={styles.highScoreCongrats}>Congratulations!</Text>
           </View>
         )}
 
-        <Text style={styles.finalScore}>საბოლოო ქულა: {gameState.score}</Text>
+        <Text style={styles.finalScore}>Final Score: {gameState.score}</Text>
 
         {highScore > 0 && !isNewHighScore && (
-          <Text style={styles.highScoreDisplay}>მაქსიმალური ქულა: {highScore}</Text>
+          <Text style={styles.highScoreDisplay}>High Score: {highScore}</Text>
         )}
 
         <View style={styles.gameOverButtons}>
           <Pressable style={styles.startButton} onPress={onStartGame}>
-            <Text style={styles.buttonText}>ახლიდან ცდა</Text>
+            <Text style={styles.buttonText}>TRY AGAIN</Text>
           </Pressable>
           <Pressable style={styles.exitButton} onPress={onExitGame}>
-            <Text style={styles.buttonText}>გამოსვლა</Text>
+            <Text style={styles.exitButtonText}>EXIT</Text>
           </Pressable>
         </View>
       </View>
@@ -381,12 +379,12 @@ const styles = StyleSheet.create({
     minWidth: 160,
   },
   exitButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(220, 53, 69, 0.85)',
     paddingHorizontal: 40,
     paddingVertical: 16,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: Colors.dark.tint,
+    borderColor: '#FF6B6B',
     minWidth: 160,
   },
   buttonText: {
@@ -399,18 +397,34 @@ const styles = StyleSheet.create({
     includeFontPadding: false, // Android: prevent extra padding
     textAlignVertical: 'center', // Android: center text vertically
   },
+  exitButtonText: {
+    fontSize: 20,
+    fontFamily: 'hamaki-eng',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: 'bold',
+    paddingHorizontal: 8,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
   gameUI: {
     position: 'absolute',
     top: 50,
     left: 20,
     right: 20,
+    flexDirection: 'column',
+    zIndex: 5,
+  },
+  scoreContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    zIndex: 5,
   },
-  topRightUI: {
-    alignItems: 'flex-end',
+  indicatorsContainer: {
+    position: 'absolute',
+    top: 80,
+    left: 0,
+    alignItems: 'flex-start',
   },
   scoreText: {
     fontSize: 18,
