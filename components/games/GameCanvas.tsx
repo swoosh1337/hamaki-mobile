@@ -15,45 +15,44 @@ const GameUI = memo(({
   combo,
   canDoubleJump,
   isGrounded,
+  needsDoubleJump,
   onPause
 }: {
   score: number;
   combo: number;
   canDoubleJump: boolean;
   isGrounded: boolean;
+  needsDoubleJump: boolean;
   onPause: () => void;
 }) => {
-  const platformsClimbed = Math.floor(score / GAME_CONFIG.SCORE_PER_PLATFORM);
-
   return (
-    <View style={styles.gameUI} pointerEvents="box-none">
-      {/* Score and Height - fixed position */}
-      <View style={styles.scoreContainer}>
-        <Text style={styles.scoreText}>Score: {score}</Text>
-        <View style={styles.livesContainer}>
-          <Text style={styles.livesText}>Height: {platformsClimbed}m</Text>
+    <>
+      <View style={styles.gameUI} pointerEvents="box-none">
+        {/* Score - fixed position */}
+        <View style={styles.scoreContainer}>
+          <Text style={styles.scoreText}>Score: {score}</Text>
+        </View>
+
+        {/* Combo and Double Jump indicators - absolutely positioned to avoid layout shift */}
+        <View style={styles.indicatorsContainer}>
+          {combo >= 3 && (
+            <View style={styles.comboContainer}>
+              <Text style={styles.comboText}>Combo x{combo}!</Text>
+            </View>
+          )}
+          {canDoubleJump && !isGrounded && needsDoubleJump && (
+            <View style={styles.doubleJumpIndicator}>
+              <Text style={styles.doubleJumpText}>⚡ Double Tap!</Text>
+            </View>
+          )}
         </View>
       </View>
 
-      {/* Combo and Double Jump indicators - absolutely positioned to avoid layout shift */}
-      <View style={styles.indicatorsContainer}>
-        {combo > 1 && (
-          <View style={styles.comboContainer}>
-            <Text style={styles.comboText}>Combo x{combo}!</Text>
-          </View>
-        )}
-        {canDoubleJump && !isGrounded && (
-          <View style={styles.doubleJumpIndicator}>
-            <Text style={styles.doubleJumpText}>⚡ Double Tap!</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Pause button - fixed position */}
-      <Pressable style={styles.pauseButton} onPress={onPause}>
+      {/* Pause button - bottom right corner */}
+      <Pressable style={styles.pauseButtonContainer} onPress={onPause}>
         <Text style={styles.pauseButtonText}>⏸️</Text>
       </Pressable>
-    </View>
+    </>
   );
 });
 
@@ -224,6 +223,9 @@ export const GameCanvas = React.memo(({
                 if (p.type === 'moving') color = "rgba(80,80,180,0.9)"; // moving - blue-gray
                 if (p.type === 'breakable') color = "rgba(139,69,19,0.9)"; // breakable - brown
                 if (p.type === 'spring') color = p.springUsed ? "rgba(100,100,100,0.6)" : "rgba(255,215,0,0.95)"; // spring - gold (unused) / gray (used)
+                if (p.type === 'bouncy') color = "rgba(255,105,180,0.9)"; // bouncy - hot pink
+                if (p.type === 'ice') color = "rgba(135,206,235,0.9)"; // ice - sky blue
+                if (p.type === 'conveyor') color = "rgba(128,128,128,0.9)"; // conveyor - gray
 
                 return (
                   <Rect key={p.id} x={p.x} y={p.y} width={p.width} height={p.height} color={color} />
@@ -299,6 +301,7 @@ export const GameCanvas = React.memo(({
             combo={gameState.combo}
             canDoubleJump={gameState.player.canDoubleJump}
             isGrounded={gameState.player.isGrounded}
+            needsDoubleJump={gameState.needsDoubleJump}
             onPause={onPauseGame}
           />
         )}
@@ -416,9 +419,13 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   scoreContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
     alignItems: 'flex-start',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
   },
   indicatorsContainer: {
     position: 'absolute',
@@ -440,43 +447,19 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  livesContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    justifyContent: 'flex-end',
-  },
-  livesText: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    color: '#FFFFFF', // White text
-    fontWeight: 'bold',
-    // No background color
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    minWidth: 140,
-    textAlign: 'right',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)', // Strong black shadow
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  heartIcon: {
-    fontSize: 16,
-    marginLeft: 4,
-  },
   comboContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: '#FFD700',
   },
   comboText: {
     fontSize: 14,
     fontFamily: 'SpaceMono',
-    color: '#000000',
+    color: '#FFD700',
     fontWeight: 'bold',
     textAlign: 'center',
   },
@@ -529,14 +512,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     zIndex: 1,
   },
-  pauseButton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  pauseButtonContainer: {
+    position: 'absolute',
+    bottom: 40,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: Colors.dark.tint,
     zIndex: 10,
   },

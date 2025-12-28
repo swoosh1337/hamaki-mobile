@@ -19,7 +19,7 @@ import { incrementDataVersion } from '@/services/youtube/verificationDataVersion
 import type { AuthMethod, AuthResult, MagicLinkResult } from '@/types';
 import type { UserProfile } from '@/types/user';
 import { analytics } from '@/utils/analytics';
-import { createLogger } from '@/utils/logger';
+import { createLogger, setLogUserContext } from '@/utils/logger';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 import { RememberMeModal } from '../components/ui/RememberMeModal';
@@ -194,6 +194,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsSubscribed(result.isSubscribed || false);
         setIsAuthenticated(true);
 
+        // Set user context for logging
+        setLogUserContext({
+          userId: updatedUser.id,
+          userName: updatedUser.full_name,
+          email: updatedUser.email,
+        });
+
         // Perform background checks for Google users
         if (method === 'google' && updatedUser.google_id && updatedUser.id) {
           performBackgroundChecks(updatedUser.google_id, updatedUser.id);
@@ -257,6 +264,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsSubscribed(supabaseUser.youtube_subscribed || false);
         setAuthMethod(pendingAuthResult.authMethod || 'google');
         setIsTemporarySession(!rememberMe);
+
+        // Set user context for logging
+        setLogUserContext({
+          userId: supabaseUser.id,
+          userName: supabaseUser.full_name,
+          email: supabaseUser.email,
+        });
 
         // Set analytics user id
         analytics.setUserId(supabaseUser.google_id);
@@ -546,6 +560,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsAuthenticated(true);
             setIsSubscribed(persistedResult.isSubscribed || false);
             setAuthMethod(persistedResult.authMethod || 'google');
+
+            // Set user context for logging
+            setLogUserContext({
+              userId: supabaseUser.id,
+              userName: supabaseUser.full_name,
+              email: supabaseUser.email,
+            });
+
             log.info('Successfully auto-signed in user', {
               email: persistedResult.userData.email,
               method: persistedResult.authMethod,
@@ -614,6 +636,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserProfile(null);
         setIsTemporarySession(false);
         setAuthMethod(null);
+        setLogUserContext(null);
       }
     };
 
@@ -717,6 +740,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsDemoMode(true);
       setAuthMethod(null); // Demo mode has no auth method
 
+      // Set user context for logging
+      setLogUserContext({
+        userId: demoUsers.id,
+        userName: demoUsers.full_name || 'Demo User',
+        email: demoUsers.email,
+      });
+
       // Set analytics user id
       analytics.setUserId(demoUsers.google_id);
 
@@ -758,6 +788,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAuthMethod(null);
       clearMagicLinkTimeout();
       setMagicLinkPending(false);
+
+      // Clear user context for logging
+      setLogUserContext(null);
+
       log.info('User signed out successfully');
       analytics.setUserId(null);
     } catch (err) {

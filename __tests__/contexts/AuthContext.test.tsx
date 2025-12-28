@@ -97,6 +97,7 @@ jest.mock('@/utils/logger', () => ({
         warn: jest.fn(),
         error: jest.fn(),
     }),
+    setLogUserContext: jest.fn(),
 }));
 
 // Mock analytics

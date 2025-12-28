@@ -27,6 +27,7 @@ import { ResponsiveScalingManager } from '@/features/games/noPogod/utils/respons
 import { NoPogodSpriteRenderer } from '@/features/games/noPogod/utils/spriteRenderer';
 import { preloadGameAssets, releaseGameAssets } from '@/features/games/shared';
 import { useGameCooldown } from '@/hooks/useGameCooldown';
+import { useMyLeaderboardStatus } from '@/hooks/useMyLeaderboardStatus';
 import { edgeFunctionQueueService } from '@/services/queue';
 import {
   generateSessionId,
@@ -54,6 +55,12 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   onClose,
 }) => {
   const { userProfile, updateUserProfile, isDemoMode } = useAuth();
+
+  // Personal leaderboard status for instant rank updates
+  const { updateFromAwardXP } = useMyLeaderboardStatus({
+    userId: userProfile?.id,
+    autoFetch: false, // Don't fetch on mount, just use for updates
+  });
   const gameEngineRef = useRef<NoPogodEngine | null>(null);
   const spriteRendererRef = useRef<NoPogodSpriteRenderer | null>(null);
   const responsiveScalingRef = useRef<ResponsiveScalingManager | null>(null);
@@ -406,6 +413,10 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
                 duplicate: result.data.duplicate,
               });
 
+              // Instantly update personal leaderboard rank (no 5-minute wait!)
+              updateFromAwardXP(result.data);
+              log.debug('Personal leaderboard rank updated instantly');
+
               // Invalidate XP stats cache so profile refreshes
               try {
                 const { invalidateXPStatsCache } = await import('@/utils/xpStatsCache');
@@ -416,6 +427,8 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
               }
             } else {
               // Edge Function failed - check if retryable
+              const newXP = userProfile.xp_points + xpToAward;
+
               if (isRetryableError(result.status)) {
                 // Add to queue for retry (optimistic XP derived from queue)
                 await edgeFunctionQueueService.addToQueue({
@@ -446,9 +459,23 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
                   error: result.error,
                 });
               }
+
+              // Update local profile and leaderboard state
+              updateUserProfile({ xp_points: newXP });
+              updateFromAwardXP({
+                success: true,
+                new_total_xp: newXP,
+                personal_rank: 0, // Unknown rank when offline
+                xp_breakdown: {
+                  game: newXP,
+                  subscription: 0,
+                  video_like: 0,
+                },
+              });
             }
           } catch (error) {
             // Unexpected error - add to queue for safety
+            const newXP = userProfile.xp_points + xpToAward;
             log.error('Unexpected error awarding XP, queuing for retry:', error);
             await edgeFunctionQueueService.addToQueue({
               id: `xp-${sessionId}-${xpToAward}`,
@@ -465,6 +492,19 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
               },
               amount: xpToAward,
               createdAt: Date.now(),
+            });
+
+            // Update local profile and leaderboard state
+            updateUserProfile({ xp_points: newXP });
+            updateFromAwardXP({
+              success: true,
+              new_total_xp: newXP,
+              personal_rank: 0, // Unknown rank when offline
+              xp_breakdown: {
+                game: newXP,
+                subscription: 0,
+                video_like: 0,
+              },
             });
           }
         }

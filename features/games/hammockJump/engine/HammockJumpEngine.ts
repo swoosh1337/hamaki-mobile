@@ -20,6 +20,7 @@ export interface GameState {
     shieldTime?: number;
     canDoubleJump: boolean;
     isGrounded: boolean;
+    isOnIce: boolean; // Slippery ice platform effect
     groundedFrames: number; // Track frames since last grounded to prevent flicker
   };
   cameraY: number; // how far the world has scrolled up
@@ -28,6 +29,9 @@ export interface GameState {
   screenShake: number;
   combo: number; // consecutive platform hits
   lastScoredPlatformId: string | null; // Track last platform that gave score
+  lastLandingTime: number; // Timestamp of last platform landing for combo timing
+  lastComboPlatformId: string | null; // Track last platform for combo (different platform required)
+  needsDoubleJump: boolean; // true if current gap likely requires double jump
   gameTime: number; // Time elapsed in seconds
   items: Item[];
 }
@@ -61,10 +65,11 @@ export interface Platform {
   width: number;
   height: number;
   vx: number; // moving platforms
-  type: 'normal' | 'moving' | 'breakable' | 'spring';
+  type: 'normal' | 'moving' | 'breakable' | 'spring' | 'bouncy' | 'ice' | 'conveyor';
   broken?: boolean; // for breakable platforms
   springUsed?: boolean; // for spring platforms
   scored?: boolean; // track if this platform already gave score
+  conveyorDirection?: 1 | -1; // for conveyor platforms
 }
 
 export interface GameAssets {
@@ -76,11 +81,14 @@ const PHYSICS = {
   GRAVITY: 0.8, // px/frame (proper gravity)
   JUMP_VELOCITY: -15, // px/frame upward (strong bounce)
   SPRING_VELOCITY: -25, // px/frame upward (super bounce)
+  BOUNCY_VELOCITY: -18, // px/frame upward (between normal and spring)
   DOUBLE_JUMP_VELOCITY: -12, // px/frame upward (double jump boost)
   HORIZONTAL_SPEED: 6, // px/frame (responsive movement)
   HORIZONTAL_BOOST: 4, // px/frame (double tap boost)
   MAX_FALL_SPEED: 20, // px/frame (terminal velocity)
   PLATFORM_SPEED: 100, // px/second baseline for moving platforms (scaled by frameMultiplier)
+  ICE_FRICTION: 0.98, // Reduced friction for ice platforms (1.0 = no friction)
+  CONVEYOR_SPEED: 3, // px/frame horizontal push for conveyor platforms
 };
 
 export const GAME_CONFIG = {
@@ -113,6 +121,9 @@ export const GAME_CONFIG = {
   SPAWN_ITEM_CHANCE: 0.25, // 25% chance to spawn an item on a platform
   ITEM_SCORE: 15,
   ITEM_SIZE: 32,
+  // Physics-based reachability (with double jump)
+  MAX_REACHABLE_HEIGHT: 200,     // Conservative max vertical reach with double jump
+  MAX_REACHABLE_HORIZONTAL: 200, // Max horizontal distance during jump arc
 } as const;
 
 export class HammockGameEngine {
@@ -146,6 +157,7 @@ export class HammockGameEngine {
         shieldTime: 0,
         canDoubleJump: false,
         isGrounded: false,
+        isOnIce: false,
         groundedFrames: 0,
       },
       cameraY: 0,
@@ -154,6 +166,9 @@ export class HammockGameEngine {
       screenShake: 0,
       combo: 0,
       lastScoredPlatformId: null,
+      lastLandingTime: 0,
+      lastComboPlatformId: null,
+      needsDoubleJump: false,
       gameTime: 0,
       items: [],
     };
@@ -240,17 +255,30 @@ export class HammockGameEngine {
     // Higher up = more special platforms
     if (heightRatio > 3) {
       const rand = Math.random();
-      if (rand < 0.1 + bias * 0.4) return 'spring';
-      if (rand < 0.25 + bias * 0.6) return 'breakable';
-      if (rand < 0.45 + bias) return 'moving';
-    } else if (heightRatio > 1.5) {
+      if (rand < 0.08 + bias * 0.3) return 'spring';
+      if (rand < 0.14 + bias * 0.4) return 'bouncy';
+      if (rand < 0.20 + bias * 0.3) return 'ice';
+      if (rand < 0.26 + bias * 0.3) return 'conveyor';
+      if (rand < 0.38 + bias * 0.5) return 'breakable';
+      if (rand < 0.55 + bias) return 'moving';
+    } else if (heightRatio > 2) {
       const rand = Math.random();
-      if (rand < 0.05 + bias * 0.3) return 'spring';
-      if (rand < 0.15 + bias * 0.4) return 'breakable';
-      if (rand < 0.3 + bias) return 'moving';
+      if (rand < 0.05 + bias * 0.2) return 'spring';
+      if (rand < 0.12 + bias * 0.3) return 'bouncy';
+      if (rand < 0.17 + bias * 0.2) return 'ice';
+      if (rand < 0.22 + bias * 0.2) return 'conveyor';
+      if (rand < 0.32 + bias * 0.4) return 'breakable';
+      if (rand < 0.50 + bias) return 'moving';
+    } else if (heightRatio > 1) {
+      const rand = Math.random();
+      if (rand < 0.03 + bias * 0.2) return 'spring';
+      if (rand < 0.10 + bias * 0.3) return 'bouncy';
+      if (rand < 0.20 + bias * 0.4) return 'breakable';
+      if (rand < 0.40 + bias) return 'moving';
     } else if (heightRatio > 0.5) {
       const rand = Math.random();
-      if (rand < 0.2 + bias * 0.8) return 'moving';
+      if (rand < 0.05 + bias * 0.2) return 'bouncy';
+      if (rand < 0.25 + bias * 0.8) return 'moving';
     }
 
     return 'normal';
@@ -279,6 +307,8 @@ export class HammockGameEngine {
     this.gameState.screenShake = 0;
     this.gameState.combo = 0;
     this.gameState.lastScoredPlatformId = null; // Reset scored platform tracking
+    this.gameState.lastLandingTime = 0; // Reset combo timing
+    this.gameState.lastComboPlatformId = null; // Reset combo platform tracking
     this.gameState.gameTime = 0;
     this.gameState.items = [];
 
@@ -368,6 +398,7 @@ export class HammockGameEngine {
     this.gameState.gameTime += dt / 1000;
 
     this.updatePlayer(dt);
+    this.analyzeGapDifficulty();
     this.updatePlatforms(dt);
     this.updateItems(dt);
     this.updateParticles(dt);
@@ -415,7 +446,15 @@ export class HammockGameEngine {
     const horizontalMovement = input * PHYSICS.HORIZONTAL_SPEED * frameMultiplier;
 
     // Apply horizontal velocity (from double jump boosts) with decay
-    p.vx *= 0.95; // Decay horizontal velocity
+    // Use reduced friction if on ice platform
+    if (p.isOnIce) {
+      p.vx *= PHYSICS.ICE_FRICTION; // Slower decay on ice
+      if (Math.abs(p.vx) < 0.1) {
+        p.isOnIce = false; // Stop ice effect when velocity is minimal
+      }
+    } else {
+      p.vx *= 0.95; // Normal decay
+    }
     p.x += horizontalMovement + p.vx * frameMultiplier;
 
     // Wrap around screen edges
@@ -456,6 +495,13 @@ export class HammockGameEngine {
         // Skip broken platforms
         if (plat.broken) continue;
 
+        // Skip platforms that are barely visible (prevent magical landings)
+        // Platforms must be at least 50px into visible area
+        const VISIBILITY_MARGIN = 50;
+        if (plat.y < -VISIBILITY_MARGIN || plat.y > s.screenHeight + VISIBILITY_MARGIN) {
+          continue;
+        }
+
         // Check horizontal overlap with some tolerance
         const playerLeft = p.x + p.width * 0.2; // 20% tolerance on sides
         const playerRight = p.x + p.width * 0.8;
@@ -489,6 +535,49 @@ export class HammockGameEngine {
     if (p.y - s.cameraY > s.screenHeight + 100) {
       this.gameState.phase = 'GAME_OVER';
     }
+  }
+
+  private analyzeGapDifficulty(): void {
+    const s = this.gameState;
+    const p = s.player;
+
+    // ONLY reset when player actually uses double jump
+    if (!p.canDoubleJump) {
+      s.needsDoubleJump = false;
+      return;
+    }
+
+    // When grounded, don't change state (UI hides hint anyway when grounded)
+    if (p.isGrounded) {
+      return;
+    }
+
+    // Once hint is shown, keep it visible until double jump is used
+    if (s.needsDoubleJump) {
+      return;
+    }
+
+    // Evaluate gap difficulty only when in air and hint not already showing
+    const reachablePlatforms = s.platforms.filter(plat =>
+      !plat.broken &&
+      plat.y < p.y + p.height &&
+      plat.y > p.y - 300
+    );
+
+    if (reachablePlatforms.length === 0) {
+      s.needsDoubleJump = true;
+      return;
+    }
+
+    const playerCenterX = p.x + p.width / 2;
+    const isEasyReach = reachablePlatforms.some(plat => {
+      const platCenterX = plat.x + plat.width / 2;
+      const horizontalDist = Math.abs(platCenterX - playerCenterX);
+      const verticalDist = Math.abs(p.y - plat.y);
+      return horizontalDist < 150 && verticalDist < 120;
+    });
+
+    s.needsDoubleJump = !isEasyReach;
   }
 
   private updatePlatforms(dt: number) {
@@ -614,20 +703,45 @@ export class HammockGameEngine {
     player.isGrounded = true;
     player.groundedFrames = 0; // Reset counter to prevent flicker
 
+    // Time-based combo logic: only count when landing on DIFFERENT platforms
+    const COMBO_TIME_WINDOW = 1500; // 1.5 seconds in ms
+    const currentTime = Date.now();
+
+    // Check if this is a different platform than the last one we landed on for combo
+    const isDifferentPlatform = s.lastComboPlatformId !== plat.id;
+
+    if (isDifferentPlatform) {
+      if (s.lastLandingTime > 0 && (currentTime - s.lastLandingTime) <= COMBO_TIME_WINDOW) {
+        // Fast consecutive landing on DIFFERENT platform - increment combo
+        // Spring platforms give bonus +2, others give +1
+        if (plat.type === 'spring' && !plat.springUsed) {
+          s.combo += 2;
+        } else {
+          s.combo++;
+        }
+      } else {
+        // Too slow or first landing - reset combo to 1
+        s.combo = 1;
+      }
+      s.lastLandingTime = currentTime;
+      s.lastComboPlatformId = plat.id;
+    }
+    // If same platform, don't change combo or timing (prevents spam)
+
     // Award score ONLY if we haven't scored on this platform before
     if (!plat.scored) {
       plat.scored = true;
       const baseScore = GAME_CONFIG.SCORE_PER_PLATFORM;
 
-      // Calculate combo bonus
-      const comboBonus = s.combo > 1 ? Math.floor(baseScore * (s.combo / GAME_CONFIG.COMBO_MULTIPLIER)) : 0;
+      // Calculate combo bonus (only when combo >= 3)
+      const comboBonus = s.combo >= 3 ? Math.floor(baseScore * (s.combo / GAME_CONFIG.COMBO_MULTIPLIER)) : 0;
 
       // Award score
       const totalScore = baseScore + comboBonus;
       s.score += totalScore;
 
       // Debug log only for significant events
-      if (s.combo > 2) {
+      if (s.combo >= 3) {
         log.debug(`Combo hit! x${s.combo}`, { points: totalScore });
       }
     }
@@ -640,12 +754,29 @@ export class HammockGameEngine {
           plat.springUsed = true;
           this.addScreenShake(8);
           this.createParticles(plat.x + plat.width / 2, plat.y, '#FFD700', 15);
-          s.combo += 2; // Bonus combo for spring
           log.debug('Spring boost triggered');
         } else {
           player.vy = PHYSICS.JUMP_VELOCITY;
-          s.combo++;
         }
+        break;
+
+      case 'bouncy':
+        player.vy = PHYSICS.BOUNCY_VELOCITY;
+        this.addScreenShake(5);
+        this.createParticles(plat.x + plat.width / 2, plat.y, '#FF69B4', 8); // Hot pink
+        break;
+
+      case 'ice':
+        player.vy = PHYSICS.JUMP_VELOCITY;
+        player.isOnIce = true; // Enable sliding effect
+        player.vx += (Math.random() - 0.5) * 4; // Random slide direction
+        this.createParticles(plat.x + plat.width / 2, plat.y, '#87CEEB', 6); // Sky blue
+        break;
+
+      case 'conveyor':
+        player.vy = PHYSICS.JUMP_VELOCITY;
+        player.vx += PHYSICS.CONVEYOR_SPEED * (plat.conveyorDirection || 1);
+        this.createParticles(plat.x + plat.width / 2, plat.y, '#808080', 5); // Gray
         break;
 
       case 'breakable':
@@ -653,12 +784,10 @@ export class HammockGameEngine {
         plat.broken = true; // Only break THIS platform
         this.addScreenShake(4);
         this.createParticles(plat.x + plat.width / 2, plat.y, '#8B4513', 10);
-        s.combo++;
         break;
 
       default:
         player.vy = PHYSICS.JUMP_VELOCITY;
-        s.combo++;
         this.createParticles(plat.x + plat.width / 2, plat.y, '#C4FF00', 5);
         break;
     }
@@ -679,21 +808,23 @@ export class HammockGameEngine {
       return true;
     });
 
-    // --- NEW ALGORITHM: Time-Based Progressive Difficulty ---
+    // --- ELLIPSE-CONSTRAINED REACHABILITY ALGORITHM ---
 
     // 1. Calculate Difficulty Level (increases every 10 seconds)
     const difficultyLevel = Math.floor(s.gameTime / 10);
 
-    // 2. Dynamic Parameters based on difficulty
-    // x_offset: Shrinks 5% per level, min 40px. Controls horizontal reach.
-    const initialXOffset = screenWidth / 3; // Start with 1/3 screen width reach
-    const xOffset = Math.max(initialXOffset * Math.pow(0.95, difficultyLevel), 40);
+    // 2. Physics-based reachability with difficulty scaling
+    // The ellipse shrinks over time, making platforms closer together (harder to miss, but tighter)
+    const scaledMaxHeight = Math.max(
+      GAME_CONFIG.MAX_REACHABLE_HEIGHT * Math.pow(0.98, difficultyLevel),
+      120 // Minimum max height
+    );
+    const scaledMaxHorizontal = Math.max(
+      GAME_CONFIG.MAX_REACHABLE_HORIZONTAL * Math.pow(0.95, difficultyLevel),
+      80 // Minimum max horizontal
+    );
 
-    // y_offset_max: Shrinks 2% per level, min 120px. Controls max vertical gap.
-    const initialYOffsetMax = 220; // Slightly higher than user suggestion for better flow
-    const yOffsetMax = Math.max(initialYOffsetMax * Math.pow(0.98, difficultyLevel), 120);
-
-    // y_offset_min: Fixed minimum gap (player height * 1.5 approx)
+    // Minimum vertical gap (player needs room to land)
     const yOffsetMin = 80;
 
     // Platform Width: Shrinks 3% per level, min 50px.
@@ -717,29 +848,46 @@ export class HammockGameEngine {
       // Generate until we have enough buffer
       while (currentHighest.y > generateThreshold - 500) { // Buffer 500px more
 
-        // --- ALWAYS REACHABLE LOGIC ---
+        // --- ELLIPSE-CONSTRAINED POSITION GENERATION ---
+        // Ensures: (horizontalGap/maxH)² + (verticalGap/maxV)² <= 1
+        // This guarantees every platform is reachable with double jump
 
-        // Safe X: Reachable horizontally from previous
-        const lowX = Math.max(0, currentHighest.x - xOffset);
-        const highX = Math.min(screenWidth - platWidth, currentHighest.x + xOffset);
-        const newX = this.randBetween(lowX, highX);
+        // Random vertical gap (always positive, platform above)
+        const verticalGap = this.randBetween(yOffsetMin, Math.floor(scaledMaxHeight));
 
-        // Safe Y: Reachable vertically (next higher up = smaller y)
-        const lowY = currentHighest.y - yOffsetMax; // Farthest jumpable up
-        const highY = currentHighest.y - yOffsetMin; // Closest up
-        const newY = this.randBetween(lowY, highY);
+        // Calculate max allowed horizontal based on ellipse formula
+        // h <= maxH * sqrt(1 - (v/maxV)²)
+        const verticalRatio = verticalGap / scaledMaxHeight;
+        const maxAllowedHorizontal = scaledMaxHorizontal * Math.sqrt(Math.max(0, 1 - verticalRatio * verticalRatio));
+
+        // Random horizontal within allowed range (can be left or right)
+        const horizontalGap = this.randBetween(0, Math.floor(maxAllowedHorizontal));
+        const direction = Math.random() < 0.5 ? -1 : 1;
+
+        // Calculate new position
+        let newX = currentHighest.x + (horizontalGap * direction);
+        const newY = currentHighest.y - verticalGap;
+
+        // Clamp X to screen bounds
+        newX = Math.max(0, Math.min(screenWidth - platWidth, newX));
 
         // Determine type based on difficulty
         // After level 3 (30s): Chance for moving/special platforms
         let platformType: Platform['type'] = 'normal';
+        let conveyorDir: 1 | -1 = Math.random() < 0.5 ? -1 : 1;
+
         if (difficultyLevel >= 3) {
           const rand = Math.random();
           // Chance increases with difficulty
           const specialChance = 0.1 + (difficultyLevel * 0.02);
 
           if (rand < specialChance) {
-            if (Math.random() < 0.5) platformType = 'moving';
-            else if (Math.random() < 0.3) platformType = 'breakable';
+            const typeRand = Math.random();
+            if (typeRand < 0.25) platformType = 'moving';
+            else if (typeRand < 0.40) platformType = 'breakable';
+            else if (typeRand < 0.55) platformType = 'bouncy';
+            else if (typeRand < 0.70) platformType = 'ice';
+            else if (typeRand < 0.85) platformType = 'conveyor';
             else platformType = 'spring';
           }
         }
@@ -753,7 +901,8 @@ export class HammockGameEngine {
           width: platWidth,
           height: GAME_CONFIG.PLATFORM_HEIGHT,
           vx,
-          type: platformType
+          type: platformType,
+          conveyorDirection: platformType === 'conveyor' ? conveyorDir : undefined,
         };
 
         s.platforms.push(newPlat);
