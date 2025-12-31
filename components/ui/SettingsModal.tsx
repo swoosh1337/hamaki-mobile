@@ -32,11 +32,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Get pending action count for badges (only for Google users)
   // Hook automatically loads cached data on mount and polls for updates
-  const { pendingActionCount, subscriptionStatuses, videoLikeStatuses } = useYouTubeVerification();
+  const {
+    pendingActionCount,
+    pendingSubscriptionCount,
+    pendingVideoLikeCount,
+    subscriptionStatuses,
+    videoLikeStatuses,
+    refreshAll
+  } = useYouTubeVerification();
 
-  // Count pending for each section
-  const pendingSubscriptions = subscriptionStatuses.filter(s => !s.xpAwarded).length;
-  const pendingVideoLikes = videoLikeStatuses.filter(s => s.latestVideoId && !s.xpAwarded).length;
+  // Use pre-calculated counts from hook (ensures consistency with profile badge)
+  const pendingSubscriptions = pendingSubscriptionCount;
+  const pendingVideoLikes = pendingVideoLikeCount;
+
+  // Track previous modal states to detect when they close
+  const prevShowVideoLikes = React.useRef(showVideoLikes);
+  const prevShowSubscriptions = React.useRef(showSubscriptions);
+
+  // Refresh data when video likes or subscriptions modals close
+  // This ensures badges update after user verifies likes/subscriptions
+  React.useEffect(() => {
+    // If modal just closed, refresh data
+    if ((prevShowVideoLikes.current && !showVideoLikes) || (prevShowSubscriptions.current && !showSubscriptions)) {
+      refreshAll();
+    }
+
+    // Update refs for next render
+    prevShowVideoLikes.current = showVideoLikes;
+    prevShowSubscriptions.current = showSubscriptions;
+  }, [showVideoLikes, showSubscriptions, refreshAll]);
 
   const handleSignOut = async () => {
     const title = isDemoMode ? 'Exit Demo' : 'Sign Out';

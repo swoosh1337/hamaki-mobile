@@ -20,8 +20,8 @@ import {
   generateXPIdempotencyKey,
   isRetryableError,
 } from '@/types/edgeFunctionQueue';
-import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { trackGameEnd, trackGameStart, trackXPEarned } from '@/utils/analytics';
+import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { createLogger } from '@/utils/logger';
 import { GameCanvas } from './GameCanvas';
 
@@ -209,6 +209,9 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
         return;
       }
 
+      // Mark as awarded IMMEDIATELY to prevent double calls (matches No Pogodi pattern)
+      setXpAwarded(true);
+
       const xpToAward = Math.max(1, Math.floor(gameState.score / 50));
       const gameDuration = Date.now() - gameStartTime.current;
 
@@ -290,9 +293,6 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
             } catch (err) {
               log.error('Failed to invalidate XP cache', err);
             }
-
-            // Mark as awarded
-            setXpAwarded(true);
           } else {
             // Edge Function failed - check if retryable
             const newXP = userProfile.xp_points + xpToAward;
