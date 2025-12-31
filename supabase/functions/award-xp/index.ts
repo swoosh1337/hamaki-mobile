@@ -8,6 +8,12 @@
  * - Returns personal_rank calculated server-side (instant feedback)
  * - No client-side rank calculation needed
  * - Single API call provides both XP update and rank
+ *
+ * IDEMPOTENCY:
+ * - Requires idempotencyKey in request body
+ * - Uses database-backed idempotency (edge_idempotency_keys table)
+ * - Duplicate requests return current state with duplicate: true
+ * - In-memory idempotency is invalid in production (multiple instances)
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -17,7 +23,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-idempotency-key',
 };
 
 type XPType = 'game' | 'subscription' | 'video_like';
@@ -26,6 +32,8 @@ interface AwardXPRequest {
     userId: string;
     xpType: XPType;
     amount: number;
+    /** Idempotency key to prevent duplicate awards */
+    idempotencyKey?: string;
 }
 
 interface XPBreakdown {
@@ -36,6 +44,8 @@ interface XPBreakdown {
 
 interface AwardXPResponse {
     success: boolean;
+    /** True if this was a duplicate request (XP already awarded) */
+    duplicate?: boolean;
     new_total_xp: number;
     personal_rank: number;
     xp_breakdown: XPBreakdown;
@@ -51,10 +61,11 @@ async function calculatePersonalRank(
     userId: string,
     userTotalXP: number
 ): Promise<number> {
-    // Count users with higher total_xp
+    // Count users with higher total_xp (only monthly entries for ranking)
     const { count, error } = await supabase
         .from('leaderboard_entries')
         .select('*', { count: 'exact', head: true })
+        .eq('period_type', 'monthly')
         .gt('total_xp', userTotalXP);
 
     if (error) {
@@ -74,10 +85,12 @@ async function getXPBreakdown(
     supabase: ReturnType<typeof createClient>,
     userId: string
 ): Promise<XPBreakdown> {
+    // Get monthly entry for XP breakdown (there are 2 entries per user: weekly + monthly)
     const { data, error } = await supabase
         .from('leaderboard_entries')
         .select('game_xp, subscription_xp, video_like_xp')
         .eq('user_id', userId)
+        .eq('period_type', 'monthly')
         .single();
 
     if (error || !data) {
@@ -90,6 +103,81 @@ async function getXPBreakdown(
         subscription: data.subscription_xp || 0,
         video_like: data.video_like_xp || 0,
     };
+}
+
+/**
+ * Get current user state (for duplicate responses)
+ * Returns XP and rank even if no XP was awarded this time.
+ *
+ * IMPORTANT: This function MUST return authoritative data.
+ * If it can't fetch state, it throws - we don't return fake data.
+ */
+async function getCurrentUserState(
+    supabase: ReturnType<typeof createClient>,
+    userId: string
+): Promise<{ totalXP: number; rank: number; breakdown: XPBreakdown }> {
+    // Get monthly leaderboard entry (there are 2 entries per user: weekly + monthly)
+    const { data, error } = await supabase
+        .from('leaderboard_entries')
+        .select('total_xp, game_xp, subscription_xp, video_like_xp')
+        .eq('user_id', userId)
+        .eq('period_type', 'monthly')
+        .single();
+
+    if (error || !data) {
+        // FAIL HARD - duplicate handling requires authoritative state
+        console.error('[award-xp] Failed to fetch current user state:', error);
+        throw new Error(`Failed to fetch current user state: ${error?.message || 'No data'}`);
+    }
+
+    const totalXP = data.total_xp || 0;
+    const breakdown: XPBreakdown = {
+        game: data.game_xp || 0,
+        subscription: data.subscription_xp || 0,
+        video_like: data.video_like_xp || 0,
+    };
+
+    // Calculate rank
+    const rank = await calculatePersonalRank(supabase, userId, totalXP);
+
+    return { totalXP, rank, breakdown };
+}
+
+/**
+ * Check idempotency key and insert if not exists
+ *
+ * IMPORTANT: If insert fails for any reason other than duplicate,
+ * we throw an error. We do NOT proceed without idempotency protection.
+ * This ensures exactly-once semantics.
+ */
+async function checkIdempotency(
+    supabase: ReturnType<typeof createClient>,
+    idempotencyKey: string,
+    userId: string
+): Promise<{ isDuplicate: boolean }> {
+    // Try to insert the idempotency key
+    const { error } = await supabase
+        .from('edge_idempotency_keys')
+        .insert({
+            key: idempotencyKey,
+            user_id: userId,
+            function_name: 'award-xp',
+        });
+
+    if (error) {
+        // Check if it's a duplicate key error (23505 = unique_violation)
+        if (error.code === '23505') {
+            console.log('[award-xp] Duplicate idempotency key detected:', idempotencyKey);
+            return { isDuplicate: true };
+        }
+
+        // FAIL HARD - do NOT proceed without idempotency protection
+        // This ensures exactly-once semantics are never violated
+        console.error('[award-xp] Idempotency check failed:', error);
+        throw new Error(`Idempotency check failed: ${error.message}`);
+    }
+
+    return { isDuplicate: false };
 }
 
 Deno.serve(async (req: Request) => {
@@ -113,6 +201,7 @@ Deno.serve(async (req: Request) => {
                 userId: body.userId ? 'present' : 'missing',
                 xpType: body.xpType,
                 amount: body.amount,
+                hasIdempotencyKey: !!body.idempotencyKey,
             });
         } catch (parseError) {
             console.error('[award-xp] Failed to parse request body:', parseError);
@@ -122,7 +211,7 @@ Deno.serve(async (req: Request) => {
             );
         }
 
-        const { userId, xpType, amount } = body;
+        const { userId, xpType, amount, idempotencyKey } = body;
 
         // Validate required fields
         if (!userId) {
@@ -152,8 +241,43 @@ Deno.serve(async (req: Request) => {
             );
         }
 
+        // Validate idempotencyKey (REQUIRED for exactly-once semantics)
+        if (!idempotencyKey || typeof idempotencyKey !== 'string') {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: 'idempotencyKey is required. Format: award-xp:{userId}:{gameId}:{sessionId}:{amount}'
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
         // Create Supabase client with service role
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+        // Check idempotency - this MUST succeed before we proceed
+        console.log('[award-xp] Checking idempotency:', idempotencyKey);
+        const { isDuplicate } = await checkIdempotency(supabase, idempotencyKey, userId);
+
+        if (isDuplicate) {
+            // This is a duplicate request - return current state without awarding XP
+            console.log('[award-xp] Duplicate request, returning current state');
+            const currentState = await getCurrentUserState(supabase, userId);
+
+            const response: AwardXPResponse = {
+                success: true,
+                duplicate: true,
+                new_total_xp: currentState.totalXP,
+                personal_rank: currentState.rank,
+                xp_breakdown: currentState.breakdown,
+            };
+
+            console.log('[award-xp] Duplicate response:', response);
+            return new Response(
+                JSON.stringify(response),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
 
         console.log('[award-xp] Calling award_xp SQL function:', { userId, xpType, amount });
 

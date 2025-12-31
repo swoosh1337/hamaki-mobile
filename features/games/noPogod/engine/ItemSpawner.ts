@@ -5,8 +5,18 @@
  * This is a pure logic module with no React dependencies.
  */
 
-import { ITEM_DEFINITIONS, PHYSICS, SIZES, SPAWN_WEIGHTS, TIMING } from './config';
+import { DIFFICULTY, ITEM_DEFINITIONS, MULTI_THROW, PHYSICS, SIZES, SPAWN_WEIGHTS, TIMING } from './config';
 import type { FallingItem, ItemType, ShonzikaState } from './types';
+
+/**
+ * Difficulty settings for current game phase
+ */
+export interface DifficultySettings {
+    spawnInterval: number;
+    fallSpeed: number;
+    shonzikaY: number;
+    phase: number;
+}
 
 /**
  * State for managing item spawning
@@ -15,6 +25,10 @@ export interface SpawnerState {
     lastSpawnTime: number;
     nextSpawnTime: number;
     itemIdCounter: number;
+    /** Number of items remaining in current burst (0 = no burst active) */
+    burstPendingCount: number;
+    /** Time when next burst item should spawn (only used if burstPendingCount > 0) */
+    nextBurstTime: number;
 }
 
 /**
@@ -25,15 +39,44 @@ export function createInitialSpawnerState(): SpawnerState {
         lastSpawnTime: 0,
         nextSpawnTime: 0,
         itemIdCounter: 0,
+        burstPendingCount: 0,
+        nextBurstTime: 0,
     };
 }
 
 /**
- * Generates the next spawn time with random variance
+ * Gets difficulty settings based on elapsed game time.
+ * Difficulty increases every 10 seconds.
+ * 
+ * @param elapsedMs - Time elapsed since game start in milliseconds
  */
-export function calculateNextSpawnTime(currentTime: number): number {
+export function getDifficultySettings(elapsedMs: number): DifficultySettings {
+    const elapsedSec = elapsedMs / 1000;
+
+    // Find which phase we're in
+    let phaseIndex = 0;
+    for (let i = DIFFICULTY.PHASES.length - 1; i >= 0; i--) {
+        if (elapsedSec >= DIFFICULTY.PHASES[i]) {
+            phaseIndex = i;
+            break;
+        }
+    }
+
+    return {
+        spawnInterval: DIFFICULTY.SPAWN_INTERVALS[phaseIndex],
+        fallSpeed: DIFFICULTY.FALL_SPEEDS[phaseIndex],
+        shonzikaY: DIFFICULTY.SHONZIKA_Y[phaseIndex],
+        phase: phaseIndex,
+    };
+}
+
+/**
+ * Generates the next spawn time with random variance, using difficulty-adjusted interval
+ */
+export function calculateNextSpawnTime(currentTime: number, spawnInterval?: number): number {
+    const interval = spawnInterval ?? TIMING.ITEM_SPAWN_INTERVAL;
     const variance = (Math.random() - 0.5) * 2 * TIMING.ITEM_SPAWN_VARIANCE;
-    return currentTime + TIMING.ITEM_SPAWN_INTERVAL + variance;
+    return currentTime + interval + variance;
 }
 
 /**
@@ -73,12 +116,15 @@ export function generateItemId(spawnerState: SpawnerState): string {
 
 /**
  * Creates a new falling item at the Shonzika's hand position
+ * 
+ * @param fallSpeed - Optional fall speed override for difficulty scaling
  */
 export function createFallingItem(
     itemType: ItemType,
     spawnX: number,
     spawnY: number,
-    itemId: string
+    itemId: string,
+    fallSpeed?: number
 ): FallingItem {
     const definition = ITEM_DEFINITIONS[itemType];
 
@@ -88,7 +134,7 @@ export function createFallingItem(
         x: spawnX,
         y: spawnY,
         velocityX: 0,  // Straight down drop
-        velocityY: PHYSICS.ITEM_FALL_SPEED,
+        velocityY: fallSpeed ?? PHYSICS.ITEM_FALL_SPEED,
         sprite: null,  // Will be set by renderer
         points: definition.points,
         isBad: definition.isBad,
@@ -119,9 +165,127 @@ export function spawnItem(
         lastSpawnTime: currentTime,
         nextSpawnTime: calculateNextSpawnTime(currentTime),
         itemIdCounter: spawnerState.itemIdCounter + 1,
+        burstPendingCount: spawnerState.burstPendingCount,
+        nextBurstTime: spawnerState.nextBurstTime,
     };
 
     return { item, newState };
+}
+
+/**
+ * Checks if a burst throw should be initiated (random chance)
+ * Returns the number of items to throw in the burst (1 = no burst)
+ */
+export function rollForBurstThrow(): number {
+    const shouldBurst = Math.random() < MULTI_THROW.CHANCE;
+    if (!shouldBurst) return 1;
+
+    // Random between MIN_ITEMS and MAX_ITEMS
+    return Math.floor(Math.random() * (MULTI_THROW.MAX_ITEMS - MULTI_THROW.MIN_ITEMS + 1)) + MULTI_THROW.MIN_ITEMS;
+}
+
+/**
+ * Spawns item and potentially starts a burst sequence
+ * Returns the spawned item and updated state with burst tracking
+ */
+export function spawnWithBurst(
+    spawnerState: SpawnerState,
+    shonzika: ShonzikaState,
+    currentTime: number
+): { item: FallingItem; newState: SpawnerState } {
+    // Check if we're in the middle of a burst
+    if (spawnerState.burstPendingCount > 0) {
+        // Spawn the next burst item
+        const { item, newState } = spawnItem(spawnerState, shonzika, currentTime);
+
+        // Decrement burst count
+        const remainingBurst = spawnerState.burstPendingCount - 1;
+
+        return {
+            item,
+            newState: {
+                ...newState,
+                burstPendingCount: remainingBurst,
+                nextBurstTime: remainingBurst > 0 ? currentTime + MULTI_THROW.BURST_DELAY_MS : 0,
+                // Don't update nextSpawnTime yet - will be set after burst completes
+                nextSpawnTime: remainingBurst > 0 ? newState.nextSpawnTime : calculateNextSpawnTime(currentTime),
+            },
+        };
+    }
+
+    // Starting a new spawn - roll for burst
+    const burstCount = rollForBurstThrow();
+    const { item, newState } = spawnItem(spawnerState, shonzika, currentTime);
+
+    if (burstCount > 1) {
+        // Start burst sequence (we already spawned 1, so pending is burstCount - 1)
+        return {
+            item,
+            newState: {
+                ...newState,
+                burstPendingCount: burstCount - 1,
+                nextBurstTime: currentTime + MULTI_THROW.BURST_DELAY_MS,
+                nextSpawnTime: currentTime + MULTI_THROW.BURST_DELAY_MS, // Short delay for next item
+            },
+        };
+    }
+
+    // No burst, normal spawn
+    return { item, newState };
+}
+
+/**
+ * Spawns item with difficulty-adjusted settings.
+ * Uses elapsed game time to determine difficulty phase.
+ * 
+ * @param elapsedMs - Time elapsed since game start in milliseconds
+ */
+export function spawnWithDifficulty(
+    spawnerState: SpawnerState,
+    shonzika: ShonzikaState,
+    currentTime: number,
+    elapsedMs: number
+): { item: FallingItem; newState: SpawnerState; difficulty: DifficultySettings } {
+    const difficulty = getDifficultySettings(elapsedMs);
+
+    // Spawn the item using existing burst logic
+    const { item, newState } = spawnWithBurst(spawnerState, shonzika, currentTime);
+
+    // Apply difficulty-adjusted fall speed to the item
+    const adjustedItem: FallingItem = {
+        ...item,
+        velocityY: difficulty.fallSpeed,
+    };
+
+    // Apply difficulty-adjusted spawn interval to next spawn time
+    const adjustedState: SpawnerState = {
+        ...newState,
+        // Only adjust nextSpawnTime if not in burst (burst has its own timing)
+        nextSpawnTime: newState.burstPendingCount > 0
+            ? newState.nextSpawnTime
+            : calculateNextSpawnTime(currentTime, difficulty.spawnInterval),
+    };
+
+    return {
+        item: adjustedItem,
+        newState: adjustedState,
+        difficulty,
+    };
+}
+
+/**
+ * Checks if it's time to spawn the next item (either regular or burst)
+ */
+export function shouldSpawnNextItem(
+    spawnerState: SpawnerState,
+    currentTime: number
+): boolean {
+    // If in burst mode, check burst timing
+    if (spawnerState.burstPendingCount > 0) {
+        return currentTime >= spawnerState.nextBurstTime;
+    }
+    // Normal spawn check
+    return currentTime >= spawnerState.nextSpawnTime;
 }
 
 /**

@@ -48,6 +48,12 @@ export interface PlayerState {
     speedBoostActive: boolean;
     /** When speed boost ends (timestamp) */
     speedBoostEndTime: number;
+    /** Speed boost level (1 = normal boost, 2 = double, etc) - stacks with multiple peppers */
+    speedBoostLevel: number;
+    /** Whether slowdown effect is active (from shocker) */
+    slowdownActive: boolean;
+    /** When slowdown effect ends (timestamp) */
+    slowdownEndTime: number;
 }
 
 // =============================================================================

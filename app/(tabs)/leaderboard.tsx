@@ -12,8 +12,8 @@
  * All data comes through hooks which use services.
  */
 
-import React, { useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { NetworkError } from '@/components/ui/NetworkError';
 import { Colors } from '@/constants/Colors';
@@ -47,6 +47,7 @@ export default function LeaderboardScreen() {
     const { userProfile } = useAuth();
     const [activeTab, setActiveTab] = useState<TabType>('weekly');
     const [expandedPrizeId, setExpandedPrizeId] = useState<string | null>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     // Personal truth: User's own rank and XP (instant updates from Edge Function)
     const {
@@ -68,14 +69,14 @@ export default function LeaderboardScreen() {
         limit: 10,
     });
 
-    // Global truth: All-time leaderboard snapshot (batched refresh)
+    // Global truth: Monthly leaderboard snapshot (batched refresh)
     const {
         entries: mainEntries,
         isLoading: mainLoading,
         error: mainError,
         refetch: refetchMain,
     } = useLeaderboardSnapshot({
-        periodType: 'all_time',
+        periodType: 'monthly',
         limit: 10,
     });
 
@@ -141,6 +142,22 @@ export default function LeaderboardScreen() {
         refetchMain();
         refetchPrizes();
     };
+
+    // Pull-to-refresh handler
+    const handleRefresh = useCallback(async () => {
+        setIsRefreshing(true);
+        try {
+            if (activeTab === 'weekly') {
+                await refetchWeekly();
+            } else if (activeTab === 'main') {
+                await refetchMain();
+            } else {
+                await refetchPrizes();
+            }
+        } finally {
+            setIsRefreshing(false);
+        }
+    }, [activeTab, refetchWeekly, refetchMain, refetchPrizes]);
 
     const renderLeaderboardItem = (item: LeaderboardDisplayEntry) => {
         const isCurrentUser = userProfile?.id === item.user_id;
@@ -230,7 +247,7 @@ export default function LeaderboardScreen() {
                     onPress={() => setActiveTab('main')}
                 >
                     <Text style={[styles.tabText, activeTab === 'main' && styles.activeTabText]}>
-                        მთავარი
+                        თვის
                     </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -243,7 +260,19 @@ export default function LeaderboardScreen() {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                style={styles.content}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={handleRefresh}
+                        colors={[Colors.dark.tint]}
+                        tintColor={Colors.dark.tint}
+                        progressBackgroundColor={Colors.dark.background}
+                    />
+                }
+            >
                 {activeTab === 'weekly' && (
                     <View style={styles.leaderboardContainer}>
                         {weeklyData.length > 0 ? (

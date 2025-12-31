@@ -46,6 +46,12 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
     // Asset support for backwards compatibility
     private assets: NoPogodGameAssets | null = null;
 
+    // Audio callback for catch events
+    public onItemCaught: ((itemType: string) => void) | null = null;
+
+    // Audio callback for throw events (Shonzika throws item)
+    public onItemThrown: ((itemType: string) => void) | null = null;
+
     constructor(screenWidth: number, screenHeight: number, assets?: NoPogodGameAssets) {
         super(screenWidth, screenHeight, {
             gameDuration: TIMING.GAME_DURATION,
@@ -305,6 +311,30 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
         return Math.ceil(this.getSpeedBoostTimeRemaining() / 1000);
     }
 
+    /**
+     * Check if slowdown is active
+     */
+    isSlowdownActive(): boolean {
+        return this.gameState.player.slowdownActive;
+    }
+
+    /**
+     * Get remaining slowdown time in ms
+     */
+    getSlowdownTimeRemaining(): number {
+        return PlayerController.getSlowdownTimeRemaining(
+            this.gameState.player,
+            Date.now()
+        );
+    }
+
+    /**
+     * Get remaining slowdown time in seconds
+     */
+    getSlowdownTimeRemainingSeconds(): number {
+        return Math.ceil(this.getSlowdownTimeRemaining() / 1000);
+    }
+
     // =========================================================================
     // Position Info Methods
     // =========================================================================
@@ -338,6 +368,12 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
             this.gameState.player,
             currentTime
         );
+
+        // Update slowdown
+        this.gameState.player = PlayerController.updateSlowdown(
+            this.gameState.player,
+            currentTime
+        );
     }
 
     private updateShonzika(deltaTime: number): void {
@@ -360,19 +396,36 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
     }
 
     private updateItemSpawning(currentTime: number): void {
-        if (ItemSpawner.shouldSpawnItem(this.spawnerState, currentTime)) {
+        // Check if it's time to spawn (handles both regular and burst timing)
+        if (ItemSpawner.shouldSpawnNextItem(this.spawnerState, currentTime)) {
             // Trigger throw animation
             this.gameState.shonzika = ShonzikaAI.triggerThrow(this.gameState.shonzika);
 
-            // Spawn item
-            const { item, newState } = ItemSpawner.spawnItem(
+            // Calculate elapsed time for difficulty scaling
+            const elapsedMs = currentTime - this.gameStartTime;
+
+            // Spawn item with difficulty-adjusted settings (30% chance for burst)
+            const { item, newState, difficulty } = ItemSpawner.spawnWithDifficulty(
                 this.spawnerState,
                 this.gameState.shonzika,
-                currentTime
+                currentTime,
+                elapsedMs
             );
+
+            // Update Shonzika Y position based on difficulty phase
+            // (moves closer to player as difficulty increases)
+            this.gameState.shonzika = {
+                ...this.gameState.shonzika,
+                y: this.getScreenHeight() * difficulty.shonzikaY,
+            };
 
             this.spawnerState = newState;
             this.items.push(item);
+
+            // Trigger throw sound callback
+            if (this.onItemThrown) {
+                this.onItemThrown(item.type);
+            }
         }
     }
 
@@ -403,6 +456,15 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
             this.addScore(aggregate.totalPoints);
         }
 
+        // Trigger catch sound callback for each EGG or TOMATO caught
+        if (this.onItemCaught) {
+            for (const outcome of outcomes) {
+                if (outcome.itemType === 'EGG' || outcome.itemType === 'TOMATO') {
+                    this.onItemCaught(outcome.itemType);
+                }
+            }
+        }
+
         // Apply lives lost
         for (let i = 0; i < aggregate.totalLivesLost; i++) {
             this.loseLife();
@@ -416,6 +478,14 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
         // Activate speed boost
         if (aggregate.shouldActivateSpeedBoost) {
             this.gameState.player = PlayerController.activateSpeedBoost(
+                this.gameState.player,
+                Date.now()
+            );
+        }
+
+        // Activate slowdown (from shocker) - negates speed boost if active
+        if (aggregate.shouldActivateSlowdown) {
+            this.gameState.player = PlayerController.activateSlowdown(
                 this.gameState.player,
                 Date.now()
             );

@@ -18,6 +18,7 @@
  */
 
 import { supabase } from '@/services/supabase';
+import { FunctionsHttpError, FunctionsFetchError } from '@supabase/supabase-js';
 import { createLogger } from '@/utils/logger';
 import { retryWithBackoff } from '@/utils/retry';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -72,6 +73,9 @@ export interface EdgeFunctionResult<T> {
 
     /** Error message if failed */
     error?: string;
+
+    /** HTTP status code (for retry classification) */
+    status?: number;
 
     /** Whether the result came from cache */
     fromCache: boolean;
@@ -190,11 +194,26 @@ export async function invokeEdgeFunction<T>(
         return {
             success: true,
             data,
+            status: 200, // HTTP success
             fromCache: false,
         };
 
     } catch (error) {
-        log.error(`Edge Function ${functionName} failed after retries:`, error);
+        // Extract HTTP status from Supabase function errors
+        let httpStatus: number | undefined;
+        if (error instanceof FunctionsHttpError) {
+            // HTTP error response from Edge Function (4xx, 5xx)
+            // Status is stored in error.context.status
+            httpStatus = error.context?.status;
+        } else if (error instanceof FunctionsFetchError) {
+            // Network error (failed to reach server)
+            httpStatus = 0;
+        }
+
+        log.error(`Edge Function ${functionName} failed after retries:`, {
+            error: error instanceof Error ? error.message : String(error),
+            status: httpStatus,
+        });
 
         // Try cache fallback
         if (cacheKey) {
@@ -233,6 +252,7 @@ export async function invokeEdgeFunction<T>(
                 success: false,
                 data: null,
                 error: error instanceof Error ? error.message : String(error),
+                status: httpStatus,
                 fromCache: false,
             };
         }

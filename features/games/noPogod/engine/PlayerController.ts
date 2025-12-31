@@ -34,6 +34,9 @@ export function createInitialPlayerState(
         movementStartTime: 0,
         speedBoostActive: false,
         speedBoostEndTime: 0,
+        speedBoostLevel: 0,
+        slowdownActive: false,
+        slowdownEndTime: 0,
     };
 }
 
@@ -130,8 +133,18 @@ export function updatePlayerPosition(
         return state;
     }
 
-    // Frame-based movement: 4px normal, 8px boosted (same as original)
-    const moveSpeed = state.speedBoostActive ? 8 : 4;
+    // Frame-based movement calculation
+    // Base speed: 4px per frame
+    // Speed boost: +4px per level (capped at level 3) = max 16px
+    // Slowdown: halves the speed (2px base)
+    const baseSpeed = 4;
+    const boostMultiplier = state.speedBoostActive ? Math.min(state.speedBoostLevel, 3) : 0;
+    let moveSpeed = baseSpeed + (baseSpeed * boostMultiplier);
+
+    // Apply slowdown if active (halves speed)
+    if (state.slowdownActive) {
+        moveSpeed = Math.max(2, Math.floor(moveSpeed / 2)); // Minimum 2px speed
+    }
 
     // Calculate bounds
     const characterHalfWidth = 75; // Character is ~150px wide
@@ -169,16 +182,23 @@ export function updatePlayerPosition(
 }
 
 /**
- * Activates speed boost
+ * Activates or stacks speed boost
+ * If already boosted, increases level and extends duration
  */
 export function activateSpeedBoost(
     state: PlayerState,
     currentTime: number
 ): PlayerState {
+    // Calculate new level - start at 1, increment if already boosted
+    const newLevel = state.speedBoostActive
+        ? state.speedBoostLevel + 1
+        : 1;
+
     return {
         ...state,
         speedBoostActive: true,
         speedBoostEndTime: currentTime + ANIMATION.SPEED_BOOST_DURATION,
+        speedBoostLevel: newLevel,
     };
 }
 
@@ -198,6 +218,55 @@ export function updateSpeedBoost(
             ...state,
             speedBoostActive: false,
             speedBoostEndTime: 0,
+            speedBoostLevel: 0, // Reset level when boost expires
+        };
+    }
+
+    return state;
+}
+
+/**
+ * Activates slowdown effect from shocker
+ * If speed boost is active, it negates the shocker instead (removes speed boost)
+ */
+export function activateSlowdown(
+    state: PlayerState,
+    currentTime: number
+): PlayerState {
+    // If speed boost is active, shocker negates it instead of slowing down
+    if (state.speedBoostActive) {
+        return {
+            ...state,
+            speedBoostActive: false,
+            speedBoostEndTime: 0,
+            speedBoostLevel: 0,
+        };
+    }
+
+    // Apply slowdown effect (same duration as speed boost)
+    return {
+        ...state,
+        slowdownActive: true,
+        slowdownEndTime: currentTime + ANIMATION.SPEED_BOOST_DURATION,
+    };
+}
+
+/**
+ * Updates slowdown state
+ */
+export function updateSlowdown(
+    state: PlayerState,
+    currentTime: number
+): PlayerState {
+    if (!state.slowdownActive) {
+        return state;
+    }
+
+    if (currentTime >= state.slowdownEndTime) {
+        return {
+            ...state,
+            slowdownActive: false,
+            slowdownEndTime: 0,
         };
     }
 
@@ -233,6 +302,19 @@ export function getSpeedBoostTimeRemaining(
         return 0;
     }
     return Math.max(0, state.speedBoostEndTime - currentTime);
+}
+
+/**
+ * Gets remaining slowdown time in milliseconds
+ */
+export function getSlowdownTimeRemaining(
+    state: PlayerState,
+    currentTime: number
+): number {
+    if (!state.slowdownActive) {
+        return 0;
+    }
+    return Math.max(0, state.slowdownEndTime - currentTime);
 }
 
 /**

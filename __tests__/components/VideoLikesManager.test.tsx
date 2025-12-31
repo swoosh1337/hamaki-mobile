@@ -51,6 +51,8 @@ describe('VideoLikesManager', () => {
             verifySubscriptions: jest.fn(),
             totalSubscriptionXP: 0,
             pendingActionCount: 0,
+            pendingSubscriptionCount: 0,
+            pendingVideoLikeCount: 0,
             lastSubscriptionCheck: null,
             refreshAll: jest.fn(),
         });

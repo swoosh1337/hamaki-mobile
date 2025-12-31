@@ -159,6 +159,72 @@ describe('PlayerController Module', () => {
             expect(zones.right).toBe(screenWidth);
         });
     });
+
+    describe('activateSlowdown', () => {
+        test('should activate slowdown when no speed boost', () => {
+            const state = PlayerController.createInitialPlayerState(screenWidth, screenHeight);
+            const slowed = PlayerController.activateSlowdown(state, Date.now());
+            expect(slowed.slowdownActive).toBe(true);
+        });
+
+        test('should set slowdown end time', () => {
+            const state = PlayerController.createInitialPlayerState(screenWidth, screenHeight);
+            const now = Date.now();
+            const slowed = PlayerController.activateSlowdown(state, now);
+            expect(slowed.slowdownEndTime).toBeGreaterThan(now);
+        });
+
+        test('should negate speed boost instead of slowing when boosted', () => {
+            let state = PlayerController.createInitialPlayerState(screenWidth, screenHeight);
+            // First activate speed boost
+            state = PlayerController.activateSpeedBoost(state, Date.now());
+            expect(state.speedBoostActive).toBe(true);
+
+            // Then activate slowdown (from shocker)
+            const slowed = PlayerController.activateSlowdown(state, Date.now());
+
+            // Speed boost should be removed, but no slowdown applied
+            expect(slowed.speedBoostActive).toBe(false);
+            expect(slowed.slowdownActive).toBe(false);
+        });
+    });
+
+    describe('updateSlowdown', () => {
+        test('should keep slowdown active before end time', () => {
+            let state = PlayerController.createInitialPlayerState(screenWidth, screenHeight);
+            const now = Date.now();
+            state = PlayerController.activateSlowdown(state, now);
+
+            // Update 1 second later (should still be active)
+            const updated = PlayerController.updateSlowdown(state, now + 1000);
+            expect(updated.slowdownActive).toBe(true);
+        });
+
+        test('should deactivate slowdown after end time', () => {
+            let state = PlayerController.createInitialPlayerState(screenWidth, screenHeight);
+            const now = Date.now();
+            state = PlayerController.activateSlowdown(state, now);
+
+            // Update well past the end time (10 seconds later)
+            const updated = PlayerController.updateSlowdown(state, now + 10000);
+            expect(updated.slowdownActive).toBe(false);
+            expect(updated.slowdownEndTime).toBe(0);
+        });
+
+        test('should not change state if slowdown not active', () => {
+            const state = PlayerController.createInitialPlayerState(screenWidth, screenHeight);
+            const updated = PlayerController.updateSlowdown(state, Date.now());
+            expect(updated).toBe(state);
+        });
+    });
+
+    describe('initial state slowdown', () => {
+        test('should have no slowdown initially', () => {
+            const state = PlayerController.createInitialPlayerState(screenWidth, screenHeight);
+            expect(state.slowdownActive).toBe(false);
+            expect(state.slowdownEndTime).toBe(0);
+        });
+    });
 });
 
 describe('ItemSpawner Module', () => {
@@ -242,6 +308,12 @@ describe('CollisionSystem Module', () => {
             expect(outcome.livesLost).toBe(1);
         });
 
+        test('should activate slowdown for ELECTRIC_SHOCK', () => {
+            const item = ItemSpawner.createFallingItem('ELECTRIC_SHOCK', 100, 100, 'test_1');
+            const outcome = CollisionSystem.processItemCatch(item);
+            expect(outcome.activateSlowdown).toBe(true);
+        });
+
         test('should game over for BOMB', () => {
             const item = ItemSpawner.createFallingItem('BOMB', 100, 100, 'test_1');
             const outcome = CollisionSystem.processItemCatch(item);
@@ -252,8 +324,8 @@ describe('CollisionSystem Module', () => {
     describe('aggregateOutcomes', () => {
         test('should sum points', () => {
             const outcomes = [
-                { pointsEarned: 10, livesLost: 0, isGameOver: false, activateSpeedBoost: false, itemType: 'EGG' as const },
-                { pointsEarned: 10, livesLost: 0, isGameOver: false, activateSpeedBoost: false, itemType: 'TOMATO' as const },
+                { pointsEarned: 10, livesLost: 0, isGameOver: false, activateSpeedBoost: false, activateSlowdown: false, itemType: 'EGG' as const },
+                { pointsEarned: 10, livesLost: 0, isGameOver: false, activateSpeedBoost: false, activateSlowdown: false, itemType: 'TOMATO' as const },
             ];
             const result = CollisionSystem.aggregateOutcomes(outcomes);
             expect(result.totalPoints).toBe(20);
@@ -261,8 +333,8 @@ describe('CollisionSystem Module', () => {
 
         test('should sum lives lost', () => {
             const outcomes = [
-                { pointsEarned: 0, livesLost: 1, isGameOver: false, activateSpeedBoost: false, itemType: 'ELECTRIC_SHOCK' as const },
-                { pointsEarned: 0, livesLost: 1, isGameOver: false, activateSpeedBoost: false, itemType: 'ELECTRIC_SHOCK' as const },
+                { pointsEarned: 0, livesLost: 1, isGameOver: false, activateSpeedBoost: false, activateSlowdown: true, itemType: 'ELECTRIC_SHOCK' as const },
+                { pointsEarned: 0, livesLost: 1, isGameOver: false, activateSpeedBoost: false, activateSlowdown: true, itemType: 'ELECTRIC_SHOCK' as const },
             ];
             const result = CollisionSystem.aggregateOutcomes(outcomes);
             expect(result.totalLivesLost).toBe(2);
@@ -270,10 +342,18 @@ describe('CollisionSystem Module', () => {
 
         test('should detect game over', () => {
             const outcomes = [
-                { pointsEarned: 0, livesLost: 0, isGameOver: true, activateSpeedBoost: false, itemType: 'BOMB' as const },
+                { pointsEarned: 0, livesLost: 0, isGameOver: true, activateSpeedBoost: false, activateSlowdown: false, itemType: 'BOMB' as const },
             ];
             const result = CollisionSystem.aggregateOutcomes(outcomes);
             expect(result.shouldGameOver).toBe(true);
+        });
+
+        test('should detect slowdown activation', () => {
+            const outcomes = [
+                { pointsEarned: 0, livesLost: 1, isGameOver: false, activateSpeedBoost: false, activateSlowdown: true, itemType: 'ELECTRIC_SHOCK' as const },
+            ];
+            const result = CollisionSystem.aggregateOutcomes(outcomes);
+            expect(result.shouldActivateSlowdown).toBe(true);
         });
     });
 });

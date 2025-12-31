@@ -43,10 +43,10 @@ interface NoPogodGameCanvasAtlasProps {
 }
 
 /**
- * Renders a sprite from an atlas using Group clipping + native Image fit
- * This preserves aspect ratio correctly using Skia's built-in fit="contain"
+ * Renders a sprite from an atlas using Group clipping + Image
+ * Memoized to prevent unnecessary re-renders during game loop
  */
-const AtlasSprite: React.FC<{
+const AtlasSprite = React.memo<{
     atlas: LoadedAtlas;
     frameName: string;
     x: number;
@@ -54,11 +54,21 @@ const AtlasSprite: React.FC<{
     width: number;
     height: number;
     flipX?: boolean;
-}> = ({ atlas, frameName, x, y, width, height, flipX = false }) => {
+}>(({ atlas, frameName, x, y, width, height, flipX = false }) => {
     const frame = atlas.frames[frameName];
+
+    // Fallback: render a placeholder if frame not found
     if (!frame) {
-        log.warn(`Frame not found: ${frameName}`);
-        return null;
+        log.warn(`Frame not found: ${frameName}, rendering placeholder`);
+        return (
+            <Rect
+                x={x}
+                y={y}
+                width={width}
+                height={height}
+                color="rgba(255, 0, 255, 0.5)"
+            />
+        );
     }
 
     // Calculate the scale factor to fit the frame into the destination
@@ -79,24 +89,37 @@ const AtlasSprite: React.FC<{
     const finalX = x + offsetX;
     const finalY = y + offsetY;
 
-    // Transforms for flipping
-    const transforms = flipX
-        ? [{ translateX: finalX + renderedWidth }, { scaleX: -1 }, { translateX: -finalX }]
-        : undefined;
-
     // Clip rect in local coordinates (at origin, then translated)
     const clipRect = rect(0, 0, renderedWidth, renderedHeight);
 
+    // Simple rendering without flip (most common case)
+    if (!flipX) {
+        return (
+            <Group
+                transform={[{ translateX: finalX }, { translateY: finalY }]}
+                clip={clipRect}
+            >
+                <SkiaImage
+                    image={atlas.image}
+                    x={-frame.x * scale}
+                    y={-frame.y * scale}
+                    width={atlas.meta.size.width * scale}
+                    height={atlas.meta.size.height * scale}
+                />
+            </Group>
+        );
+    }
+
+    // With horizontal flip
     return (
         <Group
             transform={[{ translateX: finalX }, { translateY: finalY }]}
             clip={clipRect}
         >
-            <Group transform={transforms}>
-                {/* 
-          Position the atlas so the desired frame is at origin,
-          then scale to fit the destination size
-        */}
+            <Group transform={[
+                { translateX: renderedWidth },
+                { scaleX: -1 }
+            ]}>
                 <SkiaImage
                     image={atlas.image}
                     x={-frame.x * scale}
@@ -107,7 +130,7 @@ const AtlasSprite: React.FC<{
             </Group>
         </Group>
     );
-};
+});
 
 export const NoPogodGameCanvasAtlas: React.FC<NoPogodGameCanvasAtlasProps> = ({
     gameState,
@@ -286,20 +309,18 @@ export const NoPogodGameCanvasAtlas: React.FC<NoPogodGameCanvasAtlasProps> = ({
                     />
                 )}
 
-                {/* Falling items - from atlas with clipping */}
-                {items && renderData.items.map((itemSprite, index) => {
-                    const item = gameState.items[index];
-                    if (!item) return null;
-
+                {/* Falling items - direct iteration to prevent index mismatch */}
+                {items && gameState.items.map((item) => {
+                    const itemSize = responsiveSizes.itemSize;
                     return (
                         <AtlasSprite
                             key={item.id}
                             atlas={items}
                             frameName={getItemFrameName(item.type)}
-                            x={itemSprite.x}
-                            y={itemSprite.y}
-                            width={itemSprite.width}
-                            height={itemSprite.height}
+                            x={item.x - itemSize / 2}
+                            y={item.y - itemSize / 2}
+                            width={itemSize}
+                            height={itemSize}
                         />
                     );
                 })}

@@ -116,11 +116,11 @@ export const leaderboardService = {
      * Do NOT merge with personal rank from useMyLeaderboardStatus.
      *
      * @param limit Maximum entries to return (default: 100 for mobile optimization)
-     * @param periodType Period type to filter by (default: 'all_time')
+     * @param periodType Period type to filter by (default: 'monthly')
      */
     async getLeaderboardSnapshot(
         limit = 100,
-        periodType: 'weekly' | 'all_time' = 'all_time'
+        periodType: 'weekly' | 'monthly' = 'monthly'
     ): Promise<{
         entries: Array<{
             userId: string;

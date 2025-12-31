@@ -82,6 +82,8 @@ describe('Component Preloading Tests', () => {
                 verifySubscriptions: jest.fn(),
                 totalSubscriptionXP: 0,
                 pendingActionCount: 0,
+                pendingSubscriptionCount: 0,
+                pendingVideoLikeCount: 0,
                 lastSubscriptionCheck: null,
                 refreshAll: jest.fn(),
             });
@@ -115,6 +117,8 @@ describe('Component Preloading Tests', () => {
                 isLoadingSubscriptions: false,
                 subscriptionError: null,
                 verifySubscriptions: jest.fn(),
+                pendingSubscriptionCount: 0,
+                pendingVideoLikeCount: 0,
                 totalSubscriptionXP: 0,
                 pendingActionCount: 0,
                 lastSubscriptionCheck: null,
@@ -142,6 +146,8 @@ describe('Component Preloading Tests', () => {
                 earnedSubscriptionXP: 0,
                 subscriptionStatuses: [],
                 isLoadingSubscriptions: false,
+                pendingSubscriptionCount: 0,
+                pendingVideoLikeCount: 0,
                 subscriptionError: null,
                 verifySubscriptions: jest.fn(),
                 totalSubscriptionXP: 0,
@@ -164,6 +170,8 @@ describe('Component Preloading Tests', () => {
                 verifyVideoLikes: jest.fn(),
                 totalVideoLikeXP: 500,
                 earnedSubscriptionXP: 0,
+                pendingSubscriptionCount: 0,
+                pendingVideoLikeCount: 0,
                 subscriptionStatuses: [],
                 isLoadingSubscriptions: false,
                 subscriptionError: null,
@@ -187,6 +195,8 @@ describe('Component Preloading Tests', () => {
                 isLoadingVideoLikes: false,
                 videoLikeError: null,
                 verifyVideoLikes: jest.fn(),
+                pendingSubscriptionCount: 0,
+                pendingVideoLikeCount: 0,
                 totalVideoLikeXP: 0,
                 earnedSubscriptionXP: 0,
                 subscriptionStatuses: [], // Hook hasn't loaded yet
@@ -219,6 +229,8 @@ describe('Component Preloading Tests', () => {
             mockUseYouTubeVerification.mockReturnValue({
                 videoLikeStatuses: [],
                 isLoadingVideoLikes: false,
+                pendingSubscriptionCount: 0,
+                pendingVideoLikeCount: 0,
                 videoLikeError: null,
                 verifyVideoLikes: jest.fn(),
                 totalVideoLikeXP: 0,
@@ -246,6 +258,8 @@ describe('Component Preloading Tests', () => {
 
         it('should work without initialStatuses prop (backward compatibility)', () => {
             mockUseYouTubeVerification.mockReturnValue({
+                pendingSubscriptionCount: 0,
+                pendingVideoLikeCount: 0,
                 videoLikeStatuses: [],
                 isLoadingVideoLikes: false,
                 videoLikeError: null,
@@ -283,6 +297,8 @@ describe('Component Preloading Tests', () => {
                 verifySubscriptions: jest.fn(),
                 totalSubscriptionXP: 0,
                 pendingActionCount: 0,
+                pendingSubscriptionCount: 0,
+                pendingVideoLikeCount: 0,
                 lastSubscriptionCheck: null,
                 refreshAll: jest.fn(),
             });

@@ -1,5 +1,40 @@
 import 'react-native-gesture-handler/jestSetup';
 
+// Mock PostHog React Native
+jest.mock('posthog-react-native', () => {
+  return jest.fn().mockImplementation(() => ({
+    identify: jest.fn(),
+    capture: jest.fn(),
+    screen: jest.fn(),
+    reset: jest.fn(),
+    flush: jest.fn().mockResolvedValue(undefined),
+    register: jest.fn(),
+  }));
+});
+
+// Mock New Relic React Native Agent
+jest.mock('newrelic-react-native-agent', () => ({
+  __esModule: true,
+  default: {
+    startAgent: jest.fn(),
+    setJSAppVersion: jest.fn(),
+    setAttribute: jest.fn(),
+    recordBreadcrumb: jest.fn(),
+    logInfo: jest.fn(),
+    logWarning: jest.fn(),
+    logError: jest.fn(),
+    logDebug: jest.fn(),
+    recordError: jest.fn(),
+    LogLevel: {
+      ERROR: 'ERROR',
+      WARNING: 'WARNING',
+      INFO: 'INFO',
+      VERBOSE: 'VERBOSE',
+      DEBUG: 'DEBUG',
+    },
+  },
+}));
+
 // Mock react-native modules - remove problematic mock
 // jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper');
 

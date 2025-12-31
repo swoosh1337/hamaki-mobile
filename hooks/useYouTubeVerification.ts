@@ -52,6 +52,8 @@ interface UseYouTubeVerificationReturn {
 
     // Computed values
     pendingActionCount: number;
+    pendingSubscriptionCount: number;
+    pendingVideoLikeCount: number;
     lastSubscriptionCheck: Date | null;
     totalSubscriptionXP: number;
     earnedSubscriptionXP: number;
@@ -289,24 +291,29 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
      * - Channels not yet subscribed (user could subscribe)
      * - Videos not yet liked (user could like)
      */
-    const pendingActionCount = (() => {
-        let count = 0;
+    const pendingCounts = (() => {
+        let subscriptionCount = 0;
+        let videoLikeCount = 0;
 
         // Count unsubscribed channels where XP not yet awarded
         for (const status of subscriptionStatuses) {
             if (!status.xpAwarded) {
-                count++;
+                subscriptionCount++;
             }
         }
 
         // Count videos not liked where XP not yet awarded
         for (const status of videoLikeStatuses) {
             if (status.latestVideoId && !status.xpAwarded) {
-                count++;
+                videoLikeCount++;
             }
         }
 
-        return count;
+        return {
+            total: subscriptionCount + videoLikeCount,
+            subscriptions: subscriptionCount,
+            videoLikes: videoLikeCount,
+        };
     })();
 
     /**
@@ -333,7 +340,9 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
         refreshAll,
 
         // Computed values
-        pendingActionCount,
+        pendingActionCount: pendingCounts.total,
+        pendingSubscriptionCount: pendingCounts.subscriptions,
+        pendingVideoLikeCount: pendingCounts.videoLikes,
         lastSubscriptionCheck,
         totalSubscriptionXP,
         earnedSubscriptionXP,

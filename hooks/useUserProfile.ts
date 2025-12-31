@@ -2,12 +2,14 @@
  * useUserProfile Hook
  * 
  * Manages user profile data and operations including XP, avatar, and username updates.
+ * Uses caching for XP stats to reduce unnecessary network requests.
  */
 
 import { userService } from '@/services/supabase/userService';
 import type { UserProfile, XPStats } from '@/types';
 import { createLogger } from '@/utils/logger';
-import { useCallback, useEffect, useState } from 'react';
+import { getCachedXPStats, setCachedXPStats } from '@/utils/xpStatsCache';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const log = createLogger('Hook:UserProfile');
 
@@ -29,8 +31,10 @@ interface UseUserProfileReturn {
     isLoading: boolean;
     /** Error state */
     error: Error | null;
-    /** Refresh profile data */
+    /** Refresh profile data (uses cache) */
     refetch: () => Promise<void>;
+    /** Force refresh profile data (bypasses cache) */
+    forceRefetch: () => Promise<void>;
     /** Update user avatar */
     updateAvatar: (avatar: string) => Promise<boolean>;
     /** Update username */
@@ -51,10 +55,13 @@ export function useUserProfile(options: UseUserProfileOptions = {}): UseUserProf
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
+    // Track if we've already fetched to avoid unnecessary refetches
+    const hasFetchedRef = useRef(false);
+
     /**
-     * Fetch user profile
+     * Fetch user profile with optional cache bypass
      */
-    const fetchProfile = useCallback(async () => {
+    const fetchProfile = useCallback(async (forceRefresh: boolean = false) => {
         if (!googleId && !userId) {
             log.warn('No googleId or userId provided, skipping fetch');
             return;
@@ -78,12 +85,28 @@ export function useUserProfile(options: UseUserProfileOptions = {}): UseUserProf
                 setProfile(profileData);
                 log.debug('Profile fetched successfully');
 
-                // Also fetch XP stats
+                // Check XP stats cache first (unless force refresh)
+                if (!forceRefresh && profileData.id) {
+                    const cachedStats = await getCachedXPStats(profileData.id);
+                    if (cachedStats) {
+                        setXpStats(cachedStats);
+                        log.debug('XP stats loaded from cache');
+                        hasFetchedRef.current = true;
+                        return;
+                    }
+                }
+
+                // Fetch XP stats from server
                 const stats = await userService.getUserXPStats(profileData.google_id);
                 if (stats) {
                     setXpStats(stats);
-                    log.debug('XP stats fetched successfully');
+                    // Cache the stats
+                    if (profileData.id) {
+                        await setCachedXPStats(profileData.id, stats);
+                    }
+                    log.debug('XP stats fetched and cached');
                 }
+                hasFetchedRef.current = true;
             } else {
                 log.warn('Profile not found');
                 setError(new Error('Profile not found'));
@@ -98,10 +121,17 @@ export function useUserProfile(options: UseUserProfileOptions = {}): UseUserProf
     }, [googleId, userId]);
 
     /**
-     * Refresh profile data
+     * Refresh profile data (uses cache)
      */
     const refetch = useCallback(async () => {
-        await fetchProfile();
+        await fetchProfile(false);
+    }, [fetchProfile]);
+
+    /**
+     * Force refresh profile data (bypasses cache)
+     */
+    const forceRefetch = useCallback(async () => {
+        await fetchProfile(true);
     }, [fetchProfile]);
 
     /**
@@ -202,6 +232,7 @@ export function useUserProfile(options: UseUserProfileOptions = {}): UseUserProf
         isLoading,
         error,
         refetch,
+        forceRefetch,
         updateAvatar,
         updateUsername,
         addXP,
