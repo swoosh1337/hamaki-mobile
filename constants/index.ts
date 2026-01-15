@@ -12,4 +12,12 @@ export { API, GameCooldowns } from './Api';
 export { Colors } from './Colors';
 export { Spacing } from './Spacing';
 export { Typography } from './Typography';
+export {
+  TAB_ORDER,
+  TAB_INDEX_MAP,
+  TAB_COUNT,
+  TAB_CONFIG,
+  SWIPE_ANIMATION_DURATION,
+  DEFAULT_TAB_INDEX,
+} from './Navigation';
 

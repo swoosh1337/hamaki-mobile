@@ -133,20 +133,38 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
             const subs = await getSubscriptionStatuses(userProfile.id);
             setSubscriptionStatuses(subs);
 
+            // Expected number of channels (hamaki, miro, bastos, koro)
+            const EXPECTED_CHANNEL_COUNT = 4;
+            // Cache TTL: 4 hours (matches sync interval)
+            const VIDEO_LIKE_CACHE_TTL = 4 * 60 * 60 * 1000;
+
             // First try to load video like statuses from cache (instant)
             const hasCache = await verificationCacheService.hasVideoLikeCache();
             if (hasCache) {
                 const cachedStatuses = await verificationCacheService.getCachedVideoLikeStatuses();
-                if (cachedStatuses.length > 0) {
-                    log.debug('Loaded video like statuses from cache', { count: cachedStatuses.length });
+                const lastCheck = await verificationCacheService.getLastSubscriptionCheckTime();
+                const cacheAge = lastCheck ? Date.now() - lastCheck : Infinity;
+                const isCacheFresh = cacheAge < VIDEO_LIKE_CACHE_TTL;
+
+                // Only use cache if it has ALL expected channels AND is fresh
+                if (cachedStatuses.length >= EXPECTED_CHANNEL_COUNT && isCacheFresh) {
+                    log.debug('Loaded video like statuses from cache', {
+                        count: cachedStatuses.length,
+                        ageMinutes: Math.round(cacheAge / 60000)
+                    });
                     setVideoLikeStatuses(cachedStatuses);
 
-                    // Get last check time
-                    const lastCheck = await verificationCacheService.getLastSubscriptionCheckTime();
                     if (lastCheck) {
                         setLastSubscriptionCheck(new Date(lastCheck));
                     }
-                    return; // Don't fetch from DB if we have cache
+                    return; // Don't fetch from DB if we have complete and fresh cache
+                } else {
+                    log.info('Cache invalid, fetching from DB', {
+                        cached: cachedStatuses.length,
+                        expected: EXPECTED_CHANNEL_COUNT,
+                        isFresh: isCacheFresh,
+                        ageHours: Math.round(cacheAge / 3600000)
+                    });
                 }
             }
 

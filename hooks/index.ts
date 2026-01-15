@@ -20,6 +20,9 @@ export type { AwardXPResult, MyLeaderboardStatus, MyXPBreakdown } from './useMyL
 export { useLeaderboardSnapshot } from './useLeaderboardSnapshot';
 export type { LeaderboardEntry, LeaderboardSnapshot } from './useLeaderboardSnapshot';
 
+// Navigation hooks
+export { useTabNavigation } from './useTabNavigation';
+
 // Utility hooks
 export { useColorScheme } from './useColorScheme';
 export { useRetry } from './useRetry';

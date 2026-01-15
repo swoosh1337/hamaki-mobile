@@ -158,8 +158,45 @@ Deno.serve(async (req: Request) => {
                 .eq('channel_id', channel.id)
                 .single();
 
-            if (existing?.latest_video_id === latest.videoId) {
-                console.log(`[${channel.name}] Unchanged`);
+            const videoUnchanged = existing?.latest_video_id === latest.videoId;
+
+            if (videoUnchanged) {
+                console.log(`[${channel.name}] Video unchanged, checking content_posts status...`);
+
+                // Even if video unchanged, check if content_posts needs fixing
+                const { data: existingPost } = await supabase
+                    .from('content_posts')
+                    .select('id, is_published, is_featured')
+                    .eq('metadata->>videoId', latest.videoId)
+                    .maybeSingle();
+
+                if (existingPost && (!existingPost.is_published || !existingPost.is_featured)) {
+                    console.log(`[${channel.name}] Fixing content post status for video ${latest.videoId}`);
+
+                    // Un-feature other videos from this channel first
+                    await supabase
+                        .from('content_posts')
+                        .update({ is_featured: false })
+                        .eq('type', 'video')
+                        .eq('metadata->>channelKey', channel.key)
+                        .eq('is_featured', true)
+                        .neq('id', existingPost.id);
+
+                    // Fix the current video's status
+                    const { error: fixError } = await supabase
+                        .from('content_posts')
+                        .update({ is_published: true, is_featured: true })
+                        .eq('id', existingPost.id);
+
+                    if (fixError) {
+                        console.error(`[${channel.name}] Failed to fix content post:`, fixError);
+                    } else {
+                        console.log(`[${channel.name}] Fixed content post - now published and featured`);
+                        results.updated.push(`${channel.name} (fixed)`);
+                        continue;
+                    }
+                }
+
                 results.unchanged.push(channel.name);
                 continue;
             }
@@ -233,7 +270,39 @@ Deno.serve(async (req: Request) => {
                     console.log(`[${channel.name}] Content post created for video ${latest.videoId}`);
                 }
             } else {
-                console.log(`[${channel.name}] Content post already exists for video ${latest.videoId}`);
+                // Fix existing post if it has wrong is_published or is_featured status
+                const { data: postStatus } = await supabase
+                    .from('content_posts')
+                    .select('is_published, is_featured')
+                    .eq('id', existingPost.id)
+                    .single();
+
+                if (postStatus && (!postStatus.is_published || !postStatus.is_featured)) {
+                    console.log(`[${channel.name}] Fixing content post status for video ${latest.videoId}`);
+
+                    // Un-feature other videos from this channel first
+                    await supabase
+                        .from('content_posts')
+                        .update({ is_featured: false })
+                        .eq('type', 'video')
+                        .eq('metadata->>channelKey', channel.key)
+                        .eq('is_featured', true)
+                        .neq('id', existingPost.id);
+
+                    // Fix the current video's status
+                    const { error: fixError } = await supabase
+                        .from('content_posts')
+                        .update({ is_published: true, is_featured: true })
+                        .eq('id', existingPost.id);
+
+                    if (fixError) {
+                        console.error(`[${channel.name}] Failed to fix content post:`, fixError);
+                    } else {
+                        console.log(`[${channel.name}] Fixed content post - now published and featured`);
+                    }
+                } else {
+                    console.log(`[${channel.name}] Content post already exists and is correctly published`);
+                }
             }
 
             console.log(`[${channel.name}] Updated → ${latest.title}`);
