@@ -20,7 +20,6 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
 import type { SubscriptionStatus } from '@/types/youtube';
-import { YOUTUBE_CHANNELS } from '@/types/youtube';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('ChannelSubscriptionManager');
@@ -31,11 +30,10 @@ interface ChannelSubscriptionManagerProps {
 }
 
 export const ChannelSubscriptionManager: React.FC<ChannelSubscriptionManagerProps> = ({ initialStatuses }) => {
-  const { userProfile, updateUserProfile } = useAuth();
+  const { updateUserProfile } = useAuth();
   const {
     subscriptionStatuses: hookStatuses,
     isLoadingSubscriptions,
-    subscriptionError,
     verifySubscriptions,
     lastSubscriptionCheck,
     totalSubscriptionXP,
@@ -72,11 +70,6 @@ export const ChannelSubscriptionManager: React.FC<ChannelSubscriptionManagerProp
     try {
       await verifySubscriptions();
 
-      // Calculate XP earned
-      const newlyEarnedXP = subscriptionStatuses
-        .filter(s => s.xpAwarded)
-        .reduce((sum, s) => sum + s.xpReward, 0);
-
       // Update user profile in context if XP changed
       if (subscriptionStatuses.some(s => s.xpAwarded)) {
         const subStatuses = subscriptionStatuses.reduce((acc, s) => {
@@ -103,8 +96,6 @@ export const ChannelSubscriptionManager: React.FC<ChannelSubscriptionManagerProp
   };
 
   const renderChannelCard = (status: SubscriptionStatus) => {
-    const channel = YOUTUBE_CHANNELS[status.channelKey];
-
     return (
       <View key={status.channelKey} style={styles.channelCard}>
         <View style={styles.channelHeader}>

@@ -44,11 +44,10 @@ interface Post {
 export default function HomeScreen() {
   // Keep auth available for future header personalization
   // const { userProfile } = useAuth();
-  const { posts, featuredPosts, isLoading, error, hasNewContent, refreshContent, isNetworkError } = useContent();
+  const { posts, featuredPosts, isLoading, error, refreshContent, isNetworkError } = useContent();
   const [expandedPostId, setExpandedPostId] = React.useState<string | null>(null);
   const expandStartedAtRef = React.useRef<number | null>(null);
   const scrollViewRef = React.useRef<ScrollView>(null);
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   // Sort posts using extracted utility
   const sortedPosts = React.useMemo(() => sortPostsHybrid(posts), [posts]);
@@ -95,9 +94,7 @@ export default function HomeScreen() {
   };
 
   const handleRetry = async () => {
-    setIsRefreshing(true);
     await refreshContent();
-    setIsRefreshing(false);
   };
 
   return (

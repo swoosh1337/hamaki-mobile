@@ -35,11 +35,11 @@ interface PrizeItem {
     id: string;
     sponsor: string;
     thumbnail: string;
-    prizes: Array<{
+    prizes: {
         rank: number;
         amount: string;
         description?: string;
-    }>;
+    }[];
     expanded: boolean;
 }
 
@@ -51,8 +51,6 @@ export default function LeaderboardScreen() {
 
     // Personal truth: User's own rank and XP (instant updates from Edge Function)
     const {
-        personalRank,
-        myXP,
         isLoading: personalLoading,
     } = useMyLeaderboardStatus({
         userId: userProfile?.id,
@@ -91,7 +89,7 @@ export default function LeaderboardScreen() {
     const weeklyData: LeaderboardDisplayEntry[] = weeklyEntries.map(e => ({
         user_id: e.userId,
         name: e.fullName,
-        points: e.gameXP, // Weekly uses game XP
+        points: e.totalXP, // Weekly uses total XP (game + subscription + video)
         rank: e.rank,
         avatar_url: e.avatarUrl,
     }));
@@ -112,15 +110,6 @@ export default function LeaderboardScreen() {
         prizes: s.prizes,
         expanded: s.id === expandedPrizeId,
     }));
-
-    // Current user display (uses personal truth, not inferred from global list)
-    const currentUserDisplay: LeaderboardDisplayEntry | null = userProfile && personalRank ? {
-        user_id: userProfile.id,
-        name: userProfile.full_name || 'You',
-        points: activeTab === 'weekly' ? myXP.game : myXP.total,
-        rank: personalRank,
-        avatar_url: userProfile.avatar_url,
-    } : null;
 
     // Determine loading state based on active tab
     const loading = activeTab === 'weekly'

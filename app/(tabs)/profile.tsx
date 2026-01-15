@@ -13,7 +13,6 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
 import { postService } from '@/services/supabase/postService';
 import type { Post as UserPost } from '@/types/post';
-import type { XPStats } from '@/types/user';
 import { getAvatarSource } from '@/utils/avatars';
 import { createLogger } from '@/utils/logger';
 
@@ -61,14 +60,6 @@ export default function ProfileScreen() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const POSTS_PER_PAGE = 10;
-
-  // Demo data for demo mode
-  const demoXPStats: XPStats = {
-    totalXP: 1250,
-    weeklyXP: 350,
-    weeklyStartDate: new Date().toISOString(),
-    weeklyEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-  };
 
   const demoPosts: (UserPost & { isUpvoted?: boolean })[] = [
     {

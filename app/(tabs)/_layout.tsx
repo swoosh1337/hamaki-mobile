@@ -62,7 +62,6 @@ export default function TabLayout() {
         {TAB_ORDER.map((tabName) => (
           <TabPageContent
             key={tabName}
-            tabName={tabName}
             isActive={state.currentTab === tabName}
             hasBeenActive={visitedTabs.has(tabName)}
             lazy
@@ -78,7 +77,7 @@ export default function TabLayout() {
 
       <CustomTabBar
         currentIndex={state.currentIndex}
-        onTabPress={(tabName) => handleTabPress(tabName)}
+        onTabPress={handleTabPress}
       />
     </View>
   );

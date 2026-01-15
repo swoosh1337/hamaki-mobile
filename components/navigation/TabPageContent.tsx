@@ -8,11 +8,7 @@
 import React, { memo, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import type { TabName } from '@/types/navigation';
-
 interface TabPageContentProps {
-  /** Tab identifier */
-  tabName: TabName;
   /** Whether this tab is currently active */
   isActive: boolean;
   /** Tab content */
@@ -35,7 +31,7 @@ function TabPageContentComponent({
   }, [lazy, isActive, hasBeenActive]);
 
   if (!shouldRender) {
-    return <View style={styles.placeholder} />;
+    return null;
   }
 
   return <View style={styles.container}>{children}</View>;

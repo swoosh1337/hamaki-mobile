@@ -70,6 +70,8 @@ export function SwipeableTabNavigator({
   };
 
   return (
+    // PagerView is intentionally uncontrolled after mount: initialPage uses currentIndex once,
+    // and parent-driven navigation should use pagerRef.current.setPage(...) while these handlers keep state in sync.
     <PagerView
       ref={pagerRef}
       style={styles.container}

@@ -33,7 +33,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // Get pending action count for badges (only for Google users)
   // Hook automatically loads cached data on mount and polls for updates
   const {
-    pendingActionCount,
     pendingSubscriptionCount,
     pendingVideoLikeCount,
     subscriptionStatuses,
@@ -115,7 +114,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               } else {
                 Alert.alert('შეცდომა', 'ანგარიშის წაშლა ვერ მოხერხდა. გთხოვთ სცადოთ მოგვიანებით.');
               }
-            } catch (error) {
+            } catch {
               Alert.alert('შეცდომა', 'ანგარიშის წაშლა ვერ მოხერხდა. გთხოვთ სცადოთ მოგვიანებით.');
             }
           },

@@ -278,26 +278,43 @@ Deno.serve(async (req: Request) => {
                         .update({ xp_points: (user?.xp_points || 0) + xpAmount })
                         .eq('id', userId);
 
-                    // Also update leaderboard_entries.subscription_xp
-                    const { data: leaderboardData } = await supabase
-                        .from('leaderboard_entries')
-                        .select('subscription_xp')
-                        .eq('user_id', userId)
-                        .single();
+                    // Update leaderboard_entries.subscription_xp for BOTH monthly and weekly
+                    // Using the award_xp RPC function which handles both periods correctly
+                    const { error: awardError } = await supabase.rpc('award_xp', {
+                        p_user_id: userId,
+                        p_xp_type: 'subscription',
+                        p_amount: xpAmount,
+                    });
 
-                    const currentSubXP = leaderboardData?.subscription_xp || 0;
+                    if (awardError) {
+                        console.error(`[${channel.channelKey}] Failed to award XP via RPC:`, awardError);
+                        // Fallback: try direct upsert for both periods
+                        for (const periodType of ['monthly', 'weekly']) {
+                            const { data: existing } = await supabase
+                                .from('leaderboard_entries')
+                                .select('subscription_xp')
+                                .eq('user_id', userId)
+                                .eq('period_type', periodType)
+                                .maybeSingle();
 
-                    await supabase
-                        .from('leaderboard_entries')
-                        .upsert({
-                            user_id: userId,
-                            subscription_xp: currentSubXP + xpAmount,
-                        }, {
-                            onConflict: 'user_id'
-                        });
+                            const currentXP = existing?.subscription_xp || 0;
+
+                            await supabase
+                                .from('leaderboard_entries')
+                                .upsert({
+                                    user_id: userId,
+                                    period_type: periodType,
+                                    subscription_xp: currentXP + xpAmount,
+                                    game_xp: 0,
+                                    video_like_xp: 0,
+                                }, {
+                                    onConflict: 'user_id,period_type'
+                                });
+                        }
+                    }
 
                     totalXPAwarded += xpAmount;
-                    console.log(`[${channel.channelKey}] Awarded ${xpAmount} XP (leaderboard: ${currentSubXP} -> ${currentSubXP + xpAmount})`);
+                    console.log(`[${channel.channelKey}] Awarded ${xpAmount} subscription XP via RPC`);
                 }
 
                 results.push({

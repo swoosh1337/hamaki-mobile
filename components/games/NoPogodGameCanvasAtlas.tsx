@@ -131,6 +131,7 @@ const AtlasSprite = React.memo<{
         </Group>
     );
 });
+AtlasSprite.displayName = 'AtlasSprite';
 
 export const NoPogodGameCanvasAtlas: React.FC<NoPogodGameCanvasAtlasProps> = ({
     gameState,
@@ -144,9 +145,12 @@ export const NoPogodGameCanvasAtlas: React.FC<NoPogodGameCanvasAtlasProps> = ({
     );
 
     // Initialize responsive scaling
-    const scaling = responsiveScaling || new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT);
-    const scalingConfig = scaling.getScalingConfig();
-    const responsiveSizes = scaling.getSizes();
+    const scaling = useMemo(
+        () => responsiveScaling ?? new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT),
+        [responsiveScaling]
+    );
+    const scalingConfig = useMemo(() => scaling.getScalingConfig(), [scaling]);
+    const responsiveSizes = useMemo(() => scaling.getSizes(), [scaling]);
 
     // Calculate sprite positions
     const renderData = useMemo(() => {

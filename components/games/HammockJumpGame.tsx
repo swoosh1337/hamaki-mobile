@@ -383,7 +383,16 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
     };
 
     awardXP();
-  }, [gameState?.phase, gameState?.score, xpAwarded, userProfile, updateUserProfile, isDemoMode]);
+  }, [
+    gameState?.phase,
+    gameState?.score,
+    xpAwarded,
+    userProfile,
+    updateUserProfile,
+    updateFromAwardXP,
+    isDemoMode,
+    highScore,
+  ]);
 
   // Cleanup on close
   useEffect(() => {

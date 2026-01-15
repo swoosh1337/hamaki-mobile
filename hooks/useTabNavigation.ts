@@ -55,7 +55,12 @@ export function useTabNavigation(
    * Get tab name from index
    */
   const getTabName = useCallback((index: number): TabName => {
-    return TAB_ORDER[index] ?? 'index';
+    if (index < 0 || index >= TAB_ORDER.length) {
+      throw new RangeError(
+        `Tab index out of bounds: ${index} (TAB_ORDER length: ${TAB_ORDER.length})`
+      );
+    }
+    return TAB_ORDER[index];
   }, []);
 
   /**
@@ -92,6 +97,14 @@ export function useTabNavigation(
   const handlePageSelected = useCallback(
     (index: number) => {
       const tab = getTabName(index);
+      if (
+        index === state.currentIndex &&
+        index === TAB_INDEX_MAP[state.currentTab] &&
+        tab === state.currentTab
+      ) {
+        log.debug('Page selected (no-op)', { index, tab });
+        return;
+      }
       log.debug('Page selected', { index, tab });
 
       setState({
@@ -102,7 +115,7 @@ export function useTabNavigation(
 
       onTabChange?.(tab, index);
     },
-    [getTabName, onTabChange]
+    [getTabName, onTabChange, state.currentIndex, state.currentTab]
   );
 
   /**

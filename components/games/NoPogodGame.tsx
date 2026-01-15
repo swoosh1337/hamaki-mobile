@@ -77,7 +77,6 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
   // Game cooldown hook - persists across app restarts
   const {
-    canPlay: canPlayFromCooldown,
     remainingFormatted: cooldownRemainingFormatted,
     isOnCooldown,
     startCooldown,
@@ -176,7 +175,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     }
   };
 
-  const checkAndSaveHighScore = async (score: number) => {
+  const checkAndSaveHighScore = useCallback(async (score: number) => {
     if (score > highScore) {
       setIsNewHighScore(true);
       setHighScore(score);
@@ -189,7 +188,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     } else {
       setIsNewHighScore(false);
     }
-  };
+  }, [highScore]);
 
   // Handle game state updates
   const updateGameState = useCallback(() => {
@@ -538,7 +537,18 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     awardXP().catch((error) => {
       log.error('Critical error in awardXP:', error);
     });
-  }, [gameState?.phase, gameState?.score, xpAwarded, userProfile, updateUserProfile, isDemoMode, roundsPlayed, startCooldown]);
+  }, [
+    gameState?.phase,
+    gameState?.score,
+    xpAwarded,
+    userProfile,
+    updateUserProfile,
+    updateFromAwardXP,
+    isDemoMode,
+    roundsPlayed,
+    startCooldown,
+    checkAndSaveHighScore,
+  ]);
 
   // Cleanup on close - including releasing atlas assets and audio
   useEffect(() => {

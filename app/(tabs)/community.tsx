@@ -11,15 +11,15 @@
  * All data comes through hooks which use services.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-    Alert,
-    Image,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View
+  Alert,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 
 import { CreatePostFAB } from '@/components/community/CreatePostFAB';
@@ -32,7 +32,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePosts, useRealtimeSubscription } from '@/hooks';
 import { postService } from '@/services/supabase/postService';
 import type { PostSortOption } from '@/types';
-import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
+import { getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('Community');
@@ -66,18 +66,10 @@ export default function IdeasScreen() {
   });
 
   // Error handling state
-  const [isNetworkError, setIsNetworkError] = useState(false);
   const [showPartialError, setShowPartialError] = useState(false);
 
   // Convert hook error to string for compatibility with existing error UI
   const error = postsError ? getUserFriendlyErrorMessage(postsError) : null;
-
-  // Update network error state when hook error changes
-  useEffect(() => {
-    if (postsError) {
-      setIsNetworkError(checkNetworkError(postsError));
-    }
-  }, [postsError]);
 
   // Realtime subscription for approved posts changes (uses unified hook)
   useRealtimeSubscription<{ id: string; status: string }>({
@@ -393,7 +385,7 @@ const styles = StyleSheet.create({
   },
   topTitleText: {
     fontSize: 32,
-    fontFamily: 'HamakiEng',
+    fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
     textAlign: 'center',
   },
@@ -404,6 +396,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     marginBottom: 14,
     textAlign: 'center',
+    width: '100%',
+    paddingHorizontal: 0,
   },
   postsContainer: {
     padding: 20,

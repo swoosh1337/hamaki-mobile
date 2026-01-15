@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View, Text } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Text, useColorScheme } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,6 +24,8 @@ interface CustomTabBarProps {
 
 export function CustomTabBar({ currentIndex, onTabPress }: CustomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
+  const theme = Colors[colorScheme ?? 'dark'];
 
   const handlePress = (tabName: TabName, index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -31,7 +33,16 @@ export function CustomTabBar({ currentIndex, onTabPress }: CustomTabBarProps) {
   };
 
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom, 20),
+          backgroundColor: theme.background,
+          borderTopColor: theme.tint,
+        },
+      ]}
+    >
       {TAB_ORDER.map((tabName, index) => {
         const isActive = index === currentIndex;
         const config = TAB_CONFIG[tabName];
@@ -46,12 +57,12 @@ export function CustomTabBar({ currentIndex, onTabPress }: CustomTabBarProps) {
             <IconSymbol
               size={24}
               name={config.icon as any}
-              color={isActive ? Colors.dark.tint : Colors.dark.tabIconDefault}
+              color={isActive ? theme.tint : theme.tabIconDefault}
             />
             <Text
               style={[
                 styles.label,
-                { color: isActive ? Colors.dark.tint : Colors.dark.tabIconDefault },
+                { color: isActive ? theme.tint : theme.tabIconDefault },
               ]}
             >
               {config.title}
@@ -66,8 +77,6 @@ export function CustomTabBar({ currentIndex, onTabPress }: CustomTabBarProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: Colors.dark.background,
-    borderTopColor: Colors.dark.tint,
     borderTopWidth: 1,
     paddingTop: 10,
   },

@@ -26,7 +26,6 @@ export const VideoLikesManager: React.FC<VideoLikesManagerProps> = ({ initialSta
   const {
     videoLikeStatuses: hookStatuses,
     isLoadingVideoLikes,
-    videoLikeError,
     verifyVideoLikes,
     totalVideoLikeXP,
   } = useYouTubeVerification();

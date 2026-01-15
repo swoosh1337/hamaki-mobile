@@ -11,9 +11,59 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const YOUTUBE_API_KEY = Deno.env.get('YOUTUBE_API_KEY')!;
+const getRequiredEnv = (key: string): string => {
+    const value = Deno.env.get(key);
+    if (!value) {
+        throw new Error(`Missing ${key} environment variable`);
+    }
+    return value;
+};
+
+const SUPABASE_URL = getRequiredEnv('SUPABASE_URL');
+const SUPABASE_SERVICE_ROLE_KEY = getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY');
+const YOUTUBE_API_KEY = getRequiredEnv('YOUTUBE_API_KEY');
+
+type SupabaseClient = ReturnType<typeof createClient>;
+
+const fixContentPostStatus = async (
+    supabase: SupabaseClient,
+    postId: string,
+    channelKey: string,
+    channelName: string,
+    videoId: string
+): Promise<boolean> => {
+    console.log(`[${channelName}] Fixing content post status for video ${videoId}`);
+
+    const { error: unfeatureError } = await supabase
+        .from('content_posts')
+        .update({ is_featured: false })
+        .eq('type', 'video')
+        .eq('metadata->>channelKey', channelKey)
+        .eq('is_featured', true)
+        .neq('id', postId);
+
+    if (unfeatureError) {
+        console.error('[sync-youtube-videos] Failed to un-feature old videos', {
+            channelKey,
+            postId,
+            error: unfeatureError,
+        });
+        return false;
+    }
+
+    const { error: fixError } = await supabase
+        .from('content_posts')
+        .update({ is_published: true, is_featured: true })
+        .eq('id', postId);
+
+    if (fixError) {
+        console.error(`[${channelName}] Failed to fix content post:`, fixError);
+        return false;
+    }
+
+    console.log(`[${channelName}] Fixed content post - now published and featured`);
+    return true;
+};
 
 // Channel configuration with keys matching the mobile app
 const CHANNELS = [
@@ -171,27 +221,15 @@ Deno.serve(async (req: Request) => {
                     .maybeSingle();
 
                 if (existingPost && (!existingPost.is_published || !existingPost.is_featured)) {
-                    console.log(`[${channel.name}] Fixing content post status for video ${latest.videoId}`);
+                    const fixed = await fixContentPostStatus(
+                        supabase,
+                        existingPost.id,
+                        channel.key,
+                        channel.name,
+                        latest.videoId
+                    );
 
-                    // Un-feature other videos from this channel first
-                    await supabase
-                        .from('content_posts')
-                        .update({ is_featured: false })
-                        .eq('type', 'video')
-                        .eq('metadata->>channelKey', channel.key)
-                        .eq('is_featured', true)
-                        .neq('id', existingPost.id);
-
-                    // Fix the current video's status
-                    const { error: fixError } = await supabase
-                        .from('content_posts')
-                        .update({ is_published: true, is_featured: true })
-                        .eq('id', existingPost.id);
-
-                    if (fixError) {
-                        console.error(`[${channel.name}] Failed to fix content post:`, fixError);
-                    } else {
-                        console.log(`[${channel.name}] Fixed content post - now published and featured`);
+                    if (fixed) {
                         results.updated.push(`${channel.name} (fixed)`);
                         continue;
                     }
@@ -278,28 +316,13 @@ Deno.serve(async (req: Request) => {
                     .single();
 
                 if (postStatus && (!postStatus.is_published || !postStatus.is_featured)) {
-                    console.log(`[${channel.name}] Fixing content post status for video ${latest.videoId}`);
-
-                    // Un-feature other videos from this channel first
-                    await supabase
-                        .from('content_posts')
-                        .update({ is_featured: false })
-                        .eq('type', 'video')
-                        .eq('metadata->>channelKey', channel.key)
-                        .eq('is_featured', true)
-                        .neq('id', existingPost.id);
-
-                    // Fix the current video's status
-                    const { error: fixError } = await supabase
-                        .from('content_posts')
-                        .update({ is_published: true, is_featured: true })
-                        .eq('id', existingPost.id);
-
-                    if (fixError) {
-                        console.error(`[${channel.name}] Failed to fix content post:`, fixError);
-                    } else {
-                        console.log(`[${channel.name}] Fixed content post - now published and featured`);
-                    }
+                    await fixContentPostStatus(
+                        supabase,
+                        existingPost.id,
+                        channel.key,
+                        channel.name,
+                        latest.videoId
+                    );
                 } else {
                     console.log(`[${channel.name}] Content post already exists and is correctly published`);
                 }

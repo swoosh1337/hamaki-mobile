@@ -39,9 +39,12 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   responsiveScaling,
 }) => {
   // Initialize responsive scaling if not provided
-  const scaling = responsiveScaling || new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT);
-  const scalingConfig = scaling.getScalingConfig();
-  const responsiveSizes = scaling.getSizes();
+  const scaling = useMemo(
+    () => responsiveScaling ?? new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT),
+    [responsiveScaling]
+  );
+  const scalingConfig = useMemo(() => scaling.getScalingConfig(), [scaling]);
+  const responsiveSizes = useMemo(() => scaling.getSizes(), [scaling]);
 
   // Load all game images using useImage hook
   const backgroundImage = useImage(NOPOGOD_GAME_ASSETS.background);
@@ -50,7 +53,6 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   const miroIdleImage = useImage(NOPOGOD_GAME_ASSETS.miro.idle);
   const miroStep1Image = useImage(NOPOGOD_GAME_ASSETS.miro.step1);
   const miroStep2Image = useImage(NOPOGOD_GAME_ASSETS.miro.step2);
-  const miroAngle45Image = useImage(NOPOGOD_GAME_ASSETS.miro.angle45);
   const miroAngle90Image = useImage(NOPOGOD_GAME_ASSETS.miro.angle90);
 
   // Shonzika sprites
@@ -59,8 +61,6 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   const shonzikaWalk1Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.walking1);
   const shonzikaWalk2Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.walking2);
   const shonzikaHandProfileImage = useImage(NOPOGOD_GAME_ASSETS.shonzika.handProfile);
-  const shonzikaHand45Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.hand45);
-  const shonzikaHand90Image = useImage(NOPOGOD_GAME_ASSETS.shonzika.hand90);
 
   // Item sprites
   const eggImage = useImage(NOPOGOD_GAME_ASSETS.items.egg);
@@ -103,24 +103,6 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
       pepper: !!pepperImage
     });
   }
-
-  // Get current Miro sprite based on state and animation
-  const getCurrentMiroImage = () => {
-    if (gameState.player.isMoving) {
-      // Alternate between step sprites based on animation progress
-      return gameState.player.animationProgress < 0.5 ? miroStep1Image : miroStep2Image;
-    }
-    return miroIdleImage;
-  };
-
-  // Get current Shonzika sprite based on state
-  const getCurrentShonzikaImage = () => {
-    if (gameState.shonzika.sprite === 'THROWING') {
-      // Use hand profile for throwing animation
-      return shonzikaHandProfileImage;
-    }
-    return shonzikaIdle90Image;
-  };
 
   // Get item image based on type
   const getItemImage = (itemType: string) => {
@@ -266,9 +248,6 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
 
     // Horizontal tightrope at Shonzika's feet level
     const ropeY = shonzikaSprite.y + shonzikaSprite.height; // At bottom of character (feet level)
-    const ropeStartX = 0; // Starts at left edge
-    const ropeEndX = scalingConfig.screenWidth; // Ends at right edge
-
     // Support posts on left and right sides
     const postWidth = 6;
     const postHeight = 40;
@@ -434,18 +413,6 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
     });
   };
 
-  // Get fallback color for items when images fail to load
-  const getItemFallbackColor = (itemType: string): string => {
-    switch (itemType) {
-      case 'EGG': return '#FFFF99'; // Light yellow
-      case 'TOMATO': return '#FF6B6B'; // Red
-      case 'PEPPER': return '#4ECDC4'; // Teal
-      case 'ELECTRIC_SHOCK': return '#FFD93D'; // Yellow
-      case 'BOMB': return '#2C2C2C'; // Dark gray
-      default: return '#FFFF99';
-    }
-  };
-
   // Show loading screen while images are loading
   if (!allImagesLoaded) {
     log.debug('Loading game assets...');
@@ -514,7 +481,7 @@ const styles = StyleSheet.create({
 });
 
 // Helper function to check if all required images are loaded
-export const areImagesLoaded = (...images: Array<SkImage | null>): boolean => {
+export const areImagesLoaded = (...images: (SkImage | null)[]): boolean => {
   return images.every(image => image !== null);
 };
 

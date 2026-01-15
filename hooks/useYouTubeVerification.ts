@@ -29,6 +29,7 @@ import type {
     SubscriptionStatus,
     VideoLikeStatus,
 } from '@/types/youtube';
+import { YOUTUBE_CHANNELS } from '@/types/youtube';
 import { createLogger } from '@/utils/logger';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -133,8 +134,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
             const subs = await getSubscriptionStatuses(userProfile.id);
             setSubscriptionStatuses(subs);
 
-            // Expected number of channels (hamaki, miro, bastos, koro)
-            const EXPECTED_CHANNEL_COUNT = 4;
+            const expectedChannelCount = Object.keys(YOUTUBE_CHANNELS).length;
             // Cache TTL: 4 hours (matches sync interval)
             const VIDEO_LIKE_CACHE_TTL = 4 * 60 * 60 * 1000;
 
@@ -147,7 +147,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
                 const isCacheFresh = cacheAge < VIDEO_LIKE_CACHE_TTL;
 
                 // Only use cache if it has ALL expected channels AND is fresh
-                if (cachedStatuses.length >= EXPECTED_CHANNEL_COUNT && isCacheFresh) {
+                if (cachedStatuses.length >= expectedChannelCount && isCacheFresh) {
                     log.debug('Loaded video like statuses from cache', {
                         count: cachedStatuses.length,
                         ageMinutes: Math.round(cacheAge / 60000)
@@ -161,7 +161,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
                 } else {
                     log.info('Cache invalid, fetching from DB', {
                         cached: cachedStatuses.length,
-                        expected: EXPECTED_CHANNEL_COUNT,
+                        expected: expectedChannelCount,
                         isFresh: isCacheFresh,
                         ageHours: Math.round(cacheAge / 3600000)
                     });

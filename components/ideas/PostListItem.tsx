@@ -104,6 +104,7 @@ export const PostListItem: React.FC<PostListItemProps> = React.memo(({
     </View>
   );
 });
+PostListItem.displayName = 'PostListItem';
 
 const styles = StyleSheet.create({
   container: {
