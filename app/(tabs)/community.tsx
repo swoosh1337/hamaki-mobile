@@ -66,7 +66,6 @@ export default function IdeasScreen() {
   });
 
   // Error handling state
-  const [showPartialError, setShowPartialError] = useState(false);
 
   // Convert hook error to string for compatibility with existing error UI
   const error = postsError ? getUserFriendlyErrorMessage(postsError) : null;
@@ -97,7 +96,6 @@ export default function IdeasScreen() {
   // Refresh posts
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    setShowPartialError(false);
     await refetch();
     setIsRefreshing(false);
   }, [refetch]);
@@ -240,15 +238,6 @@ export default function IdeasScreen() {
               <View style={styles.demoNotice}>
                 <Text style={styles.demoNoticeText}>
                   🎭 Demo Mode - Viewing as demouser@apple.com
-                </Text>
-              </View>
-            )}
-
-            {/* Partial Error Banner */}
-            {showPartialError && (
-              <View style={styles.errorBanner}>
-                <Text style={styles.errorBannerText}>
-                  ⚠️ Connection issue. Some content may not load.
                 </Text>
               </View>
             )}

@@ -114,7 +114,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               } else {
                 Alert.alert('შეცდომა', 'ანგარიშის წაშლა ვერ მოხერხდა. გთხოვთ სცადოთ მოგვიანებით.');
               }
-            } catch {
+            } catch (error) {
+              console.error('Failed to delete account', error);
               Alert.alert('შეცდომა', 'ანგარიშის წაშლა ვერ მოხერხდა. გთხოვთ სცადოთ მოგვიანებით.');
             }
           },

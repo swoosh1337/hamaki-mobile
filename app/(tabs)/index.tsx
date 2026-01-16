@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
 // import { useAuth } from '@/contexts/AuthContext';
@@ -7,7 +7,7 @@ import { CarouselCard } from '@/components/ui/CarouselCard';
 import { InlineError } from '@/components/ui/InlineError';
 import { CarouselSkeleton, PostSkeleton } from '@/components/ui/SkeletonLoader';
 import { useContent } from '@/contexts/ContentContext';
-import { trackPostClose, trackPostOpen } from '@/utils/analytics';
+import { trackPostClose, trackPostOpen, trackVideoWatch } from '@/utils/analytics';
 import { isNewPost, sortPostsHybrid } from '@/utils/contentSorting';
 import { createLogger } from '@/utils/logger';
 
@@ -183,6 +183,14 @@ function PostCard({ post, isExpanded, onToggleExpand }: { post: Post; isExpanded
   const handleWatchVideo = async (e: any) => {
     e.stopPropagation(); // Prevent card expansion when button is pressed
     if (post.type === 'video' && post.metadata.videoId) {
+      // Track video watch for analytics dashboard
+      trackVideoWatch(
+        post.metadata.videoId,
+        (post.metadata as any).channelKey || 'unknown',
+        post.title,
+        (post.metadata as any).channelName
+      );
+
       const appUrl = `youtube://watch?v=${post.metadata.videoId}`;
       const webUrl = `https://www.youtube.com/watch?v=${post.metadata.videoId}`;
       try {
@@ -201,9 +209,20 @@ function PostCard({ post, isExpanded, onToggleExpand }: { post: Post; isExpanded
         const canOpen = await Linking.canOpenURL(post.metadata.applicationUrl);
         if (canOpen) {
           await Linking.openURL(post.metadata.applicationUrl);
+        } else {
+          Alert.alert(
+            'Link unavailable',
+            'Could not open the application link. Please try again later.',
+            [{ text: 'OK' }]
+          );
         }
       } catch (error) {
         log.error('Error opening application URL', error);
+        Alert.alert(
+          'Link error',
+          'We could not open the application link. Please try again later.',
+          [{ text: 'OK' }]
+        );
       }
     }
   };
@@ -288,7 +307,10 @@ function formatDate(dateString: string): string {
     return m <= 1 ? 'Just now' : `${m} minutes ago`;
   }
   if (diffHours < 24) return `${Math.floor(diffHours)} hours ago`;
-  if (diffDays < 7) return `${Math.floor(diffDays)} day(s) ago`;
+  if (diffDays < 7) {
+    const d = Math.floor(diffDays);
+    return `${d} day${d === 1 ? '' : 's'} ago`;
+  }
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 

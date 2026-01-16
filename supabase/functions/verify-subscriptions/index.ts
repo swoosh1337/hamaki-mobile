@@ -292,12 +292,14 @@ Deno.serve(async (req: Request) => {
                         for (const periodType of ['monthly', 'weekly']) {
                             const { data: existing } = await supabase
                                 .from('leaderboard_entries')
-                                .select('subscription_xp')
+                                .select('subscription_xp, game_xp, video_like_xp')
                                 .eq('user_id', userId)
                                 .eq('period_type', periodType)
                                 .maybeSingle();
 
                             const currentXP = existing?.subscription_xp || 0;
+                            const existingGame = existing?.game_xp || 0;
+                            const existingVideo = existing?.video_like_xp || 0;
 
                             await supabase
                                 .from('leaderboard_entries')
@@ -305,8 +307,8 @@ Deno.serve(async (req: Request) => {
                                     user_id: userId,
                                     period_type: periodType,
                                     subscription_xp: currentXP + xpAmount,
-                                    game_xp: 0,
-                                    video_like_xp: 0,
+                                    game_xp: existingGame,
+                                    video_like_xp: existingVideo,
                                 }, {
                                     onConflict: 'user_id,period_type'
                                 });

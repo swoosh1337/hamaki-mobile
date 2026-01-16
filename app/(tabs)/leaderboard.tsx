@@ -19,6 +19,7 @@ import { NetworkError } from '@/components/ui/NetworkError';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeaderboardSnapshot, useMyLeaderboardStatus, useSponsors } from '@/hooks';
+import { trackSponsorClick } from '@/utils/analytics';
 import { getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 
 type TabType = 'weekly' | 'main' | 'prizes';
@@ -123,6 +124,12 @@ export default function LeaderboardScreen() {
     const errorMessage = error ? getUserFriendlyErrorMessage(error) : null;
 
     const togglePrize = (prizeId: string) => {
+        // Track sponsor click for analytics dashboard
+        const sponsor = sponsors.find(s => s.id === prizeId);
+        if (sponsor) {
+            trackSponsorClick(prizeId, sponsor.name);
+        }
+
         setExpandedPrizeId(prev => prev === prizeId ? null : prizeId);
     };
 

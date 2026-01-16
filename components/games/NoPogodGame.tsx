@@ -36,6 +36,7 @@ import {
 } from '@/types/edgeFunctionQueue';
 import type { AwardXPResult } from '@/types/leaderboard';
 import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
+import { trackGameEnd, trackGameStart } from '@/utils/analytics';
 import { createLogger } from '@/utils/logger';
 import { NoPogodGameCanvasAtlas } from './NoPogodGameCanvasAtlas';
 
@@ -73,7 +74,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const [roundsPlayed, setRoundsPlayed] = useState(0);
   const [showCooldownScreen, setShowCooldownScreen] = useState(false);
   const MAX_ROUNDS = 3; // Maximum rounds before cooldown
-  const COOLDOWN_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
+  const COOLDOWN_DURATION_MS = 1 * 60 * 60 * 1000; // 1 hour
 
   // Game cooldown hook - persists across app restarts
   const {
@@ -210,6 +211,9 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       // Generate a new session ID for idempotency
       sessionIdRef.current = generateSessionId();
       log.debug('New game session', { sessionId: sessionIdRef.current });
+
+      // Track game start for analytics dashboard
+      trackGameStart(NOPOGOD_GAME_ID, { sessionId: sessionIdRef.current });
 
       gameEngineRef.current.startGame();
       updateGameState();
@@ -371,6 +375,12 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         if (audioManagerRef.current) {
           audioManagerRef.current.stopBackground();
         }
+
+        // Track game end for analytics dashboard
+        trackGameEnd(NOPOGOD_GAME_ID, gameState.score, {
+          sessionId: sessionIdRef.current,
+          lives: gameState.lives,
+        });
 
         // Check for high score
         await checkAndSaveHighScore(gameState.score);
@@ -698,9 +708,10 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         )}
 
         {/* Show rounds info for non-demo users */}
+        {/* Use xpAwarded to determine if state has updated: if false, show +1 for immediate feedback */}
         {!isDemoMode && (
           <Text style={styles.roundsInfo}>
-            Round {roundsPlayed}/{MAX_ROUNDS}
+            Round {xpAwarded ? roundsPlayed : roundsPlayed + 1}/{MAX_ROUNDS}
           </Text>
         )}
 

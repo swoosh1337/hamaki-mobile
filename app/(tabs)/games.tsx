@@ -8,6 +8,7 @@ import { NoPogodGame } from '@/components/games/NoPogodGame';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameCooldown } from '@/hooks/useGameCooldown';
+import { trackGamePlay } from '@/utils/analytics';
 
 interface GameItem {
   id: string;
@@ -74,6 +75,10 @@ export default function GamesScreen() {
       );
       return;
     }
+
+    // Track game play for analytics dashboard
+    const game = GAMES.find(g => g.id === gameId);
+    trackGamePlay(gameId, game?.title || gameId);
 
     // Open selected game
     setSelectedGame(gameId);

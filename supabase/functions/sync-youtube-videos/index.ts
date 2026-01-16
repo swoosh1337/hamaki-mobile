@@ -34,6 +34,16 @@ const fixContentPostStatus = async (
 ): Promise<boolean> => {
     console.log(`[${channelName}] Fixing content post status for video ${videoId}`);
 
+    const { error: fixError } = await supabase
+        .from('content_posts')
+        .update({ is_published: true, is_featured: true })
+        .eq('id', postId);
+
+    if (fixError) {
+        console.error(`[${channelName}] Failed to fix content post:`, fixError);
+        return false;
+    }
+
     const { error: unfeatureError } = await supabase
         .from('content_posts')
         .update({ is_featured: false })
@@ -48,16 +58,6 @@ const fixContentPostStatus = async (
             postId,
             error: unfeatureError,
         });
-        return false;
-    }
-
-    const { error: fixError } = await supabase
-        .from('content_posts')
-        .update({ is_published: true, is_featured: true })
-        .eq('id', postId);
-
-    if (fixError) {
-        console.error(`[${channelName}] Failed to fix content post:`, fixError);
         return false;
     }
 

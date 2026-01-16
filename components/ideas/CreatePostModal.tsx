@@ -7,6 +7,7 @@ import {
   Modal,
   Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -144,77 +145,83 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
 
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.scrollView}
+            style={styles.keyboardAvoid}
           >
-            {/* Title Input */}
-            <View style={styles.inputSection}>
-              <Text style={styles.label}>სათაური *</Text>
-              <TextInput
-                style={[styles.titleInput, titleError ? styles.inputError : null]}
-                placeholder="რა არის შენი ვიდეოს იდეა?"
-                placeholderTextColor="rgba(150, 150, 150, 0.5)"
-                value={title}
-                onChangeText={handleTitleChange}
-                maxLength={100}
-                editable={!isSubmitting}
-                autoFocus
-              />
-              {titleError ? <Text style={styles.errorText}>{titleError}</Text> : null}
-              <Text style={styles.charCount}>{title.length}/100</Text>
-            </View>
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Title Input */}
+              <View style={styles.inputSection}>
+                <Text style={styles.label}>სათაური *</Text>
+                <TextInput
+                  style={[styles.titleInput, titleError ? styles.inputError : null]}
+                  placeholder="რა არის შენი ვიდეოს იდეა?"
+                  placeholderTextColor="rgba(150, 150, 150, 0.5)"
+                  value={title}
+                  onChangeText={handleTitleChange}
+                  maxLength={100}
+                  editable={!isSubmitting}
+                  autoFocus
+                />
+                {titleError ? <Text style={styles.errorText}>{titleError}</Text> : null}
+                <Text style={styles.charCount}>{title.length}/100</Text>
+              </View>
 
-            {/* Content Input */}
-            <View style={styles.inputSection}>
-              <Text style={styles.label}>აღწერა *</Text>
-              <TextInput
-                style={[styles.contentInput, contentError ? styles.inputError : null]}
-                placeholder="აღწერე შენი იდეა დეტალურად. რას უნდა მოიცავდეს ვიდეო? რატომ იქნება საინტერესო?"
-                placeholderTextColor="rgba(150, 150, 150, 0.5)"
-                value={content}
-                onChangeText={handleContentChange}
-                maxLength={1000}
-                multiline
-                numberOfLines={8}
-                textAlignVertical="top"
-                editable={!isSubmitting}
-              />
-              {contentError ? <Text style={styles.errorText}>{contentError}</Text> : null}
-              <Text style={styles.charCount}>{content.length}/1000</Text>
-            </View>
+              {/* Content Input */}
+              <View style={styles.inputSection}>
+                <Text style={styles.label}>აღწერა *</Text>
+                <TextInput
+                  style={[styles.contentInput, contentError ? styles.inputError : null]}
+                  placeholder="აღწერე შენი იდეა დეტალურად. რას უნდა მოიცავდეს ვიდეო? რატომ იქნება საინტერესო?"
+                  placeholderTextColor="rgba(150, 150, 150, 0.5)"
+                  value={content}
+                  onChangeText={handleContentChange}
+                  maxLength={1000}
+                  multiline
+                  numberOfLines={8}
+                  textAlignVertical="top"
+                  editable={!isSubmitting}
+                />
+                {contentError ? <Text style={styles.errorText}>{contentError}</Text> : null}
+                <Text style={styles.charCount}>{content.length}/1000</Text>
+              </View>
 
-            {/* Info Box */}
-            <View style={styles.infoBox}>
-              <Ionicons name="information-circle-outline" size={20} color={Colors.dark.tint} />
-              <Text style={styles.infoText}>
-                შენი იდეა განიხილება და დადასტურების შემთხვევაში გამოჩნდება იდეების სიაში!
-              </Text>
-            </View>
+              {/* Info Box */}
+              <View style={styles.infoBox}>
+                <Ionicons name="information-circle-outline" size={20} color={Colors.dark.tint} />
+                <Text style={styles.infoText}>
+                  შენი იდეა განიხილება და დადასტურების შემთხვევაში გამოჩნდება იდეების სიაში!
+                </Text>
+              </View>
 
-            {/* Action Buttons */}
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={handleClose}
-                disabled={isSubmitting}
-              >
-                <Text style={styles.cancelButtonText}>გაუქმება</Text>
-              </TouchableOpacity>
+              {/* Action Buttons */}
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={handleClose}
+                  disabled={isSubmitting}
+                >
+                  <Text style={styles.cancelButtonText}>გაუქმება</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.submitButtonNew,
-                  (isSubmitting || !title.trim() || !content.trim()) && styles.submitButtonDisabled
-                ]}
-                onPress={handleSubmit}
-                disabled={isSubmitting || !title.trim() || !content.trim()}
-              >
-                {isSubmitting ? (
-                  <Text style={styles.submitButtonText}>დასტურის დამუშავება...</Text>
-                ) : (
-                  <Text style={styles.submitButtonText}>დადასტურება</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={[
+                    styles.submitButtonNew,
+                    (isSubmitting || !title.trim() || !content.trim()) && styles.submitButtonDisabled
+                  ]}
+                  onPress={handleSubmit}
+                  disabled={isSubmitting || !title.trim() || !content.trim()}
+                >
+                  {isSubmitting ? (
+                    <Text style={styles.submitButtonText}>დასტურის დამუშავება...</Text>
+                  ) : (
+                    <Text style={styles.submitButtonText}>დადასტურება</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
       </TouchableWithoutFeedback>
@@ -241,9 +248,15 @@ const styles = StyleSheet.create({
     color: Colors.dark.tint,
     fontWeight: 'bold',
   },
+  keyboardAvoid: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
     paddingTop: 20,
+    paddingBottom: 20,
   },
   inputSection: {
     marginBottom: 24,
@@ -290,7 +303,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 4,
   },
-
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -311,20 +323,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 10,
     paddingBottom: 30,
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: 'rgba(245, 245, 245, 0.1)',
+    backgroundColor: 'rgba(255, 59, 48, 0.15)',
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(196, 255, 0, 0.3)',
+    borderColor: 'rgba(255, 59, 48, 0.5)',
   },
   cancelButtonText: {
-    color: Colors.dark.text,
+    color: '#FF3B30',
     fontSize: 16,
     fontWeight: '600',
   },

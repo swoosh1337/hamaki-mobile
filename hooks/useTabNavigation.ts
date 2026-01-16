@@ -99,7 +99,6 @@ export function useTabNavigation(
       const tab = getTabName(index);
       if (
         index === state.currentIndex &&
-        index === TAB_INDEX_MAP[state.currentTab] &&
         tab === state.currentTab
       ) {
         log.debug('Page selected (no-op)', { index, tab });
