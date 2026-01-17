@@ -50,7 +50,6 @@ export interface AudioManagerConfig {
  */
 export abstract class BaseAudioManager {
     protected backgroundSound: Audio.Sound | null = null;
-    protected soundEffects: Map<string, Audio.Sound> = new Map();
     protected soundEffectConfigs: Map<string, SoundConfig> = new Map();
     protected isLoaded: boolean = false;
     protected isBackgroundPlaying: boolean = false;
@@ -66,6 +65,9 @@ export abstract class BaseAudioManager {
     /**
      * Load all sounds defined in the configuration.
      * Call this when the game component mounts.
+     *
+     * Note: Sound effects are NOT pre-loaded into memory. Only their configs are stored.
+     * New sound instances are created on-demand in playSound() to support overlapping.
      */
     async loadSounds(): Promise<void> {
         if (this.isLoaded) {
@@ -85,7 +87,7 @@ export abstract class BaseAudioManager {
 
             const config = this.getAudioConfig();
 
-            // Load background music
+            // Load background music (this one IS pre-loaded since it's long-running)
             if (config.backgroundMusic) {
                 log.debug('Loading background music', { id: config.backgroundMusic.id });
                 const { sound } = await Audio.Sound.createAsync(
@@ -99,24 +101,16 @@ export abstract class BaseAudioManager {
                 this.backgroundStartPositionMs = config.backgroundMusic.startPositionMs ?? 0;
             }
 
-            // Load sound effects
+            // Store sound effect configs (instances created on-demand in playSound)
             if (config.soundEffects) {
                 for (const sfx of config.soundEffects) {
-                    log.debug('Loading sound effect', { id: sfx.id });
-                    const { sound } = await Audio.Sound.createAsync(
-                        sfx.source,
-                        {
-                            isLooping: sfx.loop ?? false,
-                            volume: sfx.volume ?? 1.0,
-                        }
-                    );
-                    this.soundEffects.set(sfx.id, sound);
+                    log.debug('Registering sound effect', { id: sfx.id });
                     this.soundEffectConfigs.set(sfx.id, sfx);
                 }
             }
 
             this.isLoaded = true;
-            log.info('All sounds loaded successfully');
+            log.info('Audio manager initialized', { soundEffects: this.soundEffectConfigs.size });
         } catch (error) {
             log.error('Failed to load sounds', error);
             throw error;
@@ -136,13 +130,7 @@ export abstract class BaseAudioManager {
                 this.backgroundSound = null;
             }
 
-            // Stop and unload all sound effects
-            for (const [id, sound] of this.soundEffects) {
-                log.debug('Unloading sound effect', { id });
-                await sound.stopAsync();
-                await sound.unloadAsync();
-            }
-            this.soundEffects.clear();
+            // Clear sound effect configs (instances are auto-cleaned after playback)
             this.soundEffectConfigs.clear();
 
             this.isLoaded = false;

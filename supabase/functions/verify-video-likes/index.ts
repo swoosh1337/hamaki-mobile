@@ -226,12 +226,21 @@ Deno.serve(async (req: Request) => {
                 console.error('[verify-video-likes] Failed to award XP via RPC:', awardError);
                 // Fallback: try direct upsert for both periods
                 for (const periodType of ['monthly', 'weekly']) {
-                    const { data: existing } = await supabase
+                    const { data: existing, error: existingError } = await supabase
                         .from('leaderboard_entries')
                         .select('video_like_xp, game_xp, subscription_xp')
                         .eq('user_id', userId)
                         .eq('period_type', periodType)
                         .maybeSingle();
+
+                    if (existingError) {
+                        console.error('[verify-video-likes] Failed to load leaderboard entry for fallback', {
+                            userId,
+                            periodType,
+                            error: existingError,
+                        });
+                        throw existingError;
+                    }
 
                     const existingVideoXP = existing?.video_like_xp || 0;
                     const existingGameXP = existing?.game_xp || 0;

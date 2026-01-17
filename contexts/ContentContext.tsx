@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase/client';
+import type { ContentPost } from '@/types';
 import { sortPostsHybrid } from '@/utils/contentSorting';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 import { createLogger } from '@/utils/logger';
@@ -7,37 +8,9 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 
 const log = createLogger('Content');
 
-// Types from our unified model
-interface Post {
-  id: string;
-  type: 'video' | 'blog' | 'hiring' | 'announcement';
-  title: string;
-  excerpt: string;
-  content: string;
-  thumbnail: string;
-  isPublished: boolean;
-  publishedAt: string;
-  isFeatured: boolean;
-  featuredOrder: number;
-  metadata: {
-    videoId?: string;
-    duration?: string;
-    viewCount?: string;
-    position?: string;
-    company?: string;
-    applicationUrl?: string;
-    badge?: string;
-    priority?: 'low' | 'medium' | 'high';
-    tags?: string[];
-    readTimeMinutes?: number;
-  };
-  createdAt: string;
-  updatedAt: string;
-}
-
 interface ContentContextType {
-  posts: Post[];
-  featuredPosts: Post[];
+  posts: ContentPost[];
+  featuredPosts: ContentPost[];
   isLoading: boolean;
   error: string | null;
   hasNewContent: boolean;
@@ -56,14 +29,14 @@ export const useContent = () => {
 };
 
 export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<ContentPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasNewContent, setHasNewContent] = useState(false);
   const [isNetworkError, setIsNetworkError] = useState(false);
 
-  // Transform database rows to our Post interface
-  const transformDatabasePost = (dbPost: any): Post => ({
+  // Transform database rows to our ContentPost interface
+  const transformDatabasePost = (dbPost: any): ContentPost => ({
     id: dbPost.id,
     type: dbPost.type,
     title: decodeHtmlEntities(dbPost.title), // Decode HTML entities from YouTube API
@@ -89,7 +62,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .from('content_posts')
         .select('*')
         .eq('is_published', true)
-        .order('created_at', { ascending: false });
+        .order('published_at', { ascending: false });  // Order by YouTube publish time, not DB insertion time
 
       if (fetchError) {
         log.error('Error fetching content:', fetchError);

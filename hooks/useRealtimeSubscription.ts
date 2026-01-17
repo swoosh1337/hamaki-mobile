@@ -98,6 +98,10 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>(
     // Store channel reference for cleanup
     const channelRef = useRef<RealtimeChannel | null>(null);
 
+    // Track reconnection attempts to only warn on persistent issues
+    const reconnectCountRef = useRef(0);
+    const lastReconnectTimeRef = useRef(0);
+
     useEffect(() => {
         if (!enabled) {
             log.debug(`Subscription disabled for ${table}`);
@@ -156,10 +160,29 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>(
             .subscribe((status: string, err?: Error) => {
                 if (status === 'SUBSCRIBED') {
                     log.info(`Successfully subscribed to ${channelName}`);
+                    // Reset reconnect counter on successful subscription
+                    reconnectCountRef.current = 0;
                 } else if (status === 'CHANNEL_ERROR') {
                     // Channel errors are common during network transitions (app background/foreground)
-                    // Supabase client auto-retries, so this is a warning not an error
-                    log.warn(`Channel reconnecting for ${channelName}`, err ? { error: err.message } : undefined);
+                    // Supabase client auto-retries, so we only warn on persistent issues
+                    const now = Date.now();
+                    if (now - lastReconnectTimeRef.current > 30000) {
+                        // Reset counter if more than 30s since last reconnect
+                        reconnectCountRef.current = 0;
+                    }
+                    reconnectCountRef.current++;
+                    lastReconnectTimeRef.current = now;
+
+                    if (reconnectCountRef.current >= 3) {
+                        // Only warn after 3+ reconnects in quick succession
+                        log.warn(`Channel experiencing connection issues: ${channelName}`, {
+                            reconnectAttempts: reconnectCountRef.current,
+                            error: err?.message,
+                        });
+                    } else {
+                        // Normal reconnect - just debug level
+                        log.debug(`Channel reconnecting for ${channelName}`, err ? { error: err.message } : undefined);
+                    }
                 } else if (status === 'TIMED_OUT') {
                     log.warn(`Subscription timed out for ${channelName}`);
                 } else {

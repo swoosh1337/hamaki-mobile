@@ -52,6 +52,9 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
     // Audio callback for throw events (Shonzika throws item)
     public onItemThrown: ((itemType: string) => void) | null = null;
 
+    // Audio callback for missed items (item falls off screen)
+    public onItemMissed: ((itemType: string) => void) | null = null;
+
     constructor(screenWidth: number, screenHeight: number, assets?: NoPogodGameAssets) {
         super(screenWidth, screenHeight, {
             gameDuration: TIMING.GAME_DURATION,
@@ -433,11 +436,24 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
         // Update positions
         this.items = ItemSpawner.updateItemPositions(this.items, deltaTime);
 
+        // Get the count before removal
+        const itemsBefore = [...this.items];
+
         // Remove off-screen items
         this.items = ItemSpawner.removeOffscreenItems(
             this.items,
             this.gameState.screenHeight
         );
+
+        // Check which items were removed (missed)
+        if (this.onItemMissed) {
+            const remainingIds = new Set(this.items.map(item => item.id));
+            for (const item of itemsBefore) {
+                if (!remainingIds.has(item.id) && item.type === 'EGG') {
+                    this.onItemMissed(item.type);
+                }
+            }
+        }
     }
 
     private processCollisions(): void {
@@ -456,12 +472,11 @@ export class NoPogodEngine extends BaseGameEngine<NoPogodGameState> {
             this.addScore(aggregate.totalPoints);
         }
 
-        // Trigger catch sound callback for each EGG or TOMATO caught
+        // Trigger catch sound callback for all caught items
         if (this.onItemCaught) {
             for (const outcome of outcomes) {
-                if (outcome.itemType === 'EGG' || outcome.itemType === 'TOMATO') {
-                    this.onItemCaught(outcome.itemType);
-                }
+                // Notify for all item types - let the audio manager decide what sound to play
+                this.onItemCaught(outcome.itemType);
             }
         }
 

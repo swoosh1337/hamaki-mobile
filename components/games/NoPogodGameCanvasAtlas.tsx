@@ -21,6 +21,7 @@ import {
 } from '@shopify/react-native-skia';
 import React, { useMemo } from 'react';
 import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/Colors';
 import { NoPogodGameState } from '@/features/games/noPogod';
@@ -138,6 +139,7 @@ export const NoPogodGameCanvasAtlas: React.FC<NoPogodGameCanvasAtlasProps> = ({
     spriteRenderer,
     responsiveScaling,
 }) => {
+    const insets = useSafeAreaInsets();
     // Use the SHARED game asset system with NoPogod config
     const { isLoading, isReady, assets, error } = useGameAssets<NoPogodAtlasNames>(
         NOPOGOD_GAME_ID,
@@ -146,8 +148,8 @@ export const NoPogodGameCanvasAtlas: React.FC<NoPogodGameCanvasAtlasProps> = ({
 
     // Initialize responsive scaling
     const scaling = useMemo(
-        () => responsiveScaling ?? new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT),
-        [responsiveScaling]
+        () => responsiveScaling ?? new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT, insets),
+        [responsiveScaling, insets]
     );
     const scalingConfig = useMemo(() => scaling.getScalingConfig(), [scaling]);
     const responsiveSizes = useMemo(() => scaling.getSizes(), [scaling]);

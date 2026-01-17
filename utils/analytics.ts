@@ -346,6 +346,9 @@ export function trackVideoWatch(
   videoTitle?: string,
   channelName?: string
 ) {
+  if (!videoId || videoId.trim() === '') {
+    return;
+  }
   analytics.track('video_watch', {
     video_id: videoId,
     channel_key: channelKey,

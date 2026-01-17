@@ -19,7 +19,7 @@ import {
     verifyAndAwardSubscriptionXP,
 } from '@/services/youtube/subscriptionService';
 import { verificationCacheService } from '@/services/youtube/verificationCacheService';
-import { getDataVersion } from '@/services/youtube/verificationDataVersion';
+import { getDataVersion, incrementDataVersion } from '@/services/youtube/verificationDataVersion';
 import {
     getTotalPossibleVideoLikeXP,
     getVideoStatusesFromDB,
@@ -93,29 +93,20 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
         // Initial load
         loadCachedData();
 
-        // Poll for data version changes (detects background verification)
-        // Stops after first change since verification only happens once per login
-        let isPolling = true;
+        // Poll for data version changes (detects background and manual verification)
         const checkIntervalId = setInterval(async () => {
-            if (!isPolling) return;
-
             const currentVersion = await getDataVersion();
             if (currentVersion > lastDataVersionRef.current) {
-                log.info('Data version changed, refreshing and stopping poll', {
+                log.info('Data version changed, refreshing', {
                     old: lastDataVersionRef.current,
                     new: currentVersion
                 });
                 lastDataVersionRef.current = currentVersion;
                 loadCachedData();
-
-                // Stop polling - verification only happens once per login
-                isPolling = false;
-                clearInterval(checkIntervalId);
             }
         }, 2000);
 
         return () => {
-            isPolling = false;
             clearInterval(checkIntervalId);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -220,6 +211,9 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
                 if (result.totalXPAwarded > 0) {
                     log.info(`Awarded ${result.totalXPAwarded} XP for subscriptions`);
                 }
+
+                // Increment data version so other hook instances (e.g., home screen badge) refresh
+                await incrementDataVersion();
             } else if (result.errors.length > 0) {
                 throw new Error(result.errors[0]);
             }
@@ -284,6 +278,9 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
                 if (result.totalXPAwarded > 0) {
                     log.info(`Awarded ${result.totalXPAwarded} XP for video likes`);
                 }
+
+                // Increment data version so other hook instances (e.g., home screen badge) refresh
+                await incrementDataVersion();
             } else if (result.errors.length > 0) {
                 throw new Error(result.errors[0]);
             }

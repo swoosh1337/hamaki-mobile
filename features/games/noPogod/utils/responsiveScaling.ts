@@ -54,12 +54,20 @@ export interface ResponsiveSizes {
   };
 }
 
+export interface SafeAreaInsets {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
 export class ResponsiveScalingManager {
   private config: ScalingConfig;
   private positions: ResponsivePositions;
   private sizes: ResponsiveSizes;
+  private safeAreaInsets?: SafeAreaInsets;
 
-  constructor(screenWidth?: number, screenHeight?: number) {
+  constructor(screenWidth?: number, screenHeight?: number, safeAreaInsets?: SafeAreaInsets) {
     const dimensions = screenWidth && screenHeight
       ? { width: screenWidth, height: screenHeight }
       : Dimensions.get('window');
@@ -67,6 +75,7 @@ export class ResponsiveScalingManager {
     this.config = this.calculateScalingConfig(dimensions.width, dimensions.height);
     this.positions = this.calculateResponsivePositions();
     this.sizes = this.calculateResponsiveSizes();
+    this.safeAreaInsets = safeAreaInsets;
   }
 
   // Calculate scaling configuration based on screen dimensions
@@ -274,6 +283,15 @@ export class ResponsiveScalingManager {
     left: number;
     right: number;
   } {
+    if (this.safeAreaInsets) {
+      return {
+        top: this.safeAreaInsets.top,
+        bottom: this.safeAreaInsets.bottom,
+        left: this.safeAreaInsets.left,
+        right: this.safeAreaInsets.right,
+      };
+    }
+
     const { isTablet, screenWidth, screenHeight } = this.config;
 
     // Estimate safe area based on screen dimensions and device type
@@ -327,6 +345,13 @@ export class ResponsiveScalingManager {
       `Character: ${characterSize.toFixed(0)}px, Item: ${itemSize.toFixed(0)}px, ` +
       `Tablet: ${isTablet}, Landscape: ${isLandscape}`;
   }
+
+  // Refresh dimensions after orientation or window size changes
+  public updateScreenSize(screenWidth: number, screenHeight: number): void {
+    this.config = this.calculateScalingConfig(screenWidth, screenHeight);
+    this.positions = this.calculateResponsivePositions();
+    this.sizes = this.calculateResponsiveSizes();
+  }
 }
 
 // Utility functions for responsive scaling
@@ -356,4 +381,20 @@ export const ResponsiveUtils = {
 };
 
 // Export singleton instance for global use
-export const GlobalResponsiveScaling = new ResponsiveScalingManager();
+let globalResponsiveScaling: ResponsiveScalingManager | null = null;
+let hasRegisteredListener = false;
+
+export const getGlobalResponsiveScaling = (): ResponsiveScalingManager => {
+  if (!globalResponsiveScaling) {
+    globalResponsiveScaling = new ResponsiveScalingManager();
+  }
+
+  if (!hasRegisteredListener) {
+    Dimensions.addEventListener('change', ({ window }) => {
+      globalResponsiveScaling?.updateScreenSize(window.width, window.height);
+    });
+    hasRegisteredListener = true;
+  }
+
+  return globalResponsiveScaling;
+};

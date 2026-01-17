@@ -15,6 +15,7 @@ import {
 } from '@shopify/react-native-skia';
 import React, { useMemo } from 'react';
 import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/Colors';
 import { NoPogodGameState } from '@/features/games/noPogod';
@@ -38,10 +39,11 @@ export const NoPogodGameCanvas: React.FC<NoPogodGameCanvasProps> = ({
   spriteRenderer,
   responsiveScaling,
 }) => {
+  const insets = useSafeAreaInsets();
   // Initialize responsive scaling if not provided
   const scaling = useMemo(
-    () => responsiveScaling ?? new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT),
-    [responsiveScaling]
+    () => responsiveScaling ?? new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT, insets),
+    [responsiveScaling, insets]
   );
   const scalingConfig = useMemo(() => scaling.getScalingConfig(), [scaling]);
   const responsiveSizes = useMemo(() => scaling.getSizes(), [scaling]);

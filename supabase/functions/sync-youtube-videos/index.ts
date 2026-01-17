@@ -267,22 +267,9 @@ Deno.serve(async (req: Request) => {
                 .maybeSingle();
 
             if (!existingPost) {
-                // Un-feature old videos from this channel (keep only 1 per channel in carousel)
-                const { error: unfeatError } = await supabase
-                    .from('content_posts')
-                    .update({ is_featured: false })
-                    .eq('type', 'video')
-                    .eq('metadata->>channelKey', channel.key)
-                    .eq('is_featured', true);
-
-                if (unfeatError) {
-                    console.error(`[${channel.name}] Failed to un-feature old videos:`, unfeatError);
-                } else {
-                    console.log(`[${channel.name}] Un-featured old videos from this channel`);
-                }
-
-                // Insert new content post with auto-generated UUID
-                const { error: contentError } = await supabase
+                // STEP 1: Insert new content post FIRST (with is_featured: false initially)
+                // This prevents race condition where old videos are un-featured but new insert fails
+                const { data: newPost, error: contentError } = await supabase
                     .from('content_posts')
                     .insert({
                         type: 'video',
@@ -292,20 +279,52 @@ Deno.serve(async (req: Request) => {
                         thumbnail: latest.thumbnail,
                         is_published: true,
                         published_at: latest.publishedAt,
-                        is_featured: true,  // Shows in carousel
+                        is_featured: false,  // Will be featured after un-featuring old ones
                         featured_order: 100, // Auto-ranked (admin can set 1-99 to pin)
                         metadata: {
                             videoId: latest.videoId,
                             channelKey: channel.key,
+                            channelId: channel.id,  // Add channelId for consistency
                             channelName: channel.name,
                         },
-                    });
+                    })
+                    .select('id')
+                    .single();
 
-                if (contentError) {
+                if (contentError || !newPost) {
+                    // FAIL the sync for this channel if we can't create content post
+                    // This prevents the state where youtube_channel_state is updated but content_posts is not
                     console.error(`[${channel.name}] Failed to insert content_posts:`, contentError);
-                    // Don't fail the whole sync, just log the error
+                    throw new Error(`Failed to create content post for ${channel.name}: ${contentError?.message || 'No data returned'}`);
+                }
+
+                console.log(`[${channel.name}] Content post created: ${newPost.id}`);
+
+                // STEP 2: Un-feature old videos from this channel (keep only 1 per channel in carousel)
+                const { error: unfeatError } = await supabase
+                    .from('content_posts')
+                    .update({ is_featured: false })
+                    .eq('type', 'video')
+                    .eq('is_featured', true)
+                    .or(`metadata->>channelKey.eq.${channel.key},metadata->>channelId.eq.${channel.id}`)
+                    .neq('id', newPost.id);  // Don't un-feature the one we just created
+
+                if (unfeatError) {
+                    console.error(`[${channel.name}] Failed to un-feature old videos:`, unfeatError);
                 } else {
-                    console.log(`[${channel.name}] Content post created for video ${latest.videoId}`);
+                    console.log(`[${channel.name}] Un-featured old videos from this channel`);
+                }
+
+                // STEP 3: Feature the new post
+                const { error: featureError } = await supabase
+                    .from('content_posts')
+                    .update({ is_featured: true })
+                    .eq('id', newPost.id);
+
+                if (featureError) {
+                    console.error(`[${channel.name}] Failed to feature new post:`, featureError);
+                } else {
+                    console.log(`[${channel.name}] New video featured in carousel`);
                 }
             } else {
                 // Fix existing post if it has wrong is_published or is_featured status

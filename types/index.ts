@@ -6,6 +6,7 @@
  */
 
 export * from './auth';
+export * from './content';
 export * from './edgeFunctionQueue';
 export * from './leaderboard';
 export * from './post';

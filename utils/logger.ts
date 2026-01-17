@@ -128,9 +128,9 @@ class Logger {
         const timestamp = new Date().toISOString();
         const prefix = `[${timestamp}] [${module}]`;
 
-        // 2. Build message with context
+        // 2. Build message with context (prefer email for readability, fallback to truncated ID)
         const userPrefix = globalUserContext
-            ? ` [User: ${globalUserContext.userId.substring(0, 8)}...]`
+            ? ` [User: ${globalUserContext.email || globalUserContext.userId.substring(0, 8)}]`
             : '';
         const corrPrefix = correlationId ? ` [${correlationId}]` : '';
         const messageWithPrefix = `${prefix}${userPrefix}${corrPrefix} ${message}`;

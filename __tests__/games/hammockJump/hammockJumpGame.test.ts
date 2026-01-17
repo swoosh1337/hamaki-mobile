@@ -241,12 +241,6 @@ describe('Hammock Jump Game', () => {
       expect(state.player.vx).toBe(0);
     });
 
-    test('should initialize canDoubleJump as false', () => {
-      game.startGame();
-      const state = getGameState(game);
-      expect(state.player.canDoubleJump).toBe(false);
-    });
-
     test('should initialize isOnIce as false', () => {
       game.startGame();
       const state = getGameState(game);
@@ -311,83 +305,6 @@ describe('Hammock Jump Game', () => {
       game.setTilt(0.5);
       const moveAnalog = getPrivateField<number>(game, 'moveAnalog');
       expect(moveAnalog).toBeGreaterThan(0);
-    });
-  });
-
-  // ==========================================================================
-  // DOUBLE JUMP TESTS
-  // ==========================================================================
-  describe('Double Jump', () => {
-    beforeEach(() => {
-      game.startGame();
-    });
-
-    test('should not allow double jump when grounded', () => {
-      modifyGameState(game, (state) => {
-        state.player.isGrounded = true;
-        state.player.canDoubleJump = true;
-      });
-      game.performDoubleJump();
-      const state = getGameState(game);
-      expect(state.player.canDoubleJump).toBe(true); // Still available (wasn't used)
-    });
-
-    test('should allow double jump when in air with canDoubleJump', () => {
-      modifyGameState(game, (state) => {
-        state.player.isGrounded = false;
-        state.player.canDoubleJump = true;
-        state.player.vy = 5; // Falling
-      });
-      game.performDoubleJump();
-      const state = getGameState(game);
-      expect(state.player.canDoubleJump).toBe(false); // Used up
-      expect(state.player.vy).toBeLessThan(0); // Boosted upward
-    });
-
-    test('should not allow double jump twice', () => {
-      modifyGameState(game, (state) => {
-        state.player.isGrounded = false;
-        state.player.canDoubleJump = false; // Already used
-        state.player.vy = 5;
-      });
-      const initialVy = getGameState(game).player.vy;
-      game.performDoubleJump();
-      const state = getGameState(game);
-      expect(state.player.vy).toBe(initialVy); // No change
-    });
-
-    test('should add horizontal boost when tilting during double jump', () => {
-      setPrivateField(game, 'moveAnalog', 0.5);
-      modifyGameState(game, (state) => {
-        state.player.isGrounded = false;
-        state.player.canDoubleJump = true;
-        state.player.vx = 0;
-      });
-      game.performDoubleJump();
-      const state = getGameState(game);
-      expect(state.player.vx).toBeGreaterThan(0); // Got horizontal boost
-    });
-
-    test('should create particles on double jump', () => {
-      modifyGameState(game, (state) => {
-        state.player.isGrounded = false;
-        state.player.canDoubleJump = true;
-        state.particles = [];
-      });
-      game.performDoubleJump();
-      const state = getGameState(game);
-      expect(state.particles.length).toBeGreaterThan(0);
-    });
-
-    test('should add screen shake on double jump', () => {
-      modifyGameState(game, (state) => {
-        state.player.isGrounded = false;
-        state.player.canDoubleJump = true;
-        state.screenShake = 0;
-      });
-      game.performDoubleJump();
-      const state = getGameState(game);
-      expect(state.screenShake).toBeGreaterThan(0);
     });
   });
 
@@ -634,51 +551,6 @@ describe('Hammock Jump Game', () => {
 
     test('spawn chance should be 25%', () => {
       expect(GAME_CONFIG.SPAWN_ITEM_CHANCE).toBe(0.25);
-    });
-  });
-
-  // ==========================================================================
-  // DOUBLE JUMP HINT (needsDoubleJump) TESTS
-  // ==========================================================================
-  describe('Double Jump Hint', () => {
-    beforeEach(() => {
-      game.startGame();
-    });
-
-    test('should initialize needsDoubleJump as false', () => {
-      const state = getGameState(game);
-      expect(state.needsDoubleJump).toBe(false);
-    });
-
-    test('should reset needsDoubleJump when grounded', () => {
-      modifyGameState(game, (state) => {
-        state.needsDoubleJump = true;
-        state.player.isGrounded = true;
-      });
-      triggerUpdate(game, 16);
-      // The hint should reset based on grounded state
-    });
-
-    test('should reset needsDoubleJump when double jump used', () => {
-      modifyGameState(game, (state) => {
-        state.needsDoubleJump = true;
-        state.player.canDoubleJump = false; // Used
-      });
-      triggerUpdate(game, 16);
-      const state = getGameState(game);
-      expect(state.needsDoubleJump).toBe(false);
-    });
-
-    test('needsDoubleJump should be sticky once set', () => {
-      modifyGameState(game, (state) => {
-        state.needsDoubleJump = true;
-        state.player.isGrounded = false;
-        state.player.canDoubleJump = true;
-      });
-      triggerUpdate(game, 16);
-      const state = getGameState(game);
-      // Should stay true until player acts
-      expect(state.needsDoubleJump).toBe(true);
     });
   });
 

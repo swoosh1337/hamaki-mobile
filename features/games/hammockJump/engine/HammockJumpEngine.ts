@@ -18,7 +18,6 @@ export interface GameState {
     height: number;
     hasShield?: boolean;
     shieldTime?: number;
-    canDoubleJump: boolean;
     isGrounded: boolean;
     isOnIce: boolean; // Slippery ice platform effect
     groundedFrames: number; // Track frames since last grounded to prevent flicker
@@ -31,7 +30,6 @@ export interface GameState {
   lastScoredPlatformId: string | null; // Track last platform that gave score
   lastLandingTime: number; // Timestamp of last platform landing for combo timing
   lastComboPlatformId: string | null; // Track last platform for combo (different platform required)
-  needsDoubleJump: boolean; // true if current gap likely requires double jump
   gameTime: number; // Time elapsed in seconds
   items: Item[];
 }
@@ -65,11 +63,20 @@ export interface Platform {
   width: number;
   height: number;
   vx: number; // moving platforms
-  type: 'normal' | 'moving' | 'breakable' | 'spring' | 'bouncy' | 'ice' | 'conveyor';
+  type: 'normal' | 'moving' | 'breakable' | 'spring' | 'bouncy' | 'ice' | 'conveyor' | 'disappearing' | 'crumbling';
   broken?: boolean; // for breakable platforms
   springUsed?: boolean; // for spring platforms
   scored?: boolean; // track if this platform already gave score
   conveyorDirection?: 1 | -1; // for conveyor platforms
+  // Disappearing platform state
+  disappearTimer?: number; // countdown in ms after landing
+  isDisappearing?: boolean; // true when fading
+  opacity?: number; // 0-1 for fade effect
+  // Crumbling platform state
+  crumbleTimer?: number; // countdown in ms after landing
+  isCrumbling?: boolean; // true when shaking/falling
+  shakeOffset?: number; // horizontal shake offset
+  fallVy?: number; // vertical velocity when falling
 }
 
 export interface GameAssets {
@@ -79,58 +86,79 @@ export interface GameAssets {
 
 const PHYSICS = {
   GRAVITY: 0.8, // px/frame (proper gravity)
-  JUMP_VELOCITY: -15, // px/frame upward (strong bounce)
-  SPRING_VELOCITY: -25, // px/frame upward (super bounce)
-  BOUNCY_VELOCITY: -18, // px/frame upward (between normal and spring)
-  DOUBLE_JUMP_VELOCITY: -12, // px/frame upward (double jump boost)
+  JUMP_VELOCITY: -15, // px/frame upward - max height ~140px
+  SPRING_VELOCITY: -25, // px/frame upward (super bounce) - max height ~390px
+  BOUNCY_VELOCITY: -20, // px/frame upward - MORE DRAMATIC ~250px max height
   HORIZONTAL_SPEED: 6, // px/frame (responsive movement)
-  HORIZONTAL_BOOST: 4, // px/frame (double tap boost)
   MAX_FALL_SPEED: 20, // px/frame (terminal velocity)
   PLATFORM_SPEED: 100, // px/second baseline for moving platforms (scaled by frameMultiplier)
-  ICE_FRICTION: 0.98, // Reduced friction for ice platforms (1.0 = no friction)
+  ICE_FRICTION: 0.995, // MORE SLIPPERY - almost no friction (1.0 = no friction)
+  ICE_SLIDE_FORCE: 8, // Stronger initial slide force
   CONVEYOR_SPEED: 3, // px/frame horizontal push for conveyor platforms
+  // Disappearing/Crumbling timers
+  DISAPPEAR_DELAY: 800, // ms before platform starts fading
+  DISAPPEAR_DURATION: 400, // ms for fade animation
+  CRUMBLE_DELAY: 500, // ms before platform starts falling
+  CRUMBLE_SHAKE_DURATION: 300, // ms of shaking before fall
 };
 
 export const GAME_CONFIG = {
   PLAYER_SIZE: 64,
   PLATFORM_HEIGHT: 14,
-  // Gap tuning: start easier (smaller vertical movement per hop), get MUCH harder (bigger gaps)
-  BASE_PLATFORM_GAP: 80,        // px — initial average vertical gap (medium start)
-  MAX_PLATFORM_GAP: 220,        // px — max gap at high difficulty (very sparse late game)
+  // Gap tuning: designed for single jump only (max jump height ~140px)
+  BASE_PLATFORM_GAP: 60,        // px — initial average vertical gap (easy start)
+  MAX_PLATFORM_GAP: 115,        // px — max gap at high difficulty (still reachable with single jump)
   // Width tuning: start wide (easy), get narrower (hard)
   PLATFORM_WIDTH_MIN_EASY: 100,
-  PLATFORM_WIDTH_MIN_HARD: 40,  // Much narrower at high difficulty
+  PLATFORM_WIDTH_MIN_HARD: 50,  // Narrower at high difficulty but not too hard
   PLATFORM_WIDTH_MAX_EASY: 160,
-  PLATFORM_WIDTH_MAX_HARD: 80,  // Smaller max width
+  PLATFORM_WIDTH_MAX_HARD: 90,  // Smaller max width
   // Count tuning: start with more platforms visible, then reduce to increase challenge
-  TARGET_COUNT_EASY: 16,        // fewer to start so screen isn't overcrowded
-  TARGET_COUNT_HARD: 8,         // much fewer at high difficulty
+  TARGET_COUNT_EASY: 18,        // More platforms for easier gameplay
+  TARGET_COUNT_HARD: 10,        // Still reasonable at high difficulty
   // Moving platform speed tuning
-  MOVING_SPEED_BASE: 0.08,      // Faster base speed
-  MOVING_SPEED_MAX: 0.18,       // Much faster at high difficulty
+  MOVING_SPEED_BASE: 0.06,      // Slightly slower base speed
+  MOVING_SPEED_MAX: 0.14,       // Max speed at high difficulty
   // Scoring: points per platform landed (not continuous)
   SCORE_PER_PLATFORM: 10,       // Base score per platform
   COMBO_MULTIPLIER: 2,          // Bonus for combos
   // Sparsity controls: probability to skip spawning a platform (creates gaps)
-  SPARSE_SKIP_PROB_EASY: 0.08,
-  SPARSE_SKIP_PROB_HARD: 0.35,  // Much higher chance to skip platforms
+  SPARSE_SKIP_PROB_EASY: 0.05,  // Lower skip probability
+  SPARSE_SKIP_PROB_HARD: 0.20,  // Reduced from 0.35 to ensure reachability
   // Horizontal spacing: minimum separation between consecutive platforms
-  MIN_H_SEPARATION_EASY: 0.10,  // as fraction of screen width
-  MIN_H_SEPARATION_HARD: 0.28,  // Wider gaps
+  MIN_H_SEPARATION_EASY: 0.08,  // as fraction of screen width
+  MIN_H_SEPARATION_HARD: 0.20,  // Slightly reduced for single jump
   // Item configs
-  SPAWN_ITEM_CHANCE: 0.25, // 25% chance to spawn an item on a platform
-  ITEM_SCORE: 15,
-  ITEM_SIZE: 32,
-  // Physics-based reachability (with double jump)
-  MAX_REACHABLE_HEIGHT: 200,     // Conservative max vertical reach with double jump
-  MAX_REACHABLE_HORIZONTAL: 200, // Max horizontal distance during jump arc
+  SPAWN_ITEM_CHANCE: 0.12, // 12% chance - items are rare but valuable
+  ITEM_SIZE: 48,
+  // Dynamic scoring based on difficulty (calculated at runtime)
+  ITEM_SCORE_BASE: 100,     // Base points at start
+  ITEM_SCORE_MAX: 200,      // Max points at high difficulty
+  // Physics-based reachability (single jump only - max jump height ~140px)
+  MAX_REACHABLE_HEIGHT: 115,     // Conservative max vertical reach with single jump
+  MAX_REACHABLE_HORIZONTAL: 160, // Max horizontal distance during jump arc
 } as const;
+
+// Item spawn pattern types
+type ItemSpawnPattern = 'GAP_JUMPER' | 'OPPOSITE_SIDE' | 'BELOW_PLATFORM' | 'MOVING_TARGET' | 'ZIGZAG_TRAIL';
 
 export class HammockGameEngine {
   private gameState: GameState;
   private lastUpdateTime = 0;
   private moveDir: -1 | 0 | 1 = 0;
   private moveAnalog = 0; // -1..1 from device tilt
+
+  // Audio callbacks
+  public onPlatformLand: (() => void) | null = null;
+  public onPlayerFalling: (() => void) | null = null;
+  public onItemCollected: ((itemType: string) => void) | null = null;
+  public onBigBoostLand: (() => void) | null = null; // Spring, Bouncy platforms
+  public onSpecialPlatformLand: (() => void) | null = null; // Moving, Ice, Conveyor, Disappearing, Crumbling
+  public onBreakableLand: (() => void) | null = null; // Breakable platforms
+  private fallingTriggered = false;
+
+  // Player freeze state (for K animation)
+  private isPlayerFrozen = false;
 
   constructor(screenWidth: number, screenHeight: number) {
     this.gameState = this.createInitialState(screenWidth, screenHeight);
@@ -155,7 +183,6 @@ export class HammockGameEngine {
         height: playerSize,
         hasShield: false,
         shieldTime: 0,
-        canDoubleJump: false,
         isGrounded: false,
         isOnIce: false,
         groundedFrames: 0,
@@ -168,7 +195,6 @@ export class HammockGameEngine {
       lastScoredPlatformId: null,
       lastLandingTime: 0,
       lastComboPlatformId: null,
-      needsDoubleJump: false,
       gameTime: 0,
       items: [],
     };
@@ -183,26 +209,28 @@ export class HammockGameEngine {
     const { screenWidth, screenHeight } = state;
     const gap = GAME_CONFIG.BASE_PLATFORM_GAP;
 
-    // Generate initial platforms - some below player for starting, most above
+    // Generate initial platforms - starting from the start platform
     let lastX = screenWidth / 2; // Start from center
 
     // First, create a starting platform right below the player
     const startPlatformWidth = 120;
     const startPlatformX = Math.max(0, Math.min(screenWidth - startPlatformWidth, state.player.x - startPlatformWidth / 2));
+    const startPlatformY = state.player.y + state.player.height + 20;
+
     state.platforms.push({
       id: 'start',
       x: startPlatformX,
-      y: state.player.y + state.player.height + 20,
+      y: startPlatformY,
       width: startPlatformWidth,
       height: GAME_CONFIG.PLATFORM_HEIGHT,
       vx: 0,
       type: 'normal'
     });
 
-    // Create a few platforms below the player (but not below screen bottom)
-    let y = state.player.y + state.player.height + 20 + gap;
+    // Create a few platforms below the start platform (but not below screen bottom)
+    let y = startPlatformY + gap;
     lastX = startPlatformX;
-    const screenBottom = screenHeight; // Bottom of the screen
+    const screenBottom = screenHeight;
 
     while (y < screenBottom - 50 && state.platforms.length < 5) {
       // Wide platforms at start (easy)
@@ -221,8 +249,9 @@ export class HammockGameEngine {
       y += gap;
     }
 
-    // Now create platforms above the player
-    y = state.player.y - gap;
+    // Now create platforms ABOVE the start platform (reachable with single jump)
+    // Start from the start platform position, not player position
+    y = startPlatformY - gap;
     lastX = startPlatformX;
 
     while (y > -screenHeight * 2 && state.platforms.length < 25) {
@@ -316,6 +345,9 @@ export class HammockGameEngine {
     this.moveDir = 0;
     this.moveAnalog = 0;
 
+    // Reset falling trigger for sound
+    this.fallingTriggered = false;
+
     // Regenerate platforms
     this.seedPlatforms(this.gameState);
   }
@@ -330,6 +362,42 @@ export class HammockGameEngine {
 
   exitGame(): void {
     this.gameState = this.createInitialState(this.gameState.screenWidth, this.gameState.screenHeight);
+  }
+
+  /**
+   * Trigger game over with a score bonus (used for K animation completion)
+   */
+  triggerGameOverWithBonus(bonus: number): void {
+    if (this.gameState.phase === 'PLAYING') {
+      this.gameState.score += bonus;
+      this.gameState.phase = 'GAME_OVER';
+      this.isPlayerFrozen = false;
+    }
+  }
+
+  /**
+   * Freeze the player in place (for K animation)
+   */
+  freezePlayer(): void {
+    this.isPlayerFrozen = true;
+    // Stop all movement
+    this.gameState.player.vy = 0;
+    this.moveDir = 0;
+    this.moveAnalog = 0;
+  }
+
+  /**
+   * Unfreeze the player
+   */
+  unfreezePlayer(): void {
+    this.isPlayerFrozen = false;
+  }
+
+  /**
+   * Check if player is frozen
+   */
+  isPlayerCurrentlyFrozen(): boolean {
+    return this.isPlayerFrozen;
   }
 
   setMoveLeft(isDown: boolean) {
@@ -363,27 +431,6 @@ export class HammockGameEngine {
     this.setMoveAnalog(value);
   }
 
-  // Double tap mechanic
-  performDoubleJump(): void {
-    const p = this.gameState.player;
-
-    // Only allow double jump if player is in the air and hasn't used it yet
-    if (!p.isGrounded && p.canDoubleJump) {
-      // If player is tilting, give horizontal boost
-      if (Math.abs(this.moveAnalog) > 0.1) {
-        p.vx += this.moveAnalog * PHYSICS.HORIZONTAL_BOOST;
-        p.vy = PHYSICS.DOUBLE_JUMP_VELOCITY * 0.8; // Smaller vertical boost when boosting horizontally
-      } else {
-        // Pure vertical double jump
-        p.vy = PHYSICS.DOUBLE_JUMP_VELOCITY;
-      }
-
-      p.canDoubleJump = false; // Use up the double jump
-      this.addScreenShake(3);
-      this.createParticles(p.x + p.width / 2, p.y + p.height, '#00FFFF', 8); // Cyan particles for double jump
-    }
-  }
-
   update(currentTime: number): void {
     if (this.gameState.phase !== 'PLAYING') return;
     if (this.lastUpdateTime === 0) {
@@ -398,7 +445,6 @@ export class HammockGameEngine {
     this.gameState.gameTime += dt / 1000;
 
     this.updatePlayer(dt);
-    this.analyzeGapDifficulty();
     this.updatePlatforms(dt);
     this.updateItems(dt);
     this.updateParticles(dt);
@@ -415,6 +461,12 @@ export class HammockGameEngine {
     s.items = s.items.filter(item => {
       if (item.collected) return false;
 
+      // CLEANUP: Remove items that have scrolled below the visible screen
+      // Items below screen + 200px buffer are no longer reachable
+      if (item.y > s.screenHeight + 200) {
+        return false; // Remove from list
+      }
+
       // Simple AABB collision check
       const collision =
         p.x < item.x + item.width &&
@@ -423,10 +475,18 @@ export class HammockGameEngine {
         p.y + p.height > item.y;
 
       if (collision) {
-        // Collected!
-        s.score += GAME_CONFIG.ITEM_SCORE;
-        this.createParticles(item.x + item.width / 2, item.y + item.height / 2, '#FFD700', 5);
-        log.debug(`Collected item: ${item.type}`, { score: GAME_CONFIG.ITEM_SCORE });
+        // Collected! Calculate score based on current difficulty
+        const difficultyLevel = Math.floor(s.gameTime / 10);
+        const itemScore = this.getItemScore(difficultyLevel);
+        s.score += itemScore;
+        this.createParticles(item.x + item.width / 2, item.y + item.height / 2, '#FFD700', 8);
+        log.debug(`Collected item: ${item.type}`, { score: itemScore, difficulty: difficultyLevel });
+
+        // Trigger audio callback
+        if (this.onItemCollected) {
+          this.onItemCollected(item.type);
+        }
+
         return false; // Remove from list
       }
 
@@ -435,6 +495,11 @@ export class HammockGameEngine {
   }
 
   private updatePlayer(dt: number) {
+    // Skip all physics updates if player is frozen (K animation)
+    if (this.isPlayerFrozen) {
+      return;
+    }
+
     const s = this.gameState; const p = s.player;
 
     // Normalize dt to 60fps (16.67ms per frame)
@@ -531,60 +596,26 @@ export class HammockGameEngine {
       s.combo = 0;
     }
 
+    // Trigger falling sound when player passes visible area (before game over)
+    if (p.y - s.cameraY > s.screenHeight && !this.fallingTriggered) {
+      this.fallingTriggered = true;
+      if (this.onPlayerFalling) {
+        this.onPlayerFalling();
+      }
+    }
+
     // Game over if falls below screen bottom (ONE LIFE ONLY)
     if (p.y - s.cameraY > s.screenHeight + 100) {
       this.gameState.phase = 'GAME_OVER';
     }
   }
 
-  private analyzeGapDifficulty(): void {
-    const s = this.gameState;
-    const p = s.player;
-
-    // ONLY reset when player actually uses double jump
-    if (!p.canDoubleJump) {
-      s.needsDoubleJump = false;
-      return;
-    }
-
-    // When grounded, don't change state (UI hides hint anyway when grounded)
-    if (p.isGrounded) {
-      return;
-    }
-
-    // Once hint is shown, keep it visible until double jump is used
-    if (s.needsDoubleJump) {
-      return;
-    }
-
-    // Evaluate gap difficulty only when in air and hint not already showing
-    const reachablePlatforms = s.platforms.filter(plat =>
-      !plat.broken &&
-      plat.y < p.y + p.height &&
-      plat.y > p.y - 300
-    );
-
-    if (reachablePlatforms.length === 0) {
-      s.needsDoubleJump = true;
-      return;
-    }
-
-    const playerCenterX = p.x + p.width / 2;
-    const isEasyReach = reachablePlatforms.some(plat => {
-      const platCenterX = plat.x + plat.width / 2;
-      const horizontalDist = Math.abs(platCenterX - playerCenterX);
-      const verticalDist = Math.abs(p.y - plat.y);
-      return horizontalDist < 150 && verticalDist < 120;
-    });
-
-    s.needsDoubleJump = !isEasyReach;
-  }
-
   private updatePlatforms(dt: number) {
     const frameMultiplier = dt / 16.67;
 
-    // Update moving platforms
+    // Update all platforms
     for (const plat of this.gameState.platforms) {
+      // Moving platforms
       if (plat.vx !== 0) {
         // Move platforms horizontally. vx is a unit speed, PLATFORM_SPEED sets the px/sec baseline.
         plat.x += plat.vx * PHYSICS.PLATFORM_SPEED * frameMultiplier;
@@ -596,6 +627,46 @@ export class HammockGameEngine {
         } else if (plat.x + plat.width > this.gameState.screenWidth) {
           plat.x = this.gameState.screenWidth - plat.width;
           plat.vx *= -1;
+        }
+      }
+
+      // Disappearing platforms - fade out after timer
+      if (plat.type === 'disappearing' && plat.isDisappearing) {
+        if (plat.disappearTimer !== undefined) {
+          plat.disappearTimer -= dt;
+
+          if (plat.disappearTimer <= 0) {
+            // Start fading
+            if (plat.opacity === undefined) plat.opacity = 1;
+            plat.opacity -= dt / PHYSICS.DISAPPEAR_DURATION;
+
+            if (plat.opacity <= 0) {
+              plat.broken = true; // Mark for removal
+            }
+          }
+        }
+      }
+
+      // Crumbling platforms - shake then fall
+      if (plat.type === 'crumbling' && plat.isCrumbling) {
+        if (plat.crumbleTimer !== undefined) {
+          plat.crumbleTimer -= dt;
+
+          if (plat.crumbleTimer > 0) {
+            // Shaking phase - random horizontal offset
+            plat.shakeOffset = (Math.random() - 0.5) * 6;
+          } else {
+            // Falling phase
+            plat.shakeOffset = 0;
+            if (plat.fallVy === undefined) plat.fallVy = 0;
+            plat.fallVy += PHYSICS.GRAVITY * frameMultiplier * 0.5;
+            plat.y += plat.fallVy * frameMultiplier;
+
+            // Mark for removal when off screen
+            if (plat.y > this.gameState.screenHeight + 100) {
+              plat.broken = true;
+            }
+          }
         }
       }
     }
@@ -614,9 +685,6 @@ export class HammockGameEngine {
       // Keep cameraY unchanged; rendering uses absolute coords.
     }
   }
-
-
-
 
 
   private createParticles(x: number, y: number, color: string, count: number) {
@@ -698,10 +766,11 @@ export class HammockGameEngine {
     // Snap to platform top
     player.y = plat.y - player.height;
 
-    // Reset double jump and grounded state
-    player.canDoubleJump = true;
+    // Reset grounded state
     player.isGrounded = true;
     player.groundedFrames = 0; // Reset counter to prevent flicker
+
+    // Audio callbacks are now handled per-platform-type in the switch below
 
     // Time-based combo logic: only count when landing on DIFFERENT platforms
     const COMBO_TIME_WINDOW = 1500; // 1.5 seconds in ms
@@ -752,43 +821,108 @@ export class HammockGameEngine {
         if (!plat.springUsed) {
           player.vy = PHYSICS.SPRING_VELOCITY;
           plat.springUsed = true;
-          this.addScreenShake(8);
-          this.createParticles(plat.x + plat.width / 2, plat.y, '#FFD700', 15);
+          this.addScreenShake(10);
+          this.createParticles(plat.x + plat.width / 2, plat.y, '#FFD700', 20);
+          this.createParticles(plat.x + plat.width / 2, plat.y - 20, '#FFA500', 10);
           log.debug('Spring boost triggered');
+          // Big boost sound
+          if (this.onBigBoostLand) this.onBigBoostLand();
         } else {
           player.vy = PHYSICS.JUMP_VELOCITY;
+          if (this.onPlatformLand) this.onPlatformLand();
         }
         break;
 
       case 'bouncy':
+        // MORE DRAMATIC bouncy - higher jump, more particles, screen shake
         player.vy = PHYSICS.BOUNCY_VELOCITY;
-        this.addScreenShake(5);
-        this.createParticles(plat.x + plat.width / 2, plat.y, '#FF69B4', 8); // Hot pink
+        this.addScreenShake(8);
+        // Burst of pink particles in multiple directions
+        this.createParticles(plat.x + plat.width / 2, plat.y, '#FF69B4', 15); // Hot pink
+        this.createParticles(plat.x + plat.width / 2, plat.y - 10, '#FF1493', 10); // Deep pink
+        this.createParticles(plat.x + plat.width / 4, plat.y, '#FF69B4', 5);
+        this.createParticles(plat.x + plat.width * 3/4, plat.y, '#FF69B4', 5);
+        // Big boost sound
+        if (this.onBigBoostLand) this.onBigBoostLand();
         break;
 
       case 'ice':
+        // MORE DRAMATIC ice - strong slide, more particles, visual feedback
         player.vy = PHYSICS.JUMP_VELOCITY;
-        player.isOnIce = true; // Enable sliding effect
-        player.vx += (Math.random() - 0.5) * 4; // Random slide direction
-        this.createParticles(plat.x + plat.width / 2, plat.y, '#87CEEB', 6); // Sky blue
+        player.isOnIce = true;
+        // Determine slide direction based on player approach
+        const slideDirection = player.vx >= 0 ? 1 : -1;
+        player.vx = slideDirection * PHYSICS.ICE_SLIDE_FORCE + (Math.random() - 0.5) * 2;
+        this.addScreenShake(3);
+        // Ice crystal particles spraying in slide direction
+        this.createParticles(plat.x + plat.width / 2, plat.y, '#87CEEB', 12); // Sky blue
+        this.createParticles(plat.x + plat.width / 2, plat.y, '#E0FFFF', 8); // Light cyan
+        this.createParticles(plat.x + plat.width / 2 + slideDirection * 20, plat.y - 5, '#FFFFFF', 6); // White
+        // Special platform sound
+        if (this.onSpecialPlatformLand) this.onSpecialPlatformLand();
         break;
 
       case 'conveyor':
         player.vy = PHYSICS.JUMP_VELOCITY;
         player.vx += PHYSICS.CONVEYOR_SPEED * (plat.conveyorDirection || 1);
         this.createParticles(plat.x + plat.width / 2, plat.y, '#808080', 5); // Gray
+        // Special platform sound
+        if (this.onSpecialPlatformLand) this.onSpecialPlatformLand();
         break;
 
       case 'breakable':
         player.vy = PHYSICS.JUMP_VELOCITY;
         plat.broken = true; // Only break THIS platform
-        this.addScreenShake(4);
-        this.createParticles(plat.x + plat.width / 2, plat.y, '#8B4513', 10);
+        this.addScreenShake(6);
+        // Wood/debris particles
+        this.createParticles(plat.x + plat.width / 2, plat.y, '#8B4513', 12);
+        this.createParticles(plat.x + plat.width / 4, plat.y + 5, '#A0522D', 6);
+        this.createParticles(plat.x + plat.width * 3/4, plat.y + 5, '#D2691E', 6);
+        // Breakable sound
+        if (this.onBreakableLand) this.onBreakableLand();
+        break;
+
+      case 'disappearing':
+        player.vy = PHYSICS.JUMP_VELOCITY;
+        // Start disappear timer if not already started
+        if (!plat.isDisappearing) {
+          plat.isDisappearing = true;
+          plat.disappearTimer = PHYSICS.DISAPPEAR_DELAY;
+          plat.opacity = 1;
+          this.createParticles(plat.x + plat.width / 2, plat.y, '#9370DB', 8); // Medium purple
+        }
+        // Special platform sound
+        if (this.onSpecialPlatformLand) this.onSpecialPlatformLand();
+        break;
+
+      case 'crumbling':
+        player.vy = PHYSICS.JUMP_VELOCITY;
+        // Start crumble timer if not already started
+        if (!plat.isCrumbling) {
+          plat.isCrumbling = true;
+          plat.crumbleTimer = PHYSICS.CRUMBLE_DELAY + PHYSICS.CRUMBLE_SHAKE_DURATION;
+          plat.shakeOffset = 0;
+          this.addScreenShake(4);
+          this.createParticles(plat.x + plat.width / 2, plat.y, '#696969', 10); // Dim gray
+          this.createParticles(plat.x + plat.width / 4, plat.y, '#808080', 5);
+          this.createParticles(plat.x + plat.width * 3/4, plat.y, '#808080', 5);
+        }
+        // Special platform sound
+        if (this.onSpecialPlatformLand) this.onSpecialPlatformLand();
+        break;
+
+      case 'moving':
+        player.vy = PHYSICS.JUMP_VELOCITY;
+        this.createParticles(plat.x + plat.width / 2, plat.y, '#C4FF00', 5);
+        // Special platform sound for moving platforms
+        if (this.onSpecialPlatformLand) this.onSpecialPlatformLand();
         break;
 
       default:
         player.vy = PHYSICS.JUMP_VELOCITY;
         this.createParticles(plat.x + plat.width / 2, plat.y, '#C4FF00', 5);
+        // Normal platform sound
+        if (this.onPlatformLand) this.onPlatformLand();
         break;
     }
   }
@@ -814,22 +948,25 @@ export class HammockGameEngine {
     const difficultyLevel = Math.floor(s.gameTime / 10);
 
     // 2. Physics-based reachability with difficulty scaling
-    // The ellipse shrinks over time, making platforms closer together (harder to miss, but tighter)
+    // Max jump height is ~140px, so we keep platforms reachable but progressively harder
+    // Height scaling: starts at 115px, shrinks by 5% per level, min 90px (still reachable)
     const scaledMaxHeight = Math.max(
-      GAME_CONFIG.MAX_REACHABLE_HEIGHT * Math.pow(0.98, difficultyLevel),
-      120 // Minimum max height
+      GAME_CONFIG.MAX_REACHABLE_HEIGHT * Math.pow(0.95, difficultyLevel),
+      90 // Minimum max height (still reachable with single jump)
     );
+    // Horizontal scaling: starts at 160px, shrinks by 8% per level, min 70px
     const scaledMaxHorizontal = Math.max(
-      GAME_CONFIG.MAX_REACHABLE_HORIZONTAL * Math.pow(0.95, difficultyLevel),
-      80 // Minimum max horizontal
+      GAME_CONFIG.MAX_REACHABLE_HORIZONTAL * Math.pow(0.92, difficultyLevel),
+      70 // Minimum max horizontal
     );
 
-    // Minimum vertical gap (player needs room to land)
-    const yOffsetMin = 80;
+    // Minimum vertical gap increases slightly with difficulty (harder to chain jumps)
+    // Starts at 55px, increases to max 80px at high difficulty
+    const yOffsetMin = Math.min(55 + (difficultyLevel * 5), 80);
 
-    // Platform Width: Shrinks 3% per level, min 50px.
+    // Platform Width: Shrinks 5% per level, min 45px (still landable)
     const initialPlatWidth = 110;
-    const platWidth = Math.max(initialPlatWidth * Math.pow(0.97, difficultyLevel), 50);
+    const platWidth = Math.max(initialPlatWidth * Math.pow(0.95, difficultyLevel), 45);
 
     // 3. Generate Ahead
     // Find the highest platform (smallest y) to spawn relative to
@@ -850,7 +987,7 @@ export class HammockGameEngine {
 
         // --- ELLIPSE-CONSTRAINED POSITION GENERATION ---
         // Ensures: (horizontalGap/maxH)² + (verticalGap/maxV)² <= 1
-        // This guarantees every platform is reachable with double jump
+        // This guarantees every platform is reachable with a single jump
 
         // Random vertical gap (always positive, platform above)
         const verticalGap = this.randBetween(yOffsetMin, Math.floor(scaledMaxHeight));
@@ -871,28 +1008,58 @@ export class HammockGameEngine {
         // Clamp X to screen bounds
         newX = Math.max(0, Math.min(screenWidth - platWidth, newX));
 
-        // Determine type based on difficulty
-        // After level 3 (30s): Chance for moving/special platforms
+        // Determine type based on difficulty - progressive introduction
+        // Level 0 (0-10s): All normal
+        // Level 1 (10-20s): 15% moving
+        // Level 2 (20-30s): 25% special (moving, bouncy, disappearing)
+        // Level 3 (30-40s): 35% special (add breakable, ice, crumbling)
+        // Level 4+ (40s+): 45%+ special (add conveyor, spring)
         let platformType: Platform['type'] = 'normal';
         let conveyorDir: 1 | -1 = Math.random() < 0.5 ? -1 : 1;
 
-        if (difficultyLevel >= 3) {
-          const rand = Math.random();
-          // Chance increases with difficulty
-          const specialChance = 0.1 + (difficultyLevel * 0.02);
+        const rand = Math.random();
+
+        if (difficultyLevel >= 1) {
+          // Calculate special platform chance: starts at 15%, increases by 10% per level, caps at 60%
+          const specialChance = Math.min(0.15 + (difficultyLevel - 1) * 0.10, 0.60);
 
           if (rand < specialChance) {
             const typeRand = Math.random();
-            if (typeRand < 0.25) platformType = 'moving';
-            else if (typeRand < 0.40) platformType = 'breakable';
-            else if (typeRand < 0.55) platformType = 'bouncy';
-            else if (typeRand < 0.70) platformType = 'ice';
-            else if (typeRand < 0.85) platformType = 'conveyor';
-            else platformType = 'spring';
+
+            if (difficultyLevel === 1) {
+              // Level 1: Only moving platforms
+              platformType = 'moving';
+            } else if (difficultyLevel === 2) {
+              // Level 2: Moving (45%), Bouncy (30%), Disappearing (25%)
+              if (typeRand < 0.45) platformType = 'moving';
+              else if (typeRand < 0.75) platformType = 'bouncy';
+              else platformType = 'disappearing';
+            } else if (difficultyLevel === 3) {
+              // Level 3: Moving (30%), Bouncy (20%), Breakable (15%), Ice (15%), Disappearing (10%), Crumbling (10%)
+              if (typeRand < 0.30) platformType = 'moving';
+              else if (typeRand < 0.50) platformType = 'bouncy';
+              else if (typeRand < 0.65) platformType = 'breakable';
+              else if (typeRand < 0.80) platformType = 'ice';
+              else if (typeRand < 0.90) platformType = 'disappearing';
+              else platformType = 'crumbling';
+            } else {
+              // Level 4+: All types with good variety
+              if (typeRand < 0.20) platformType = 'moving';
+              else if (typeRand < 0.35) platformType = 'breakable';
+              else if (typeRand < 0.48) platformType = 'bouncy';
+              else if (typeRand < 0.60) platformType = 'ice';
+              else if (typeRand < 0.72) platformType = 'disappearing';
+              else if (typeRand < 0.84) platformType = 'crumbling';
+              else if (typeRand < 0.94) platformType = 'conveyor';
+              else platformType = 'spring';
+            }
           }
         }
 
-        const vx = platformType === 'moving' ? (Math.random() < 0.5 ? -GAME_CONFIG.MOVING_SPEED_BASE : GAME_CONFIG.MOVING_SPEED_BASE) : 0;
+        // Moving platform speed increases with difficulty (base speed + 50% per level, capped at 3x)
+        const movingSpeedMultiplier = Math.min(1 + (difficultyLevel * 0.5), 3.0);
+        const movingSpeed = GAME_CONFIG.MOVING_SPEED_BASE * movingSpeedMultiplier;
+        const vx = platformType === 'moving' ? (Math.random() < 0.5 ? -movingSpeed : movingSpeed) : 0;
 
         const newPlat: Platform = {
           id: Math.random().toString(36).slice(2),
@@ -907,32 +1074,8 @@ export class HammockGameEngine {
 
         s.platforms.push(newPlat);
 
-        // Attempt to spawn an item
-        if (Math.random() < GAME_CONFIG.SPAWN_ITEM_CHANCE) {
-          // Decide type
-          const r = Math.random();
-          let itemType: 'egg' | 'tomato' | 'pepper' = 'egg';
-          if (r < 0.33) itemType = 'tomato';
-          else if (r < 0.66) itemType = 'pepper';
-
-          const itemSize = GAME_CONFIG.ITEM_SIZE;
-
-          // Position: random X on platform (mostly), or slightly offset for air spawn
-          // For now, place ON TOP of platform to ensure reachability
-          // Center on platform with random offset
-          const itemX = newPlat.x + (newPlat.width - itemSize) / 2 + (Math.random() - 0.5) * (newPlat.width * 0.5);
-          const itemY = newPlat.y - itemSize - 10; // Float slightly above
-
-          s.items.push({
-            id: Math.random().toString(36).slice(2),
-            x: itemX,
-            y: itemY,
-            width: itemSize,
-            height: itemSize,
-            type: itemType,
-            collected: false
-          });
-        }
+        // Attempt to spawn items using advanced patterns
+        this.spawnItemWithPattern(newPlat, difficultyLevel, screenWidth);
 
         currentHighest = newPlat;
       }
@@ -941,5 +1084,143 @@ export class HammockGameEngine {
 
   private randBetween(min: number, max: number) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  /**
+   * Select a spawn pattern based on difficulty level
+   * Higher difficulty = harder patterns more likely
+   */
+  private selectSpawnPattern(difficulty: number): ItemSpawnPattern {
+    const rand = Math.random();
+
+    if (difficulty === 0) {
+      // Easy: Only Gap Jumper (above platforms)
+      return 'GAP_JUMPER';
+    } else if (difficulty === 1) {
+      // Medium: Gap Jumper, Opposite Side, Zigzag
+      if (rand < 0.4) return 'GAP_JUMPER';
+      if (rand < 0.7) return 'OPPOSITE_SIDE';
+      return 'ZIGZAG_TRAIL';
+    } else if (difficulty === 2) {
+      // Hard: All patterns
+      if (rand < 0.2) return 'GAP_JUMPER';
+      if (rand < 0.4) return 'OPPOSITE_SIDE';
+      if (rand < 0.6) return 'BELOW_PLATFORM';
+      if (rand < 0.8) return 'MOVING_TARGET';
+      return 'ZIGZAG_TRAIL';
+    } else {
+      // Very Hard (3+): Favor harder patterns
+      if (rand < 0.1) return 'GAP_JUMPER';
+      if (rand < 0.25) return 'OPPOSITE_SIDE';
+      if (rand < 0.45) return 'BELOW_PLATFORM';
+      if (rand < 0.7) return 'MOVING_TARGET';
+      return 'ZIGZAG_TRAIL';
+    }
+  }
+
+  /**
+   * Calculate item score based on difficulty
+   */
+  private getItemScore(difficulty: number): number {
+    const base = GAME_CONFIG.ITEM_SCORE_BASE;
+    const max = GAME_CONFIG.ITEM_SCORE_MAX;
+    // Scale from 100 to 200 over difficulty levels 0-3
+    return Math.min(max, base + difficulty * 33);
+  }
+
+  /**
+   * Spawn item(s) using advanced placement patterns
+   */
+  private spawnItemWithPattern(platform: Platform, difficulty: number, screenWidth: number): void {
+    if (Math.random() >= GAME_CONFIG.SPAWN_ITEM_CHANCE) return;
+
+    const s = this.gameState;
+    const itemSize = GAME_CONFIG.ITEM_SIZE;
+    const pattern = this.selectSpawnPattern(difficulty);
+
+    // Decide item type
+    const r = Math.random();
+    const itemType: 'egg' | 'tomato' | 'pepper' = r < 0.33 ? 'egg' : r < 0.66 ? 'tomato' : 'pepper';
+
+    switch (pattern) {
+      case 'GAP_JUMPER': {
+        // Item floats above the platform center - easy to get while jumping
+        const itemX = platform.x + (platform.width - itemSize) / 2;
+        const itemY = platform.y - itemSize - 40; // Float high above
+        s.items.push(this.createItem(itemX, itemY, itemSize, itemType));
+        break;
+      }
+
+      case 'OPPOSITE_SIDE': {
+        // Item on the opposite side of the screen from the platform
+        const platformCenterX = platform.x + platform.width / 2;
+        const isOnLeft = platformCenterX < screenWidth / 2;
+        // Place item on opposite side, requiring horizontal movement
+        const itemX = isOnLeft
+          ? screenWidth - itemSize - 30  // Far right
+          : 30;                           // Far left
+        const itemY = platform.y - itemSize - 20;
+        s.items.push(this.createItem(itemX, itemY, itemSize, itemType));
+        break;
+      }
+
+      case 'BELOW_PLATFORM': {
+        // Item below the platform edge - risky grab
+        const edge = Math.random() < 0.5 ? platform.x - itemSize : platform.x + platform.width;
+        const itemX = Math.max(0, Math.min(screenWidth - itemSize, edge));
+        const itemY = platform.y + 20; // Below platform level
+        s.items.push(this.createItem(itemX, itemY, itemSize, itemType));
+        break;
+      }
+
+      case 'MOVING_TARGET': {
+        // Only spawn on moving platforms, item stays with platform
+        if (platform.type !== 'moving') {
+          // Fallback to gap jumper if not a moving platform
+          const itemX = platform.x + (platform.width - itemSize) / 2;
+          const itemY = platform.y - itemSize - 30;
+          s.items.push(this.createItem(itemX, itemY, itemSize, itemType));
+        } else {
+          // Item on the moving platform itself
+          const itemX = platform.x + (platform.width - itemSize) / 2;
+          const itemY = platform.y - itemSize - 5; // Just above platform
+          s.items.push(this.createItem(itemX, itemY, itemSize, itemType));
+        }
+        break;
+      }
+
+      case 'ZIGZAG_TRAIL': {
+        // Create 2-3 items in a zigzag pattern above the platform
+        const itemCount = 2 + (difficulty >= 2 ? 1 : 0); // 2 items early, 3 later
+        const startY = platform.y - itemSize - 30;
+        const verticalGap = 50;
+
+        for (let i = 0; i < itemCount; i++) {
+          // Alternate left and right
+          const isLeft = i % 2 === 0;
+          const baseX = platform.x + platform.width / 2;
+          const offset = (isLeft ? -1 : 1) * (60 + i * 20);
+          const itemX = Math.max(0, Math.min(screenWidth - itemSize, baseX + offset - itemSize / 2));
+          const itemY = startY - i * verticalGap;
+          s.items.push(this.createItem(itemX, itemY, itemSize, itemType));
+        }
+        break;
+      }
+    }
+  }
+
+  /**
+   * Helper to create an item object
+   */
+  private createItem(x: number, y: number, size: number, type: 'egg' | 'tomato' | 'pepper'): Item {
+    return {
+      id: Math.random().toString(36).slice(2),
+      x,
+      y,
+      width: size,
+      height: size,
+      type,
+      collected: false
+    };
   }
 }

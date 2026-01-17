@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { HammockJumpAudioManager } from '@/features/games/hammockJump/audio';
 import { GameAssets, HammockGameEngine } from '@/features/games/hammockJump/engine/HammockJumpEngine';
 import { HAMMOCK_JUMP_ASSETS } from '@/features/games/hammockJump/utils/assets';
 import type { AwardXPResult } from '@/hooks/useMyLeaderboardStatus';
@@ -55,13 +56,12 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
     autoFetch: false, // Don't fetch on mount, just use for updates
   });
   const gameEngineRef = useRef<HammockGameEngine | null>(null);
+  const audioManagerRef = useRef<HammockJumpAudioManager | null>(null);
   const [gameState, setGameState] = useState<any>(null);
   const [xpAwarded, setXpAwarded] = useState(false);
   const sessionIdRef = useRef<string>(generateSessionId()); // Unique session for idempotency
   const accelerometerSubscription = useRef<any>(null);
   const [hasAccelerometer, setHasAccelerometer] = useState(true);
-  const lastTapTime = useRef<number>(0);
-  const doubleTapDelay = 400; // ms - increased for better detection
   const [highScore, setHighScore] = useState<number>(0);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
   const gameStartTime = useRef<number>(0); // Track game session duration
@@ -90,6 +90,56 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
         gameEngineRef.current = new HammockGameEngine(SCREEN_WIDTH, SCREEN_HEIGHT);
         if (cancelled) return; // respect unmount
         setGameState(gameEngineRef.current.getState());
+
+        // Initialize audio manager and load sounds
+        audioManagerRef.current = new HammockJumpAudioManager();
+        audioManagerRef.current.loadSounds().then(() => {
+          log.info('Game audio loaded');
+        }).catch(err => {
+          log.error('Failed to load game audio', err);
+        });
+
+        // Set up callback for normal platform landing sound
+        gameEngineRef.current.onPlatformLand = () => {
+          if (audioManagerRef.current) {
+            audioManagerRef.current.playJumpSound();
+          }
+        };
+
+        // Set up callback for falling sound (when player falls off screen)
+        gameEngineRef.current.onPlayerFalling = () => {
+          if (audioManagerRef.current) {
+            audioManagerRef.current.playFallingSound();
+          }
+        };
+
+        // Set up callback for item collection sound
+        gameEngineRef.current.onItemCollected = () => {
+          if (audioManagerRef.current) {
+            audioManagerRef.current.playItemCollectSound();
+          }
+        };
+
+        // Set up callback for big boost platforms (spring, bouncy)
+        gameEngineRef.current.onBigBoostLand = () => {
+          if (audioManagerRef.current) {
+            audioManagerRef.current.playBigBoostSound();
+          }
+        };
+
+        // Set up callback for special platforms (moving, ice, conveyor, disappearing, crumbling)
+        gameEngineRef.current.onSpecialPlatformLand = () => {
+          if (audioManagerRef.current) {
+            audioManagerRef.current.playSpecialPlatformSound();
+          }
+        };
+
+        // Set up callback for breakable platforms
+        gameEngineRef.current.onBreakableLand = () => {
+          if (audioManagerRef.current) {
+            audioManagerRef.current.playBreakablePlatformSound();
+          }
+        };
 
         // Setup accelerometer with fallback
         const setupAccelerometer = async () => {
@@ -182,19 +232,20 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
     }
   }, [updateGameState]);
 
-  const handleDoubleTap = useCallback(() => {
-    const currentTime = Date.now();
-    const timeSinceLastTap = currentTime - lastTapTime.current;
-
-    if (timeSinceLastTap < doubleTapDelay) {
-      // Double tap detected!
-      if (gameEngineRef.current) {
-        gameEngineRef.current.performDoubleJump();
-      }
+  // K animation start - freeze player in place
+  const handleKAnimationStart = useCallback(() => {
+    if (gameEngineRef.current) {
+      gameEngineRef.current.freezePlayer();
     }
-
-    lastTapTime.current = currentTime;
   }, []);
+
+  // K animation complete - trigger game over with +200 bonus
+  const handleKAnimationComplete = useCallback(() => {
+    if (gameEngineRef.current) {
+      gameEngineRef.current.triggerGameOverWithBonus(200);
+      updateGameState();
+    }
+  }, [updateGameState]);
 
   // Award XP when game ends – follow strict flow and error visibility
   useEffect(() => {
@@ -404,6 +455,14 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
       }
       gameEngineRef.current = null;
       setGameState(null);
+
+      // Stop and unload audio
+      if (audioManagerRef.current) {
+        audioManagerRef.current.unloadSounds().then(() => {
+          log.debug('Game audio unloaded');
+        });
+        audioManagerRef.current = null;
+      }
     }
   }, [visible]);
 
@@ -427,11 +486,13 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
             onExitGame={exitGame}
             onPauseGame={pauseGame}
             onUpdate={handleGameUpdate}
-            onDoubleTap={handleDoubleTap}
+            onKAnimationStart={handleKAnimationStart}
+            onKAnimationComplete={handleKAnimationComplete}
             hasAccelerometer={hasAccelerometer}
             gameEngine={gameEngineRef.current}
             highScore={highScore}
             isNewHighScore={isNewHighScore}
+            xpEarned={gameState?.phase === 'GAME_OVER' ? Math.max(1, Math.floor((gameState?.score || 0) / 50)) : 0}
           />
         </View>
       </SafeAreaView>

@@ -35,9 +35,12 @@ import {
   isRetryableError,
 } from '@/types/edgeFunctionQueue';
 import type { AwardXPResult } from '@/types/leaderboard';
-import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { trackGameEnd, trackGameStart } from '@/utils/analytics';
+import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
+import { GAME_COOLDOWN_MS } from '@/utils/gameCooldowns';
 import { createLogger } from '@/utils/logger';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { NoPogodGameCanvasAtlas } from './NoPogodGameCanvasAtlas';
 
 const log = createLogger('NoPogodGame');
@@ -55,6 +58,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   visible,
   onClose,
 }) => {
+  const insets = useSafeAreaInsets();
   const { userProfile, updateUserProfile, isDemoMode } = useAuth();
 
   // Personal leaderboard status for instant rank updates
@@ -74,7 +78,6 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const [roundsPlayed, setRoundsPlayed] = useState(0);
   const [showCooldownScreen, setShowCooldownScreen] = useState(false);
   const MAX_ROUNDS = 3; // Maximum rounds before cooldown
-  const COOLDOWN_DURATION_MS = 1 * 60 * 60 * 1000; // 1 hour
 
   // Game cooldown hook - persists across app restarts
   const {
@@ -83,7 +86,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     startCooldown,
   } = useGameCooldown({
     gameId: 'nopogod',
-    cooldownMs: COOLDOWN_DURATION_MS,
+    cooldownMs: GAME_COOLDOWN_MS,
     persist: true,
   });
 
@@ -125,7 +128,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
       gameEngineRef.current = new NoPogodEngine(SCREEN_WIDTH, SCREEN_HEIGHT, NOPOGOD_GAME_ASSETS);
       spriteRendererRef.current = new NoPogodSpriteRenderer(NOPOGOD_GAME_ASSETS, SCREEN_WIDTH, SCREEN_HEIGHT);
-      responsiveScalingRef.current = new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT);
+      responsiveScalingRef.current = new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT, insets);
 
       // Initialize audio manager and load sounds
       audioManagerRef.current = new NoPogodAudioManager();
@@ -143,9 +146,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       gameEngineRef.current.onItemCaught = (itemType: string) => {
         if (audioManagerRef.current) {
           // Play item-specific sounds
-          if (itemType === 'PEPPER') {
-            audioManagerRef.current.playCatchPepperSound();
-          } else if (itemType === 'ELECTRIC_SHOCK') {
+          if (itemType === 'ELECTRIC_SHOCK') {
             audioManagerRef.current.playCatchShockerSound();
           } else {
             audioManagerRef.current.playCatchItemSound();
@@ -161,9 +162,16 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         }
       };
 
+      // Set up callback for missed items (egg crack sound)
+      gameEngineRef.current.onItemMissed = (itemType: string) => {
+        if (audioManagerRef.current && itemType === 'EGG') {
+          audioManagerRef.current.playEggCrackSound();
+        }
+      };
+
       setGameState(gameEngineRef.current.getState());
     }
-  }, [visible]);
+  }, [visible, insets]);
 
   const loadHighScore = async () => {
     try {
@@ -550,6 +558,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   }, [
     gameState?.phase,
     gameState?.score,
+    gameState?.lives,
     xpAwarded,
     userProfile,
     updateUserProfile,
