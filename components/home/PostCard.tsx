@@ -22,6 +22,7 @@ import type { ContentPost } from '@/types';
 import { trackVideoWatch } from '@/utils/analytics';
 import { isNewPost } from '@/utils/contentSorting';
 import { formatRelativeDate } from '@/utils/dateFormatting';
+import { t } from '@/utils/i18n';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('PostCard');
@@ -58,7 +59,8 @@ export const PostCard: React.FC<PostCardProps> = ({
       try {
         const canOpen = await Linking.canOpenURL(appUrl);
         await Linking.openURL(canOpen ? appUrl : webUrl);
-      } catch {
+      } catch (error) {
+        log.error('Error opening video URL', error, { appUrl, webUrl });
         await Linking.openURL(webUrl);
       }
     }
@@ -150,7 +152,7 @@ export const PostCard: React.FC<PostCardProps> = ({
           <Text style={styles.metaText}>{formatRelativeDate(post.createdAt)}</Text>
           {post.metadata.readTimeMinutes && (
             <Text style={styles.metaText}>
-              • {post.metadata.readTimeMinutes} min read
+              • {t('post.readTime', { minutes: post.metadata.readTimeMinutes })}
             </Text>
           )}
         </View>

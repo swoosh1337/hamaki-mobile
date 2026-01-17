@@ -34,30 +34,13 @@ const fixContentPostStatus = async (
 ): Promise<boolean> => {
     console.log(`[${channelName}] Fixing content post status for video ${videoId}`);
 
-    const { error: fixError } = await supabase
-        .from('content_posts')
-        .update({ is_published: true, is_featured: true })
-        .eq('id', postId);
+    const { error: fixError } = await supabase.rpc('fix_content_post_status', {
+        p_post_id: postId,
+        p_channel_key: channelKey,
+    });
 
     if (fixError) {
-        console.error(`[${channelName}] Failed to fix content post:`, fixError);
-        return false;
-    }
-
-    const { error: unfeatureError } = await supabase
-        .from('content_posts')
-        .update({ is_featured: false })
-        .eq('type', 'video')
-        .eq('metadata->>channelKey', channelKey)
-        .eq('is_featured', true)
-        .neq('id', postId);
-
-    if (unfeatureError) {
-        console.error('[sync-youtube-videos] Failed to un-feature old videos', {
-            channelKey,
-            postId,
-            error: unfeatureError,
-        });
+        console.error(`[${channelName}] Failed to fix content post status:`, fixError);
         return false;
     }
 
@@ -148,6 +131,23 @@ async function fetchLatestVideo(channelId: string) {
 
     const res = await fetch(url.toString());
     if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        console.error('[sync-youtube-videos] YouTube API error:', error);
+
+        // Check for quota exhaustion (403 with specific reason)
+        const errorReason = error?.error?.errors?.[0]?.reason;
+        const isQuotaError = res.status === 403 && (
+            errorReason === 'quotaExceeded' ||
+            errorReason === 'dailyLimitExceeded' ||
+            errorReason === 'rateLimitExceeded' ||
+            error?.error?.message?.toLowerCase()?.includes('quota')
+        );
+
+        if (isQuotaError) {
+            console.error('[sync-youtube-videos] YouTube quota exhausted!');
+            throw new Error('YOUTUBE_QUOTA_EXHAUSTED');
+        }
+
         throw new Error(`YouTube API error: ${res.status}`);
     }
 
@@ -262,7 +262,7 @@ Deno.serve(async (req: Request) => {
             // First check if this video already exists (by metadata->videoId)
             const { data: existingPost } = await supabase
                 .from('content_posts')
-                .select('id')
+                .select('id, is_published, is_featured')
                 .eq('metadata->>videoId', latest.videoId)
                 .maybeSingle();
 
@@ -301,6 +301,20 @@ Deno.serve(async (req: Request) => {
                 console.log(`[${channel.name}] Content post created: ${newPost.id}`);
 
                 // STEP 2: Un-feature old videos from this channel (keep only 1 per channel in carousel)
+                const { data: previousFeatured, error: previousFeaturedError } = await supabase
+                    .from('content_posts')
+                    .select('id')
+                    .eq('type', 'video')
+                    .eq('is_featured', true)
+                    .or(`metadata->>channelKey.eq.${channel.key},metadata->>channelId.eq.${channel.id}`)
+                    .neq('id', newPost.id);
+
+                if (previousFeaturedError) {
+                    console.error(`[${channel.name}] Failed to load previously featured posts:`, previousFeaturedError);
+                }
+
+                const previousFeaturedIds = (previousFeatured || []).map(post => post.id);
+
                 const { error: unfeatError } = await supabase
                     .from('content_posts')
                     .update({ is_featured: false })
@@ -311,6 +325,9 @@ Deno.serve(async (req: Request) => {
 
                 if (unfeatError) {
                     console.error(`[${channel.name}] Failed to un-feature old videos:`, unfeatError);
+                    throw new Error(
+                        `[${channel.name}] Failed to un-feature old videos: ${unfeatError.message}`
+                    );
                 } else {
                     console.log(`[${channel.name}] Un-featured old videos from this channel`);
                 }
@@ -323,18 +340,25 @@ Deno.serve(async (req: Request) => {
 
                 if (featureError) {
                     console.error(`[${channel.name}] Failed to feature new post:`, featureError);
+                    if (previousFeaturedIds.length > 0) {
+                        const { error: rollbackError } = await supabase
+                            .from('content_posts')
+                            .update({ is_featured: true })
+                            .in('id', previousFeaturedIds);
+
+                        if (rollbackError) {
+                            console.error(`[${channel.name}] Failed to rollback featured posts:`, rollbackError);
+                        }
+                    }
+                    throw new Error(
+                        `[${channel.name}] Failed to feature new post ${newPost.id}: ${featureError.message}`
+                    );
                 } else {
                     console.log(`[${channel.name}] New video featured in carousel`);
                 }
             } else {
                 // Fix existing post if it has wrong is_published or is_featured status
-                const { data: postStatus } = await supabase
-                    .from('content_posts')
-                    .select('is_published, is_featured')
-                    .eq('id', existingPost.id)
-                    .single();
-
-                if (postStatus && (!postStatus.is_published || !postStatus.is_featured)) {
+                if (!existingPost.is_published || !existingPost.is_featured) {
                     await fixContentPostStatus(
                         supabase,
                         existingPost.id,

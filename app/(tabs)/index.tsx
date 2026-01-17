@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Image, Linking, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { PostCard } from '@/components/home/PostCard';
@@ -20,6 +20,7 @@ export default function HomeScreen() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const expandStartedAtRef = useRef<number | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [postsSectionY, setPostsSectionY] = useState<number | null>(null);
 
   // Get pending XP count for settings badge
   const { pendingActionCount: pendingXPCount } = useYouTubeVerification();
@@ -45,8 +46,9 @@ export default function HomeScreen() {
         trackPostOpen(post.id, 'carousel');
       }
       setExpandedPostId(post.id);
-      // Scroll to posts section (approximate position)
-      scrollViewRef.current?.scrollTo({ y: 500, animated: true });
+      if (postsSectionY !== null) {
+        scrollViewRef.current?.scrollTo({ y: postsSectionY, animated: true });
+      }
     }
   };
 
@@ -71,6 +73,10 @@ export default function HomeScreen() {
   const handleRetry = async () => {
     await refreshContent();
   };
+
+  const handlePostsLayout = useCallback((event: { nativeEvent: { layout: { y: number } } }) => {
+    setPostsSectionY(event.nativeEvent.layout.y);
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -136,28 +142,30 @@ export default function HomeScreen() {
       )}
 
       {/* Latest Posts mock */}
-      <Text style={[styles.sectionTitle, { marginLeft: 20, marginTop: 24 }]}>ბოლო პოსტები</Text>
-      <View style={styles.postsColumn}>
-        {isLoading ? (
-          // Show skeleton loading for posts while videos are loading
-          [...Array(3)].map((_, index) => (
-            <PostSkeleton key={`post-skeleton-${index}`} />
-          ))
-        ) : error ? (
-          <InlineError
-            message={isNetworkError ? 'პოსტების ჩატვირთვა ვერ მოხერხდა. შეამოწმეთ კავშირი.' : 'პოსტების ჩატვირთვა ვერ მოხერხდა'}
-            onRetry={handleRetry}
-          />
-        ) : (
-          sortedPosts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              isExpanded={expandedPostId === post.id}
-              onToggleExpand={() => handleToggleExpand(post)}
+      <View style={styles.postsSection} onLayout={handlePostsLayout}>
+        <Text style={styles.postsSectionTitle}>ბოლო პოსტები</Text>
+        <View style={styles.postsColumn}>
+          {isLoading ? (
+            // Show skeleton loading for posts while videos are loading
+            [...Array(3)].map((_, index) => (
+              <PostSkeleton key={`post-skeleton-${index}`} />
+            ))
+          ) : error ? (
+            <InlineError
+              message={isNetworkError ? 'პოსტების ჩატვირთვა ვერ მოხერხდა. შეამოწმეთ კავშირი.' : 'პოსტების ჩატვირთვა ვერ მოხერხდა'}
+              onRetry={handleRetry}
             />
-          ))
-        )}
+          ) : (
+            sortedPosts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                isExpanded={expandedPostId === post.id}
+                onToggleExpand={() => handleToggleExpand(post)}
+              />
+            ))
+          )}
+        </View>
       </View>
       </ScrollView>
 
@@ -235,6 +243,17 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
     fontWeight: 'bold',
     marginRight: 10,
+  },
+  postsSection: {
+    marginTop: 24,
+  },
+  postsSectionTitle: {
+    fontFamily: 'HamakiGeo',
+    fontSize: 16,
+    color: Colors.dark.text,
+    fontWeight: 'bold',
+    marginLeft: 20,
+    marginBottom: 8,
   },
   postsColumn: {
     paddingHorizontal: 12,

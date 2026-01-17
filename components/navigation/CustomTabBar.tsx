@@ -56,7 +56,7 @@ export function CustomTabBar({ currentIndex, onTabPress }: CustomTabBarProps) {
           >
             <IconSymbol
               size={24}
-              name={config.icon as any}
+              name={config.icon}
               color={isActive ? theme.tint : theme.tabIconDefault}
             />
             <Text

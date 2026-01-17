@@ -21,7 +21,7 @@ export const leaderboardService = {
      */
     async getLeaderboard(limit = 10): Promise<UserProfile[]> {
         try {
-            log.debug('Fetching monthly leaderboard (total XP)', { limit });
+            log.debug('Fetching monthly leaderboard entries', { limit });
 
             const { data, error } = await supabase
                 .from('leaderboard_entries')
@@ -49,7 +49,7 @@ export const leaderboardService = {
                 return [];
             }
 
-            log.debug('Fetched all-time leaderboard entries', { count: data?.length || 0 });
+            log.debug('Fetched monthly leaderboard entries', { count: data?.length || 0 });
 
             // Map to UserProfile format for backwards compatibility
             return (data || []).map(entry => {

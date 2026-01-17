@@ -29,6 +29,7 @@
 
 import { leaderboardService } from '@/services/supabase/leaderboardService';
 import { createLogger } from '@/utils/logger';
+import { subscribeToXPEvents } from '@/utils/xpEvents';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { useRealtimeInsert } from './useRealtimeSubscription';
@@ -41,6 +42,9 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 // Debounce window: 5 seconds (only applies after successful fetches)
 const DEBOUNCE_MS = 5000;
+// Jitter range for realtime events: 0-3 seconds
+// Prevents "thundering herd" when cron fires and all clients fetch simultaneously
+const REALTIME_JITTER_MAX_MS = 3000;
 
 /**
  * Leaderboard entry in snapshot
@@ -250,6 +254,7 @@ export function useLeaderboardSnapshot(
     }, [enableForegroundRefresh, fetchSnapshot]);
 
     // Realtime subscription to refresh events (filtered by period_type)
+    // Uses jitter to prevent "thundering herd" when 10K+ clients receive the event simultaneously
     useRealtimeInsert<LeaderboardRefreshEvent>(
         'leaderboard_refresh_events',
         (event) => {
@@ -258,14 +263,39 @@ export function useLeaderboardSnapshot(
                 log.debug('Skipping realtime refresh (already fresh)', { periodType: event.period_type });
                 return;
             }
-            log.info('Received refresh event from cron', { periodType: event.period_type });
-            fetchSnapshot('realtime_event');
+
+            // Add random jitter to spread out requests across 0-3 seconds
+            // This prevents all clients from hitting the database at once
+            const jitterMs = Math.random() * REALTIME_JITTER_MAX_MS;
+            log.info('Received refresh event from cron, applying jitter', {
+                periodType: event.period_type,
+                jitterMs: Math.round(jitterMs),
+            });
+
+            setTimeout(() => {
+                // Check again after jitter - we might have fetched in the meantime
+                if (isStaleRef.current && isMountedRef.current) {
+                    fetchSnapshot('realtime_event');
+                }
+            }, jitterMs);
         },
         {
             enabled: enableRealtimeRefresh,
             filter: `period_type=eq.${periodType}`,
         }
     );
+
+    // Subscribe to XP awarded events - refresh immediately when user earns XP
+    // This eliminates the 5-minute staleness window for active users
+    useEffect(() => {
+        const unsubscribe = subscribeToXPEvents((amount) => {
+            log.info('XP awarded event received, refreshing leaderboard', { amount });
+            // Force refresh to bypass debounce - user just earned XP and wants to see their rank
+            fetchSnapshot('xp_awarded', true);
+        });
+
+        return unsubscribe;
+    }, [fetchSnapshot]);
 
     return {
         entries,

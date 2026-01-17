@@ -124,13 +124,15 @@ export default function LeaderboardScreen() {
     const errorMessage = error ? getUserFriendlyErrorMessage(error) : null;
 
     const togglePrize = (prizeId: string) => {
-        // Track sponsor click for analytics dashboard
         const sponsor = sponsors.find(s => s.id === prizeId);
-        if (sponsor) {
-            trackSponsorClick(prizeId, sponsor.name);
-        }
-
-        setExpandedPrizeId(prev => prev === prizeId ? null : prizeId);
+        setExpandedPrizeId(prev => {
+            const nextExpandedId = prev === prizeId ? null : prizeId;
+            if (nextExpandedId === prizeId && sponsor) {
+                // Track sponsor click for analytics dashboard
+                trackSponsorClick(prizeId, sponsor.name);
+            }
+            return nextExpandedId;
+        });
     };
 
     const handleRetry = () => {

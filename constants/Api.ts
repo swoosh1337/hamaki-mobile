@@ -45,6 +45,9 @@ export const API = {
     },
 } as const;
 
+/** Video like cache TTL (4 hours) */
+export const VIDEO_LIKE_TTL_MS = 4 * 60 * 60 * 1000;
+
 /**
  * Game cooldowns in milliseconds
  */

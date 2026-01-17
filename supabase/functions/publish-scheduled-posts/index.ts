@@ -12,8 +12,14 @@ Deno.serve(async (req) => {
     }
 
     try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+        const missingVars = []
+        if (!supabaseUrl) missingVars.push('SUPABASE_URL')
+        if (!supabaseServiceKey) missingVars.push('SUPABASE_SERVICE_ROLE_KEY')
+        if (missingVars.length > 0) {
+            throw new Error(`Missing environment variables: ${missingVars.join(', ')}`)
+        }
 
         const supabase = createClient(supabaseUrl, supabaseServiceKey, {
             auth: {
@@ -78,25 +84,15 @@ Deno.serve(async (req) => {
             .from('content_posts')
             .select('id, title, published_at, metadata')
             .lt('published_at', oneWeekAgo.toISOString())
+            .is('metadata->>channelId', null)
+            .is('metadata->>channelKey', null)
 
         if (oldPostsError) {
             console.error('Error fetching old posts:', oldPostsError)
         } else if (oldPosts && oldPosts.length > 0) {
-            // Filter out YouTube channel videos (they have channelId or channelKey in metadata)
-            const postsToRemove = oldPosts.filter(post => {
-                const metadata = post.metadata as any
-                // Keep posts that have channelId or channelKey (YouTube sync videos)
-                if (metadata?.channelId || metadata?.channelKey) {
-                    console.log(`Keeping YouTube channel video: "${post.title}" (channel: ${metadata.channelId || metadata.channelKey})`)
-                    return false
-                }
-                return true
-            })
+            console.log(`Found ${oldPosts.length} old non-channel posts to unpublish`)
 
-            if (postsToRemove.length > 0) {
-                console.log(`Found ${postsToRemove.length} old non-channel posts to unpublish`)
-
-                const oldPostIds = postsToRemove.map(post => post.id)
+            const oldPostIds = oldPosts.map(post => post.id)
 
                 const { error: unfeaturedError } = await supabase
                     .from('content_posts')
@@ -109,14 +105,11 @@ Deno.serve(async (req) => {
 
                 if (unfeaturedError) {
                     console.error('Error unfeaturing old posts:', unfeaturedError)
-                } else {
-                    console.log(`Successfully unpublished ${oldPostIds.length} old posts`)
-                    postsToRemove.forEach(post => {
-                        console.log(`Unpublished: "${post.title}" (Published: ${post.published_at})`)
-                    })
-                }
             } else {
-                console.log('All old posts are YouTube channel videos - keeping them')
+                console.log(`Successfully unpublished ${oldPostIds.length} old posts`)
+                oldPosts.forEach(post => {
+                    console.log(`Unpublished: "${post.title}" (Published: ${post.published_at})`)
+                })
             }
         } else {
             console.log('No old posts to remove')
@@ -197,9 +190,10 @@ Deno.serve(async (req) => {
 
     } catch (error) {
         console.error('Error in publish-scheduled-posts function:', error)
+        const errorMessage = error instanceof Error ? error.message : String(error)
         return new Response(
             JSON.stringify({
-                error: error.message,
+                error: errorMessage,
                 success: false
             }),
             {

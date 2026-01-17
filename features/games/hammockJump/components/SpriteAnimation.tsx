@@ -25,11 +25,13 @@ export const SpriteAnimation: React.FC<SpriteAnimationProps> = ({
     style,
 }) => {
     const [currentFrame, setCurrentFrame] = useState(0);
+    const [isVisible, setIsVisible] = useState(false);
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const animationRef = useRef<NodeJS.Timeout | null>(null);
 
     const startAnimation = useCallback(() => {
         setCurrentFrame(0);
+        setIsVisible(true);
 
         // Fade in
         Animated.timing(fadeAnim, {
@@ -54,6 +56,7 @@ export const SpriteAnimation: React.FC<SpriteAnimationProps> = ({
                     duration: 200,
                     useNativeDriver: true,
                 }).start(() => {
+                    setIsVisible(false);
                     onAnimationEnd?.();
                 });
             } else {
@@ -75,7 +78,7 @@ export const SpriteAnimation: React.FC<SpriteAnimationProps> = ({
         };
     }, [isPlaying, startAnimation]);
 
-    if (!isPlaying && fadeAnim._value === 0) {
+    if (!isVisible) {
         return null;
     }
 

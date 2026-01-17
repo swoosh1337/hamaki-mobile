@@ -21,6 +21,7 @@ import { supabase } from '@/services/supabase';
 import { FunctionsHttpError, FunctionsFetchError } from '@supabase/supabase-js';
 import { createLogger } from '@/utils/logger';
 import { retryWithBackoff } from '@/utils/retry';
+import { youtubeQuotaState, isQuotaExhaustedError } from '@/utils/youtubeQuotaState';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const log = createLogger('EdgeFunctionClient');
@@ -79,6 +80,9 @@ export interface EdgeFunctionResult<T> {
 
     /** Whether the result came from cache */
     fromCache: boolean;
+
+    /** Whether the error was due to YouTube quota exhaustion */
+    isQuotaExhausted?: boolean;
 }
 
 /**
@@ -210,9 +214,18 @@ export async function invokeEdgeFunction<T>(
             httpStatus = 0;
         }
 
+        // Check for YouTube quota exhaustion
+        const quotaExhausted = isQuotaExhaustedError(error);
+        if (quotaExhausted) {
+            log.warn(`YouTube quota exhausted detected in ${functionName}`);
+            // Set global quota state (fire and forget)
+            youtubeQuotaState.setQuotaExhausted().catch(() => {});
+        }
+
         log.error(`Edge Function ${functionName} failed after retries:`, {
             error: error instanceof Error ? error.message : String(error),
             status: httpStatus,
+            quotaExhausted,
         });
 
         // Try cache fallback
@@ -254,6 +267,7 @@ export async function invokeEdgeFunction<T>(
                 error: error instanceof Error ? error.message : String(error),
                 status: httpStatus,
                 fromCache: false,
+                isQuotaExhausted: quotaExhausted,
             };
         }
 

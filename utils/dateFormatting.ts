@@ -12,6 +12,9 @@
  */
 export function formatRelativeDate(dateString: string): string {
   const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffHours = diffMs / (1000 * 60 * 60);
@@ -23,7 +26,8 @@ export function formatRelativeDate(dateString: string): string {
   }
 
   if (diffHours < 24) {
-    return `${Math.floor(diffHours)} hours ago`;
+    const hours = Math.floor(diffHours);
+    return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
   }
 
   if (diffDays < 7) {

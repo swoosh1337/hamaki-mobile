@@ -59,10 +59,9 @@ BEGIN
             FROM jsonb_each_text(r.video_like_xp_awarded)
             WHERE value = 'true';
 
-            -- Cap at reasonable max (in case of old video entries)
-            IF v_video_xp > 2000 THEN
-                v_video_xp := 500; -- Reset to current max (4 videos * avg 125)
-            END IF;
+            -- Cap at current max (4 videos: hamaki=200 + miro=100 + bastos=100 + koro=100 = 500)
+            -- This handles cases where old video entries might inflate the count
+            v_video_xp := LEAST(v_video_xp, 500);
         END IF;
 
         -- Update MONTHLY entry

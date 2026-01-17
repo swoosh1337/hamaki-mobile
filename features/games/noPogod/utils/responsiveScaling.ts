@@ -346,12 +346,6 @@ export class ResponsiveScalingManager {
       `Tablet: ${isTablet}, Landscape: ${isLandscape}`;
   }
 
-  // Refresh dimensions after orientation or window size changes
-  public updateScreenSize(screenWidth: number, screenHeight: number): void {
-    this.config = this.calculateScalingConfig(screenWidth, screenHeight);
-    this.positions = this.calculateResponsivePositions();
-    this.sizes = this.calculateResponsiveSizes();
-  }
 }
 
 // Utility functions for responsive scaling
@@ -383,6 +377,7 @@ export const ResponsiveUtils = {
 // Export singleton instance for global use
 let globalResponsiveScaling: ResponsiveScalingManager | null = null;
 let hasRegisteredListener = false;
+let globalResponsiveScalingListener: { remove: () => void } | null = null;
 
 export const getGlobalResponsiveScaling = (): ResponsiveScalingManager => {
   if (!globalResponsiveScaling) {
@@ -390,11 +385,19 @@ export const getGlobalResponsiveScaling = (): ResponsiveScalingManager => {
   }
 
   if (!hasRegisteredListener) {
-    Dimensions.addEventListener('change', ({ window }) => {
+    globalResponsiveScalingListener = Dimensions.addEventListener('change', ({ window }) => {
       globalResponsiveScaling?.updateScreenSize(window.width, window.height);
     });
     hasRegisteredListener = true;
   }
 
   return globalResponsiveScaling;
+};
+
+export const removeGlobalResponsiveScalingListener = (): void => {
+  if (globalResponsiveScalingListener) {
+    globalResponsiveScalingListener.remove();
+    globalResponsiveScalingListener = null;
+    hasRegisteredListener = false;
+  }
 };

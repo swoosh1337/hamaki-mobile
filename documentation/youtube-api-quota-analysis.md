@@ -256,6 +256,38 @@ Your architecture is well-optimized for the free tier:
 - Variable cost: ~0.6/user/day
 - Safe up to ~12,500 DAU
 
+### If Quota Is Exhausted (✅ IMPLEMENTED)
+
+**Detecting quota errors:**
+- ✅ Edge Functions detect 403 responses with `quotaExceeded`, `dailyLimitExceeded`, or `rateLimitExceeded` reasons
+- ✅ Returns special error code `YOUTUBE_QUOTA_EXHAUSTED` for client-side handling
+- ✅ Client detects quota errors via `isQuotaExhaustedError()` utility
+
+**Runtime fallback behavior:**
+- ✅ Global quota state tracked in `utils/youtubeQuotaState.ts`
+- ✅ State persisted in AsyncStorage, auto-clears at midnight Pacific Time (YouTube's quota reset)
+- ✅ Verification buttons check quota state before making API calls
+- ✅ Falls back to cached/DB verification data when quota exhausted
+
+**User-facing messaging templates (Georgian):**
+- ✅ Short: "YouTube-ის კვოტა ამოიწურა. სცადეთ მოგვიანებით."
+- ✅ With time: "YouTube-ის კვოტა ამოიწურა. განახლდება X საათი Y წუთი-ში."
+- ✅ Button disabled: "ვერიფიკაცია დროებით მიუწვდომელია"
+- ✅ Cache notice: "ნაჩვენებია შენახული მონაცემები."
+
+**Implementation files:**
+- `utils/youtubeQuotaState.ts` - Global quota state manager
+- `utils/edgeFunctionClient.ts` - Quota error detection + state setting
+- `hooks/useYouTubeVerification.ts` - Exposes `isQuotaExhausted`, `quotaResetTimeRemaining`, `quotaExhaustedMessage`
+- `supabase/functions/verify-subscriptions/index.ts` - Quota error detection
+- `supabase/functions/verify-video-likes/index.ts` - Quota error detection
+- `supabase/functions/sync-youtube-videos/index.ts` - Quota error detection
+
+**Emergency mitigation steps:**
+- Temporarily disable the `sync-youtube-videos` job to reserve quota for user actions.
+- Prioritize user-facing API calls over background sync when partial quota remains.
+- Notify admins with guidance to request a quota increase and track recovery status.
+
 ### If You Exceed Quota
 
 **Option 1: Reduce sync frequency**

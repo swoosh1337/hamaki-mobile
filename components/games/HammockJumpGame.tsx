@@ -6,6 +6,7 @@ import {
   Modal,
   SafeAreaView,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 
@@ -24,6 +25,7 @@ import {
 import { trackGameEnd, trackGameStart, trackXPEarned } from '@/utils/analytics';
 import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { createLogger } from '@/utils/logger';
+import { emitXPAwarded } from '@/utils/xpEvents';
 import { GameCanvas } from './GameCanvas';
 
 const log = createLogger('HammockJumpGame');
@@ -57,6 +59,8 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
   });
   const gameEngineRef = useRef<HammockGameEngine | null>(null);
   const audioManagerRef = useRef<HammockJumpAudioManager | null>(null);
+  const audioUnloadingRef = useRef(false);
+  const audioAvailableRef = useRef(true);
   const [gameState, setGameState] = useState<any>(null);
   const [xpAwarded, setXpAwarded] = useState(false);
   const sessionIdRef = useRef<string>(generateSessionId()); // Unique session for idempotency
@@ -64,6 +68,7 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
   const [hasAccelerometer, setHasAccelerometer] = useState(true);
   const [highScore, setHighScore] = useState<number>(0);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
+  const [audioAvailable, setAudioAvailable] = useState<boolean | null>(null);
   const gameStartTime = useRef<number>(0); // Track game session duration
 
   // Load high score on mount
@@ -92,51 +97,60 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
         setGameState(gameEngineRef.current.getState());
 
         // Initialize audio manager and load sounds
+        if (audioUnloadingRef.current) {
+          log.debug('Skipping audio init while unload is in progress');
+          return;
+        }
         audioManagerRef.current = new HammockJumpAudioManager();
-        audioManagerRef.current.loadSounds().then(() => {
+        try {
+          await audioManagerRef.current.loadSounds();
+          audioAvailableRef.current = true;
+          setAudioAvailable(true);
           log.info('Game audio loaded');
-        }).catch(err => {
+        } catch (err) {
+          audioAvailableRef.current = false;
+          setAudioAvailable(false);
           log.error('Failed to load game audio', err);
-        });
+        }
 
         // Set up callback for normal platform landing sound
         gameEngineRef.current.onPlatformLand = () => {
-          if (audioManagerRef.current) {
+          if (audioManagerRef.current && audioAvailableRef.current) {
             audioManagerRef.current.playJumpSound();
           }
         };
 
         // Set up callback for falling sound (when player falls off screen)
         gameEngineRef.current.onPlayerFalling = () => {
-          if (audioManagerRef.current) {
+          if (audioManagerRef.current && audioAvailableRef.current) {
             audioManagerRef.current.playFallingSound();
           }
         };
 
         // Set up callback for item collection sound
         gameEngineRef.current.onItemCollected = () => {
-          if (audioManagerRef.current) {
+          if (audioManagerRef.current && audioAvailableRef.current) {
             audioManagerRef.current.playItemCollectSound();
           }
         };
 
         // Set up callback for big boost platforms (spring, bouncy)
         gameEngineRef.current.onBigBoostLand = () => {
-          if (audioManagerRef.current) {
+          if (audioManagerRef.current && audioAvailableRef.current) {
             audioManagerRef.current.playBigBoostSound();
           }
         };
 
         // Set up callback for special platforms (moving, ice, conveyor, disappearing, crumbling)
         gameEngineRef.current.onSpecialPlatformLand = () => {
-          if (audioManagerRef.current) {
+          if (audioManagerRef.current && audioAvailableRef.current) {
             audioManagerRef.current.playSpecialPlatformSound();
           }
         };
 
         // Set up callback for breakable platforms
         gameEngineRef.current.onBreakableLand = () => {
-          if (audioManagerRef.current) {
+          if (audioManagerRef.current && audioAvailableRef.current) {
             audioManagerRef.current.playBreakablePlatformSound();
           }
         };
@@ -327,6 +341,9 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
                 game_name: 'hammock_jump',
                 score: gameState.score,
               });
+
+              // Emit XP event to trigger global leaderboard refresh
+              emitXPAwarded(xpToAward);
             }
 
             // Instantly update personal leaderboard rank (no 5-minute wait!)
@@ -346,10 +363,9 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
             }
           } else {
             // Edge Function failed - check if retryable
-            const newXP = userProfile.xp_points + xpToAward;
-
             if (isRetryableError(result.status)) {
-              // Add to queue for retry (optimistic XP derived from queue)
+              // Add to queue for retry - apply optimistic XP since it will be synced
+              const newXP = userProfile.xp_points + xpToAward;
               await edgeFunctionQueueService.addToQueue({
                 id: `xp-${sessionId}-${xpToAward}`,
                 idempotencyKey,
@@ -371,28 +387,27 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
                 amount: xpToAward,
                 status: result.status,
               });
+
+              // Update local profile and leaderboard state (optimistic - will sync later)
+              updateUserProfile({ xp_points: newXP });
+              updateFromAwardXP({
+                success: true,
+                new_total_xp: newXP,
+                personal_rank: 0, // Unknown rank when offline
+                xp_breakdown: {
+                  game: newXP,
+                  subscription: 0,
+                  video_like: 0,
+                },
+              });
             } else {
-              // Permanent error (400, 401, 403, 404, 422) - log and discard
-              log.error('Permanent XP award failure, not queuing', {
+              // Permanent error (400, 401, 403, 404, 422) - DO NOT apply optimistic updates
+              // The XP will never be synced, so don't mislead the user
+              log.error('Permanent XP award failure, XP not applied', {
                 status: result.status,
                 error: result.error,
               });
             }
-
-            // Update local profile and leaderboard state
-            updateUserProfile({ xp_points: newXP });
-            updateFromAwardXP({
-              success: true,
-              new_total_xp: newXP,
-              personal_rank: 0, // Unknown rank when offline
-              xp_breakdown: {
-                game: newXP,
-                subscription: 0,
-                video_like: 0,
-              },
-            });
-
-            setXpAwarded(true);
           }
         } catch (error) {
           // Unexpected error - add to queue for safety
@@ -458,11 +473,22 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
 
       // Stop and unload audio
       if (audioManagerRef.current) {
-        audioManagerRef.current.unloadSounds().then(() => {
-          log.debug('Game audio unloaded');
-        });
-        audioManagerRef.current = null;
+        const unloadAudio = async () => {
+          audioUnloadingRef.current = true;
+          try {
+            await audioManagerRef.current?.unloadSounds();
+            log.debug('Game audio unloaded');
+          } catch (error) {
+            log.error('Failed to unload game audio', error as Error);
+          } finally {
+            audioManagerRef.current = null;
+            audioUnloadingRef.current = false;
+          }
+        };
+        unloadAudio();
       }
+      audioAvailableRef.current = false;
+      setAudioAvailable(null);
     }
   }, [visible]);
 
@@ -494,6 +520,9 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
             isNewHighScore={isNewHighScore}
             xpEarned={gameState?.phase === 'GAME_OVER' ? Math.max(1, Math.floor((gameState?.score || 0) / 50)) : 0}
           />
+          {audioAvailable === false && (
+            <Text style={styles.audioWarning}>ხმა დროებით მიუწვდომელია</Text>
+          )}
         </View>
       </SafeAreaView>
     </Modal>
@@ -508,5 +537,13 @@ const styles = StyleSheet.create({
   gameContainer: {
     flex: 1,
     position: 'relative',
+  },
+  audioWarning: {
+    position: 'absolute',
+    bottom: 20,
+    alignSelf: 'center',
+    color: '#FFD700',
+    fontSize: 12,
+    opacity: 0.9,
   },
 });

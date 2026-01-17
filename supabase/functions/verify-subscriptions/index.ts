@@ -88,6 +88,21 @@ async function checkSubscriptions(
         if (!response.ok) {
             const error = await response.json();
             console.error('[verify-subscriptions] YouTube API error:', error);
+
+            // Check for quota exhaustion (403 with specific reason)
+            const errorReason = error?.error?.errors?.[0]?.reason;
+            const isQuotaError = response.status === 403 && (
+                errorReason === 'quotaExceeded' ||
+                errorReason === 'dailyLimitExceeded' ||
+                errorReason === 'rateLimitExceeded' ||
+                error?.error?.message?.toLowerCase()?.includes('quota')
+            );
+
+            if (isQuotaError) {
+                console.error('[verify-subscriptions] YouTube quota exhausted!');
+                throw new Error('YOUTUBE_QUOTA_EXHAUSTED');
+            }
+
             throw new Error(`YouTube API error: ${response.status}`);
         }
 
@@ -286,22 +301,32 @@ Deno.serve(async (req: Request) => {
                         p_amount: xpAmount,
                     });
 
+                    let usedFallback = false;
                     if (awardError) {
                         console.error(`[${channel.channelKey}] Failed to award XP via RPC:`, awardError);
                         // Fallback: try direct upsert for both periods
                         for (const periodType of ['monthly', 'weekly']) {
-                            const { data: existing } = await supabase
+                            const { data: existing, error: existingError } = await supabase
                                 .from('leaderboard_entries')
                                 .select('subscription_xp, game_xp, video_like_xp')
                                 .eq('user_id', userId)
                                 .eq('period_type', periodType)
                                 .maybeSingle();
 
+                            if (existingError) {
+                                console.error(`[${channel.channelKey}] Failed to load leaderboard entry for fallback`, {
+                                    userId,
+                                    periodType,
+                                    error: existingError,
+                                });
+                                throw existingError;
+                            }
+
                             const currentXP = existing?.subscription_xp || 0;
                             const existingGame = existing?.game_xp || 0;
                             const existingVideo = existing?.video_like_xp || 0;
 
-                            await supabase
+                            const { error: fallbackUpsertError } = await supabase
                                 .from('leaderboard_entries')
                                 .upsert({
                                     user_id: userId,
@@ -312,11 +337,23 @@ Deno.serve(async (req: Request) => {
                                 }, {
                                     onConflict: 'user_id,period_type'
                                 });
+
+                            if (fallbackUpsertError) {
+                                console.error(`[${channel.channelKey}] Failed to upsert leaderboard entry for fallback`, {
+                                    userId,
+                                    periodType,
+                                    error: fallbackUpsertError,
+                                });
+                                throw fallbackUpsertError;
+                            }
                         }
+                        usedFallback = true;
                     }
 
                     totalXPAwarded += xpAmount;
-                    console.log(`[${channel.channelKey}] Awarded ${xpAmount} subscription XP via RPC`);
+                    console.log(
+                        `[${channel.channelKey}] Awarded ${xpAmount} subscription XP via ${usedFallback ? 'fallback upsert' : 'RPC'}`
+                    );
                 }
 
                 results.push({

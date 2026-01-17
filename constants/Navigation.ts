@@ -17,13 +17,10 @@ export const TAB_ORDER: readonly TabName[] = [
 ] as const;
 
 /** Tab name to index mapping */
-export const TAB_INDEX_MAP: TabIndexMap = {
-  index: 0,
-  games: 1,
-  leaderboard: 2,
-  community: 3,
-  profile: 4,
-} as const;
+export const TAB_INDEX_MAP: TabIndexMap = TAB_ORDER.reduce<TabIndexMap>((acc, tabName, index) => {
+  acc[tabName] = index;
+  return acc;
+}, {} as TabIndexMap);
 
 /** Number of tabs */
 export const TAB_COUNT = TAB_ORDER.length;

@@ -1,5 +1,5 @@
 import { Canvas, Group, Image, Rect, useImage } from '@shopify/react-native-skia';
-import React, { memo, useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -96,7 +96,10 @@ export const GameCanvas = React.memo(({
   const kFrame5 = useImage(K_ANIMATION_FRAMES[4]);
   const kFrame6 = useImage(K_ANIMATION_FRAMES[5]);
   const kFrame7 = useImage(K_ANIMATION_FRAMES[6]);
-  const kFrames = [kFrame1, kFrame2, kFrame3, kFrame4, kFrame5, kFrame6, kFrame7];
+  const kFrames = useMemo(
+    () => [kFrame1, kFrame2, kFrame3, kFrame4, kFrame5, kFrame6, kFrame7],
+    [kFrame1, kFrame2, kFrame3, kFrame4, kFrame5, kFrame6, kFrame7]
+  );
 
   // Game loop using requestAnimationFrame
   const animationFrameRef = useRef<number | undefined>(undefined);
@@ -271,25 +274,32 @@ export const GameCanvas = React.memo(({
                   return null;
                 }
 
-                // Base colors for each platform type
-                let baseColor = "rgba(120,120,120,"; // normal - gray
-                let alpha = 0.9;
+                const PLATFORM_COLORS: Record<string, { base: string; alpha?: number }> = {
+                  normal: { base: "rgba(120,120,120,", alpha: 0.9 }, // normal - gray
+                  moving: { base: "rgba(80,80,180,", alpha: 0.9 }, // moving - blue-gray
+                  breakable: { base: "rgba(139,69,19,", alpha: 0.9 }, // breakable - brown
+                  spring: { base: "rgba(255,215,0,", alpha: 0.95 }, // spring - gold (unused)
+                  bouncy: { base: "rgba(255,20,147,", alpha: 0.9 }, // bouncy - BRIGHTER deep pink
+                  ice: { base: "rgba(0,191,255,", alpha: 0.9 }, // ice - BRIGHTER deep sky blue
+                  conveyor: { base: "rgba(128,128,128,", alpha: 0.9 }, // conveyor - gray
+                  disappearing: { base: "rgba(147,112,219,", alpha: 0.9 }, // disappearing - medium purple
+                  crumbling: { base: "rgba(105,105,105,", alpha: 0.9 }, // crumbling - dim gray
+                };
 
-                if (p.type === 'moving') baseColor = "rgba(80,80,180,"; // moving - blue-gray
-                if (p.type === 'breakable') baseColor = "rgba(139,69,19,"; // breakable - brown
+                const defaultColor = PLATFORM_COLORS.normal;
+                const platformColor = PLATFORM_COLORS[p.type] ?? defaultColor;
+                let baseColor = platformColor.base;
+                let alpha = platformColor.alpha ?? 0.9;
+
                 if (p.type === 'spring') {
-                  baseColor = p.springUsed ? "rgba(100,100,100," : "rgba(255,215,0,"; // spring - gold (unused) / gray (used)
-                  alpha = p.springUsed ? 0.6 : 0.95;
+                  baseColor = p.springUsed ? "rgba(100,100,100," : baseColor; // spring - gray when used
+                  alpha = p.springUsed ? 0.6 : alpha;
                 }
-                if (p.type === 'bouncy') baseColor = "rgba(255,20,147,"; // bouncy - BRIGHTER deep pink
-                if (p.type === 'ice') baseColor = "rgba(0,191,255,"; // ice - BRIGHTER deep sky blue
-                if (p.type === 'conveyor') baseColor = "rgba(128,128,128,"; // conveyor - gray
+
                 if (p.type === 'disappearing') {
-                  baseColor = "rgba(147,112,219,"; // disappearing - medium purple
                   // Use platform's opacity if set (fading effect)
-                  alpha = p.opacity !== undefined ? p.opacity : 0.9;
+                  alpha = p.opacity !== undefined ? p.opacity : alpha;
                 }
-                if (p.type === 'crumbling') baseColor = "rgba(105,105,105,"; // crumbling - dim gray
 
                 const color = `${baseColor}${alpha})`;
 
@@ -391,7 +401,6 @@ export const GameCanvas = React.memo(({
             style={styles.kAnimationButton}
             onPress={() => {
               // Find the nearest platform below or at player's position
-              const playerCenterX = gameState.player.x + spriteSize / 2;
               const playerBottom = gameState.player.y + spriteSize;
 
               // Find platforms below or at player's feet

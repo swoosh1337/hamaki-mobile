@@ -35,10 +35,11 @@ import {
   isRetryableError,
 } from '@/types/edgeFunctionQueue';
 import type { AwardXPResult } from '@/types/leaderboard';
-import { trackGameEnd, trackGameStart } from '@/utils/analytics';
+import { trackGameEnd, trackGameStart, trackXPEarned } from '@/utils/analytics';
 import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
 import { GAME_COOLDOWN_MS } from '@/utils/gameCooldowns';
 import { createLogger } from '@/utils/logger';
+import { emitXPAwarded } from '@/utils/xpEvents';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { NoPogodGameCanvasAtlas } from './NoPogodGameCanvasAtlas';
@@ -430,6 +431,17 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
                 duplicate: result.data.duplicate,
               });
 
+              // Track XP earned and emit event for leaderboard refresh
+              if (!result.data.duplicate) {
+                trackXPEarned(xpToAward, 'game', {
+                  game_name: 'nopogod',
+                  score: gameState.score,
+                });
+
+                // Emit XP event to trigger global leaderboard refresh
+                emitXPAwarded(xpToAward);
+              }
+
               // Instantly update personal leaderboard rank (no 5-minute wait!)
               updateFromAwardXP(result.data);
               log.debug('Personal leaderboard rank updated instantly');
@@ -444,10 +456,9 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
               }
             } else {
               // Edge Function failed - check if retryable
-              const newXP = userProfile.xp_points + xpToAward;
-
               if (isRetryableError(result.status)) {
-                // Add to queue for retry (optimistic XP derived from queue)
+                // Add to queue for retry - apply optimistic XP since it will be synced
+                const newXP = userProfile.xp_points + xpToAward;
                 await edgeFunctionQueueService.addToQueue({
                   id: `xp-${sessionId}-${xpToAward}`,
                   idempotencyKey,
@@ -469,26 +480,27 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
                   amount: xpToAward,
                   status: result.status,
                 });
+
+                // Update local profile and leaderboard state (optimistic - will sync later)
+                updateUserProfile({ xp_points: newXP });
+                updateFromAwardXP({
+                  success: true,
+                  new_total_xp: newXP,
+                  personal_rank: 0, // Unknown rank when offline
+                  xp_breakdown: {
+                    game: newXP,
+                    subscription: 0,
+                    video_like: 0,
+                  },
+                });
               } else {
-                // Permanent error (400, 401, 403, 404, 422) - log and discard
-                log.error('Permanent XP award failure, not queuing', {
+                // Permanent error (400, 401, 403, 404, 422) - DO NOT apply optimistic updates
+                // The XP will never be synced, so don't mislead the user
+                log.error('Permanent XP award failure, XP not applied', {
                   status: result.status,
                   error: result.error,
                 });
               }
-
-              // Update local profile and leaderboard state
-              updateUserProfile({ xp_points: newXP });
-              updateFromAwardXP({
-                success: true,
-                new_total_xp: newXP,
-                personal_rank: 0, // Unknown rank when offline
-                xp_breakdown: {
-                  game: newXP,
-                  subscription: 0,
-                  video_like: 0,
-                },
-              });
             }
           } catch (error) {
             // Unexpected error - add to queue for safety
@@ -694,6 +706,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     if (gameState?.phase !== 'GAME_OVER') return null;
 
     const xpEarned = Math.floor(gameState.score / 10);
+    const displayedRound = xpAwarded ? roundsPlayed : roundsPlayed + 1;
 
     return (
       <View style={styles.gameOverContainer}>
@@ -720,7 +733,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         {/* Use xpAwarded to determine if state has updated: if false, show +1 for immediate feedback */}
         {!isDemoMode && (
           <Text style={styles.roundsInfo}>
-            Round {xpAwarded ? roundsPlayed : roundsPlayed + 1}/{MAX_ROUNDS}
+            Round {displayedRound}/{MAX_ROUNDS}
           </Text>
         )}
 

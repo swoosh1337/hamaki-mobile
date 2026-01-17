@@ -55,6 +55,10 @@ describe('VideoLikesManager', () => {
             pendingVideoLikeCount: 0,
             lastSubscriptionCheck: null,
             refreshAll: jest.fn(),
+            // Quota state properties
+            isQuotaExhausted: false,
+            quotaResetTimeRemaining: null,
+            quotaExhaustedMessage: null,
         });
     });
 

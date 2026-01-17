@@ -18,6 +18,22 @@ interface ContentContextType {
   isNetworkError: boolean;
 }
 
+interface DbContentPost {
+  id: string;
+  type: string;
+  title: string | null;
+  excerpt: string | null;
+  content: string | null;
+  thumbnail: string | null;
+  is_published: boolean | null;
+  published_at: string | null;
+  is_featured: boolean | null;
+  featured_order: number | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 const ContentContext = createContext<ContentContextType | undefined>(undefined);
 
 export const useContent = () => {
@@ -34,22 +50,27 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [error, setError] = useState<string | null>(null);
   const [hasNewContent, setHasNewContent] = useState(false);
   const [isNetworkError, setIsNetworkError] = useState(false);
+  const isLoadingRef = React.useRef(isLoading);
+
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   // Transform database rows to our ContentPost interface
-  const transformDatabasePost = (dbPost: any): ContentPost => ({
+  const transformDatabasePost = (dbPost: DbContentPost): ContentPost => ({
     id: dbPost.id,
     type: dbPost.type,
     title: decodeHtmlEntities(dbPost.title), // Decode HTML entities from YouTube API
     excerpt: decodeHtmlEntities(dbPost.excerpt),
     content: dbPost.content,
     thumbnail: dbPost.thumbnail,
-    isPublished: dbPost.is_published,
-    publishedAt: dbPost.published_at,
-    isFeatured: dbPost.is_featured,
-    featuredOrder: dbPost.featured_order,
+    isPublished: dbPost.is_published ?? false,
+    publishedAt: dbPost.published_at ?? '',
+    isFeatured: dbPost.is_featured ?? false,
+    featuredOrder: dbPost.featured_order ?? 0,
     metadata: dbPost.metadata || {},
-    createdAt: dbPost.created_at,
-    updatedAt: dbPost.updated_at
+    createdAt: dbPost.created_at ?? '',
+    updatedAt: dbPost.updated_at ?? ''
   });
 
   // Fetch content from database
@@ -200,13 +221,13 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Check for new content periodically (fallback)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!isLoading) {
+      if (!isLoadingRef.current) {
         fetchContent();
       }
     }, 5 * 60 * 1000); // Check every 5 minutes as fallback
 
     return () => clearInterval(interval);
-  }, [isLoading]);
+  }, []);
 
   const contextValue: ContentContextType = {
     posts,

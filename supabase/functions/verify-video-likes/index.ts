@@ -65,6 +65,21 @@ async function checkVideoRatings(
     if (!response.ok) {
         const error = await response.json();
         console.error('[verify-video-likes] YouTube API error:', error);
+
+        // Check for quota exhaustion (403 with specific reason)
+        const errorReason = error?.error?.errors?.[0]?.reason;
+        const isQuotaError = response.status === 403 && (
+            errorReason === 'quotaExceeded' ||
+            errorReason === 'dailyLimitExceeded' ||
+            errorReason === 'rateLimitExceeded' ||
+            error?.error?.message?.toLowerCase()?.includes('quota')
+        );
+
+        if (isQuotaError) {
+            console.error('[verify-video-likes] YouTube quota exhausted!');
+            throw new Error('YOUTUBE_QUOTA_EXHAUSTED');
+        }
+
         throw new Error(`YouTube API error: ${response.status}`);
     }
 
@@ -246,7 +261,7 @@ Deno.serve(async (req: Request) => {
                     const existingGameXP = existing?.game_xp || 0;
                     const existingSubscriptionXP = existing?.subscription_xp || 0;
 
-                    await supabase
+                    const { error: upsertError } = await supabase
                         .from('leaderboard_entries')
                         .upsert({
                             user_id: userId,
@@ -257,10 +272,27 @@ Deno.serve(async (req: Request) => {
                         }, {
                             onConflict: 'user_id,period_type'
                         });
-                }
-            }
 
-            console.log(`[verify-video-likes] Awarded ${totalXPAwarded} video_like XP via RPC`);
+                    if (upsertError) {
+                        console.error('[verify-video-likes] Failed to upsert leaderboard entry for fallback', {
+                            userId,
+                            periodType,
+                            totalXPAwarded,
+                            error: upsertError,
+                        });
+                        throw upsertError;
+                    }
+                }
+                console.log(`[verify-video-likes] Awarded ${totalXPAwarded} via fallback upsert`, {
+                    userId,
+                    totalXPAwarded,
+                });
+            } else {
+                console.log(`[verify-video-likes] Awarded ${totalXPAwarded} video_like XP via RPC`, {
+                    userId,
+                    totalXPAwarded,
+                });
+            }
         }
 
         console.log(`[verify-video-likes] Complete. Total XP: ${totalXPAwarded}`);

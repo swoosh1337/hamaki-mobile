@@ -131,7 +131,7 @@ class AnalyticsClient {
    * Track a custom event
    * Automatically dual-writes to database for important events
    */
-  track(eventName: string, properties?: Record<string, any>) {
+  async track(eventName: string, properties?: Record<string, any>): Promise<void> {
     // Send to PostHog
     if (posthogClient) {
       posthogClient.capture(eventName, properties);
@@ -139,7 +139,13 @@ class AnalyticsClient {
 
     // Dual-write to database for important events
     if (DB_TRACKED_EVENTS.has(eventName)) {
-      writeToDatabase(eventName, this.userId, properties);
+      const dbWrite = writeToDatabase(eventName, this.userId, properties);
+      const isCriticalEvent = eventName === 'sign_in' || eventName === 'sign_up';
+      if (isCriticalEvent) {
+        await dbWrite;
+        return;
+      }
+      return dbWrite;
     }
   }
 

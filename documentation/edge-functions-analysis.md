@@ -15,6 +15,24 @@ You have **6 edge functions** in your Supabase backend:
 
 ---
 
+## Rate Limiting & Abuse Prevention
+
+Client-invoked edge functions should enforce per-user and per-IP limits to prevent abuse and protect external API quotas. Use a short window limit plus exponential backoff guidance for clients; if the limit is hit, return a 429 and instruct the client to retry with increasing delays. Where possible, add a cache/short-circuit before any external API call.
+
+**Recommendations (client-invoked):**
+- `award-xp`: 30 requests/min per user; 10 requests/min per IP for anonymous/unauthenticated traffic.
+- `verify-subscriptions`: 5 requests/min per user; 2 requests/min per IP for anonymous/unauthenticated traffic.
+- `verify-video-likes`: 10 requests/min per user; 3 requests/min per IP for anonymous/unauthenticated traffic.
+- All endpoints: check idempotency (`edge_idempotency_keys`) before doing work; if a key is already present, return cached result and do not count toward the external API quota.
+
+**External API quota protection:**
+- `verify-subscriptions` and `verify-video-likes` must short-circuit on existing verification data to avoid unnecessary YouTube API calls.
+- Cache successful verification responses for a short TTL to handle rapid retries without extra API hits.
+
+**Enforcement points and monitoring:**
+- Enforce rate limits in edge function middleware or an API gateway layer (e.g., per-user + per-IP buckets).
+- Add monitoring/alerting on spikes (429 rates, per-IP bursts, YouTube API error rates) to detect abuse early.
+
 ## Edge Function Details
 
 ### 1. `award-xp` - XP Mutation Gateway

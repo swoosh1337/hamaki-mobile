@@ -68,6 +68,10 @@ export function useTabNavigation(
    */
   const navigateToTab = useCallback((tab: TabName) => {
     const index = TAB_INDEX_MAP[tab];
+    if (typeof index !== 'number') {
+      log.error('Invalid tab index for navigateToTab', { tab, index });
+      return;
+    }
     log.debug('Navigating to tab', { tab, index });
 
     pagerRef.current?.setPage(index);

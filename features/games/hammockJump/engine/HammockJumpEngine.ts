@@ -846,7 +846,7 @@ export class HammockGameEngine {
         if (this.onBigBoostLand) this.onBigBoostLand();
         break;
 
-      case 'ice':
+      case 'ice': {
         // MORE DRAMATIC ice - strong slide, more particles, visual feedback
         player.vy = PHYSICS.JUMP_VELOCITY;
         player.isOnIce = true;
@@ -861,6 +861,7 @@ export class HammockGameEngine {
         // Special platform sound
         if (this.onSpecialPlatformLand) this.onSpecialPlatformLand();
         break;
+      }
 
       case 'conveyor':
         player.vy = PHYSICS.JUMP_VELOCITY;
@@ -1175,12 +1176,7 @@ export class HammockGameEngine {
 
       case 'MOVING_TARGET': {
         // Only spawn on moving platforms, item stays with platform
-        if (platform.type !== 'moving') {
-          // Fallback to gap jumper if not a moving platform
-          const itemX = platform.x + (platform.width - itemSize) / 2;
-          const itemY = platform.y - itemSize - 30;
-          s.items.push(this.createItem(itemX, itemY, itemSize, itemType));
-        } else {
+        if (platform.type === 'moving') {
           // Item on the moving platform itself
           const itemX = platform.x + (platform.width - itemSize) / 2;
           const itemY = platform.y - itemSize - 5; // Just above platform

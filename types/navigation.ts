@@ -31,7 +31,7 @@ export interface SwipeableTabContentProps {
 /** Tab configuration */
 export interface TabConfig {
   title: string;
-  icon: string;
+  icon: import('@/components/ui/IconSymbol').IconSymbolName;
 }
 
 /** Tab configuration map */

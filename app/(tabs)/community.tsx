@@ -316,32 +316,6 @@ const styles = StyleSheet.create({
     color: '#FFA500',
     textAlign: 'center',
   },
-  errorBanner: {
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 107, 107, 0.3)',
-  },
-  errorBannerText: {
-    fontSize: 13,
-    fontFamily: 'HamakiGeo',
-    color: '#FF6B6B',
-    textAlign: 'center',
-  },
-  connectionStatus: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    marginTop: 8,
-  },
-  connectionStatusText: {
-    fontSize: 14,
-    fontFamily: 'HamakiGeo',
-    color: Colors.dark.tint,
-    opacity: 0.7,
-  },
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
