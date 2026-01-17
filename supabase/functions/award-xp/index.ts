@@ -85,13 +85,21 @@ function setCachedRank(userId: string, totalXP: number, rank: number): void {
         expiresAt: Date.now() + RANK_CACHE_TTL_MS,
     });
 
-    // Cleanup old entries periodically (keep cache size bounded)
+    // Cleanup when cache exceeds limit
     if (rankCache.size > 1000) {
         const now = Date.now();
+        // First: remove expired entries
         for (const [k, v] of rankCache.entries()) {
             if (now > v.expiresAt) {
                 rankCache.delete(k);
             }
+        }
+        // Second: evict oldest entries until under limit (FIFO order via Map insertion)
+        const iterator = rankCache.keys();
+        while (rankCache.size > 1000) {
+            const oldestKey = iterator.next().value;
+            if (oldestKey) rankCache.delete(oldestKey);
+            else break;
         }
     }
 }

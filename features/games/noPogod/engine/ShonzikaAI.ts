@@ -31,6 +31,7 @@ export function createInitialShonzikaState(
         animationProgress: 0,
         movementStartTime: 0,
         nextMoveTime: 0,
+        facingDirection: 1, // Start facing right
     };
 }
 
@@ -101,8 +102,9 @@ export function updateShonzikaPosition(
         screenWidth
     );
 
-    // Calculate animation progress for walk cycle
-    const walkCycleProgress = (Date.now() / 1000 * ANIMATION.SHONZIKA_WALK_CYCLES_PER_SEC) % 1;
+    // Frame-based animation progress (same rate as Miro for smooth walking)
+    // Use 0.05 per frame to match Miro's walk cycle cadence
+    const newProgress = (state.animationProgress + 0.05) % 1.0;
 
     // Determine position based on screen region
     const leftThird = screenWidth / 3;
@@ -121,7 +123,8 @@ export function updateShonzikaPosition(
             position,
             isMoving: true,
             sprite: state.visualThrowTimer > 0 ? 'THROWING' : 'WALKING',
-            animationProgress: walkCycleProgress,
+            animationProgress: newProgress,
+            facingDirection: newDirection, // Always face the direction of movement
         },
         newDirection,
     };

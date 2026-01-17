@@ -340,6 +340,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     marginBottom: 12,
     gap: 12,
+    marginLeft: -22, // Offset left by (icon width 32 + gap 12) / 2 to center text over subtitle
   },
   topTitleIcon: {
     width: 32,

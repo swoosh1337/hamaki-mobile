@@ -242,11 +242,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     if (gameEngineRef.current) {
       gameEngineRef.current.pauseGame();
       updateGameState();
-
-      // Pause background music
-      if (audioManagerRef.current) {
-        audioManagerRef.current.pauseBackground();
-      }
+      // Music continues playing during pause
     }
   }, [updateGameState]);
 
@@ -254,11 +250,6 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     if (gameEngineRef.current) {
       gameEngineRef.current.resumeGame();
       updateGameState();
-
-      // Resume background music
-      if (audioManagerRef.current) {
-        audioManagerRef.current.resumeBackground();
-      }
     }
   }, [updateGameState]);
 
@@ -488,7 +479,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
                   new_total_xp: newXP,
                   personal_rank: 0, // Unknown rank when offline
                   xp_breakdown: {
-                    game: newXP,
+                    game: xpToAward, // Only the game XP delta (not cumulative, but best we can do offline)
                     subscription: 0,
                     video_like: 0,
                   },
@@ -530,7 +521,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
               new_total_xp: newXP,
               personal_rank: 0, // Unknown rank when offline
               xp_breakdown: {
-                game: newXP,
+                game: xpToAward, // Only the game XP delta (not cumulative, but best we can do offline)
                 subscription: 0,
                 video_like: 0,
               },
@@ -609,7 +600,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const renderMenuState = () => (
     <View style={styles.menuContainer}>
       <Image
-        source={require('@/assets/images/game/launch_Screen.png')}
+        source={require('@/features/games/noPogod/assets/launch_Screen.png')}
         style={styles.menuBackgroundImage}
         resizeMode="contain"
       />

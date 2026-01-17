@@ -395,9 +395,9 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
                 new_total_xp: newXP,
                 personal_rank: 0, // Unknown rank when offline
                 xp_breakdown: {
-                  game: newXP,
-                  subscription: 0,
-                  video_like: 0,
+                  game: xpToAward, // Only the game XP delta (not cumulative, but best we can do offline)
+                  subscription: 0, // Unknown offline - will be corrected on sync
+                  video_like: 0,   // Unknown offline - will be corrected on sync
                 },
               });
             } else {
@@ -437,13 +437,11 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
             new_total_xp: newXP,
             personal_rank: 0, // Unknown rank when offline
             xp_breakdown: {
-              game: newXP,
-              subscription: 0,
-              video_like: 0,
+              game: xpToAward, // Only the game XP delta (not cumulative, but best we can do offline)
+              subscription: 0, // Unknown offline - will be corrected on sync
+              video_like: 0,   // Unknown offline - will be corrected on sync
             },
           });
-
-          setXpAwarded(true);
         }
       }
     };

@@ -266,7 +266,7 @@ Modify SQL function to return rank and breakdown in single call.
 CREATE OR REPLACE FUNCTION award_xp_v2(
     p_user_id UUID,
     p_xp_type TEXT,
-    p_amount INTEGER
+    p_xp_amount INTEGER
 )
 RETURNS TABLE(
     success BOOLEAN,
@@ -283,20 +283,62 @@ DECLARE
     v_game INTEGER;
     v_sub INTEGER;
     v_video INTEGER;
+    v_has_user BOOLEAN;
 BEGIN
-    -- Existing award logic...
+    IF p_user_id IS NULL OR p_xp_amount IS NULL OR p_xp_amount <= 0 THEN
+        RAISE EXCEPTION 'Invalid input: user_id=% xp_amount=%', p_user_id, p_xp_amount;
+    END IF;
 
-    -- Get XP breakdown
+    IF p_xp_type NOT IN ('game', 'subscription', 'video_like') THEN
+        RAISE EXCEPTION 'Invalid xp_type: %', p_xp_type;
+    END IF;
+
+    SELECT EXISTS(SELECT 1 FROM users WHERE id = p_user_id)
+    INTO v_has_user;
+
+    IF NOT v_has_user THEN
+        RAISE EXCEPTION 'User not found: %', p_user_id;
+    END IF;
+
     SELECT le.game_xp, le.subscription_xp, le.video_like_xp, le.total_xp, le.rank
     INTO v_game, v_sub, v_video, v_new_total, v_rank
+    FROM leaderboard_entries le
+    WHERE le.user_id = p_user_id AND le.period_type = 'monthly'
+    FOR UPDATE;
+
+    v_game := COALESCE(v_game, 0);
+    v_sub := COALESCE(v_sub, 0);
+    v_video := COALESCE(v_video, 0);
+
+    IF p_xp_type = 'game' THEN
+        v_game := v_game + p_xp_amount;
+    ELSIF p_xp_type = 'subscription' THEN
+        v_sub := v_sub + p_xp_amount;
+    ELSIF p_xp_type = 'video_like' THEN
+        v_video := v_video + p_xp_amount;
+    END IF;
+
+    v_new_total := v_game + v_sub + v_video;
+
+    INSERT INTO leaderboard_entries (user_id, period_type, total_xp, game_xp, subscription_xp, video_like_xp)
+    VALUES (p_user_id, 'monthly', v_new_total, v_game, v_sub, v_video)
+    ON CONFLICT (user_id, period_type)
+    DO UPDATE SET
+        total_xp = EXCLUDED.total_xp,
+        game_xp = EXCLUDED.game_xp,
+        subscription_xp = EXCLUDED.subscription_xp,
+        video_like_xp = EXCLUDED.video_like_xp;
+
+    SELECT le.rank
+    INTO v_rank
     FROM leaderboard_entries le
     WHERE le.user_id = p_user_id AND le.period_type = 'monthly';
 
     RETURN QUERY SELECT
-        true, v_new_total, COALESCE(v_rank, 0),
+        true, v_new_total, v_rank,
         v_game, v_sub, v_video, 'XP awarded'::TEXT;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql VOLATILE;
 ```
 
 **B. Modify: `supabase/functions/award-xp/index.ts`**

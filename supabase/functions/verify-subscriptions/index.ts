@@ -59,15 +59,25 @@ interface YouTubeSubscription {
 }
 
 /**
+ * Result from checking subscriptions including quota usage
+ */
+interface CheckSubscriptionsResult {
+    foundChannels: Set<string>;
+    pagesChecked: number;  // Each page = 1 quota unit
+}
+
+/**
  * Fetch user's subscriptions with early-exit pagination
  * Stops as soon as all required channels are found
+ * Returns found channels AND pages checked (for quota tracking)
  */
 async function checkSubscriptions(
     accessToken: string,
     requiredChannels: Set<string>
-): Promise<Set<string>> {
+): Promise<CheckSubscriptionsResult> {
     const foundChannels = new Set<string>();
     let nextPageToken: string | undefined;
+    let pagesChecked = 0;
 
     // Copy to track remaining (for early exit)
     const remaining = new Set(requiredChannels);
@@ -106,6 +116,9 @@ async function checkSubscriptions(
             throw new Error(`YouTube API error: ${response.status}`);
         }
 
+        // Count this page (1 quota unit per subscriptions.list call)
+        pagesChecked++;
+
         const data = await response.json();
 
         // Check each subscription
@@ -131,7 +144,7 @@ async function checkSubscriptions(
         }
     }
 
-    return foundChannels;
+    return { foundChannels, pagesChecked };
 }
 
 Deno.serve(async (req: Request) => {
@@ -250,7 +263,16 @@ Deno.serve(async (req: Request) => {
             console.log(`[verify-subscriptions] Checking ${needsCheck.length} channels`);
 
             const requiredIds = new Set(needsCheck.map(c => c.channelId));
-            const foundIds = await checkSubscriptions(accessToken, requiredIds);
+            const { foundChannels: foundIds, pagesChecked } = await checkSubscriptions(accessToken, requiredIds);
+
+            // Log quota usage (1 unit per page of subscriptions.list)
+            if (pagesChecked > 0) {
+                await supabase.rpc('log_youtube_quota_usage', {
+                    p_operation: 'subscriptions.list',
+                    p_units: pagesChecked,
+                });
+                console.log(`[verify-subscriptions] Logged ${pagesChecked} quota units for subscriptions.list`);
+            }
 
             // Step 3: Process results and award XP
             for (const channel of needsCheck) {

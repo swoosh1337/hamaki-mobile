@@ -385,6 +385,8 @@ export const getGlobalResponsiveScaling = (): ResponsiveScalingManager => {
   }
 
   if (!hasRegisteredListener) {
+    const { width, height } = Dimensions.get('window');
+    globalResponsiveScaling?.updateScreenSize(width, height);
     globalResponsiveScalingListener = Dimensions.addEventListener('change', ({ window }) => {
       globalResponsiveScaling?.updateScreenSize(window.width, window.height);
     });

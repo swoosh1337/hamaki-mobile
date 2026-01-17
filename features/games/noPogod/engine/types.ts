@@ -93,6 +93,8 @@ export interface ShonzikaState {
     movementStartTime: number;
     /** When next movement should occur */
     nextMoveTime: number;
+    /** Direction Shonzika is facing (1 = right, -1 = left) */
+    facingDirection: 1 | -1;
 }
 
 // =============================================================================

@@ -10,7 +10,7 @@
  * - Calculates pending action count for badge
  */
 
-import { VIDEO_LIKE_TTL_MS } from '@/constants/Api';
+import { API } from '@/constants/Api';
 import { useAuth } from '@/contexts/AuthContext';
 import { tokenManager } from '@/services/auth';
 import {
@@ -172,7 +172,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
 
             const expectedChannelCount = Object.keys(YOUTUBE_CHANNELS).length;
             // Cache TTL: 4 hours (matches sync interval)
-            const VIDEO_LIKE_CACHE_TTL = VIDEO_LIKE_TTL_MS;
+            const VIDEO_LIKE_CACHE_TTL = API.cache.videoLikeTTL;
 
             // First try to load video like statuses from cache (instant)
             const hasCache = await verificationCacheService.hasVideoLikeCache();
@@ -273,6 +273,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
                 // Check if the error is quota-related
                 if (isQuotaExhaustedError(result.errors[0])) {
                     log.warn('Quota exhausted error in subscription verification');
+                    await youtubeQuotaState.setQuotaExhausted(); // Persist to AsyncStorage
                     setIsQuotaExhausted(true);
                     setQuotaResetTimeRemaining(youtubeQuotaState.getFormattedTimeUntilReset());
                 }
@@ -283,6 +284,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
 
             // Check if it's a quota error and update state
             if (isQuotaExhaustedError(error)) {
+                await youtubeQuotaState.setQuotaExhausted(); // Persist to AsyncStorage
                 setIsQuotaExhausted(true);
                 setQuotaResetTimeRemaining(youtubeQuotaState.getFormattedTimeUntilReset());
             }
@@ -368,6 +370,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
                 // Check if the error is quota-related
                 if (isQuotaExhaustedError(result.errors[0])) {
                     log.warn('Quota exhausted error in video like verification');
+                    await youtubeQuotaState.setQuotaExhausted(); // Persist to AsyncStorage
                     setIsQuotaExhausted(true);
                     setQuotaResetTimeRemaining(youtubeQuotaState.getFormattedTimeUntilReset());
                 }
@@ -378,6 +381,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
 
             // Check if it's a quota error and update state
             if (isQuotaExhaustedError(error)) {
+                await youtubeQuotaState.setQuotaExhausted(); // Persist to AsyncStorage
                 setIsQuotaExhausted(true);
                 setQuotaResetTimeRemaining(youtubeQuotaState.getFormattedTimeUntilReset());
             }

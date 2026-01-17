@@ -298,7 +298,7 @@ export const NoPogodGameCanvasAtlas: React.FC<NoPogodGameCanvasAtlasProps> = ({
                         y={renderData.shonzika.y}
                         width={renderData.shonzika.width}
                         height={renderData.shonzika.height}
-                        flipX={gameState.shonzika.position === 'LEFT'}
+                        flipX={gameState.shonzika.facingDirection === -1}
                     />
                 )}
 

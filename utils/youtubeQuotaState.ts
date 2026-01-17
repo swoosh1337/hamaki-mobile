@@ -242,12 +242,29 @@ export function isQuotaExhaustedError(error: unknown): boolean {
         }
     }
 
-    // Check for 403 status with quota-related reason
-    // Edge Functions return "YouTube API error: 403" for any 403
-    if (message.includes('YouTube API error: 403')) {
-        // Could be quota or permission - but we'll treat as quota
-        // if it happens after successful auth
-        return true;
+    // Check for 403 status - but be more conservative about treating as quota
+    // Edge Functions may return "YouTube API error: 403" for various 403 reasons
+    if (message.includes('YouTube API error: 403') || message.includes('403')) {
+        // Exclude known non-quota 403 reasons before treating as quota
+        const nonQuotaIndicators = [
+            'forbidden',
+            'permission',
+            'access denied',
+            'not authorized',
+            'invalid api key',
+            'api key not valid',
+            'private video',
+            'video unavailable',
+        ];
+
+        const isLikelyNonQuota = nonQuotaIndicators.some(indicator =>
+            lowerMessage.includes(indicator)
+        );
+
+        // Only treat as quota if no non-quota indicators found
+        if (!isLikelyNonQuota) {
+            return true;
+        }
     }
 
     return false;

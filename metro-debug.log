@@ -1,0 +1,134 @@
+2025-12-22T00:49:01.413Z expo:telemetry Switching strategy from detached to instant
+2025-12-22T00:49:01.462Z expo:telemetry Recording 1 event(s)
+2025-12-22T00:49:01.466Z expo:env Loaded environment variables from: /Users/user/dev/hamaki-mobile/.env
+2025-12-22T00:49:01.466Z expo:env /Users/user/dev/hamaki-mobile/.env.development does not exist, skipping this env file
+2025-12-22T00:49:01.466Z expo:env /Users/user/dev/hamaki-mobile/.env.local does not exist, skipping this env file
+2025-12-22T00:49:01.466Z expo:env /Users/user/dev/hamaki-mobile/.env.development.local does not exist, skipping this env file
+env: load .env
+env: export EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_YOUTUBE_API_KEY EXPO_PUBLIC_HAMAKI_CHANNEL_ID
+2025-12-22T00:49:01.569Z expo:utils:scheme ios application Info.plist path: hamaki/Info.plist
+2025-12-22T00:49:01.573Z expo:utils:scheme ios application schemes: [
+  'com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3',
+  'com.igrigolia1.hamaki',
+  'exp+hamaki'
+]
+2025-12-22T00:49:01.594Z expo:utils:scheme android application schemes: [
+  'com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3',
+  'exp+hamaki'
+]
+Starting project at /Users/user/dev/hamaki-mobile
+2025-12-22T00:49:01.684Z expo:prebuild-config:expo-splash-screen:ios config: {
+  backgroundColor: '#0B0C1A',
+  image: './assets/images/logo-transparent.png',
+  imageWidth: 250,
+  dark: {
+    backgroundColor: '#0B0C1A',
+    image: './assets/images/logo-transparent.png',
+    imageWidth: 250
+  },
+  resizeMode: 'contain'
+}
+2025-12-22T00:49:01.816Z expo:utils:fileNotifier Observing /Users/user/dev/hamaki-mobile/babel.config.js
+2025-12-22T00:49:01.819Z expo:prebuild-config:expo-splash-screen:ios config: {
+  backgroundColor: '#0B0C1A',
+  image: './assets/images/logo-transparent.png',
+  imageWidth: 250,
+  dark: {
+    backgroundColor: '#0B0C1A',
+    image: './assets/images/logo-transparent.png',
+    imageWidth: 250
+  },
+  resizeMode: 'contain'
+}
+2025-12-22T00:49:01.908Z expo:start:server:devServer Stopping dev server (bundler: metro)
+2025-12-22T00:49:01.908Z expo:start:server:devServer Stopped dev server (bundler: metro)
+2025-12-22T00:49:01.939Z expo:prebuild-config:expo-splash-screen:ios config: {
+  backgroundColor: '#0B0C1A',
+  image: './assets/images/logo-transparent.png',
+  imageWidth: 250,
+  dark: {
+    backgroundColor: '#0B0C1A',
+    image: './assets/images/logo-transparent.png',
+    imageWidth: 250
+  },
+  resizeMode: 'contain'
+}
+2025-12-22T00:49:01.950Z expo:start:server:metro:router Using app as the root directory for Expo Router.
+2025-12-22T00:49:02.078Z expo:doctor:apple:simulatorApp Simulator app id: com.apple.iphonesimulator
+2025-12-22T00:49:02.477Z expo:metro:config react-native-reanimated package.json: /Users/user/dev/hamaki-mobile/node_modules/react-native-reanimated/package.json
+
+Expo Metro config:
+- Version: 0.20.17
+- Extensions: ts, tsx, mjs, js, jsx, json, cjs, scss, sass, css
+- React Native: /Users/user/dev/hamaki-mobile/node_modules/react-native
+- Watch Folders: 
+- Node Module Paths: 
+- Sass: null
+- Reanimated: 3.17.5
+
+2025-12-22T00:49:02.653Z expo:metro:withMetroResolvers Appending 8 custom resolvers to Metro config. (has custom resolver: false)
+2025-12-22T00:49:02.764Z expo:start:server:urlCreator URL: http://127.0.0.1:8081
+Starting Metro Bundler
+2025-12-22T00:49:03.136Z expo:prebuild-config:expo-splash-screen:ios config: {
+  backgroundColor: '#0B0C1A',
+  image: './assets/images/logo-transparent.png',
+  imageWidth: 250,
+  dark: {
+    backgroundColor: '#0B0C1A',
+    image: './assets/images/logo-transparent.png',
+    imageWidth: 250
+  },
+  resizeMode: 'contain'
+}
+2025-12-22T00:49:03.142Z expo:start:server:middleware:serveStatic Serving static files from: /Users/user/dev/hamaki-mobile/public
+2025-12-22T00:49:03.226Z expo:start:server:urlCreator URL: http://192.168.12.137:8081
+2025-12-22T00:49:03.226Z expo:start:server:urlCreator Dev client URL: exp+hamaki://expo-development-client/?url=http%3A%2F%2F192.168.12.137%3A8081 -- manifestUrl: http://192.168.12.137:8081 -- {}
+2025-12-22T00:49:03.229Z expo:prebuild-config:expo-splash-screen:ios config: {
+  backgroundColor: '#0B0C1A',
+  image: './assets/images/logo-transparent.png',
+  imageWidth: 250,
+  dark: {
+    backgroundColor: '#0B0C1A',
+    image: './assets/images/logo-transparent.png',
+    imageWidth: 250
+  },
+  resizeMode: 'contain'
+}
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+2025-12-22T00:49:03.237Z expo:start:server:developmentSession Development session ping (runtime: native, url: exp+hamaki://expo-development-client/?url=http%3A%2F%2F192.168.12.137%3A8081)
+2025-12-22T00:49:03.325Z expo:start:server:metro:waitForTypescript Watching file changes: [
+  '/Users/user/dev/hamaki-mobile/.env.development.local',
+  '/Users/user/dev/hamaki-mobile/.env.local',
+  '/Users/user/dev/hamaki-mobile/.env.development',
+  '/Users/user/dev/hamaki-mobile/.env'
+]
+2025-12-22T00:49:03.325Z expo:doctor:typescriptSupport Ensuring TypeScript support is setup
+2025-12-22T00:49:03.331Z expo:prebuild-config:expo-splash-screen:ios config: {
+  backgroundColor: '#0B0C1A',
+  image: './assets/images/logo-transparent.png',
+  imageWidth: 250,
+  dark: {
+    backgroundColor: '#0B0C1A',
+    image: './assets/images/logo-transparent.png',
+    imageWidth: 250
+  },
+  resizeMode: 'contain'
+}
+2025-12-22T00:49:03.333Z expo:doctor:dependencies:getMissingPackages Required package "typescript" found (no version constraint specified).
+2025-12-22T00:49:03.334Z expo:doctor:dependencies:getMissingPackages Required package "@types/react" found (no version constraint specified).
+2025-12-22T00:49:03.338Z expo:prebuild-config:expo-splash-screen:ios config: {
+  backgroundColor: '#0B0C1A',
+  image: './assets/images/logo-transparent.png',
+  imageWidth: 250,
+  dark: {
+    backgroundColor: '#0B0C1A',
+    image: './assets/images/logo-transparent.png',
+    imageWidth: 250
+  },
+  resizeMode: 'contain'
+}
+2025-12-22T00:49:03.340Z expo:typed-routes Ensuring typed routes side-effects are setup (experiments.typedRoutes: true, typesDirectory: /Users/user/dev/hamaki-mobile/.expo/types)
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+2025-12-22T00:49:03.346Z expo:start:server:metro:router Using app as the root directory for Expo Router.
+2025-12-22T00:49:03.355Z expo:start:server:metro:metroWatchTypeScriptFiles Waiting for TypeScript files to be added to the project...

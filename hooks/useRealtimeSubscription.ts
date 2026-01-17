@@ -108,6 +108,9 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>(
             return;
         }
 
+        reconnectCountRef.current = 0;
+        lastReconnectTimeRef.current = 0;
+
         // Generate unique channel name
         const channelName = `realtime:${schema}:${table}${filter ? `:${filter}` : ''}${channelSuffix ? `:${channelSuffix}` : ''}`;
         log.info(`Subscribing to ${channelName}, event=${event}`);

@@ -9,6 +9,18 @@ import { K_ANIMATION_FRAMES } from '@/features/games/hammockJump/sprites';
 import { NOPOGOD_GAME_ASSETS } from '@/features/games/noPogod/utils/assets';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const PLATFORM_COLORS: Record<string, { base: string; alpha?: number }> = {
+  normal: { base: "rgba(120,120,120,", alpha: 0.9 }, // normal - gray
+  moving: { base: "rgba(80,80,180,", alpha: 0.9 }, // moving - blue-gray
+  breakable: { base: "rgba(139,69,19,", alpha: 0.9 }, // breakable - brown
+  spring: { base: "rgba(255,215,0,", alpha: 0.95 }, // spring - gold (unused)
+  bouncy: { base: "rgba(255,20,147,", alpha: 0.9 }, // bouncy - BRIGHTER deep pink
+  ice: { base: "rgba(0,191,255,", alpha: 0.9 }, // ice - BRIGHTER deep sky blue
+  conveyor: { base: "rgba(128,128,128,", alpha: 0.9 }, // conveyor - gray
+  disappearing: { base: "rgba(147,112,219,", alpha: 0.9 }, // disappearing - medium purple
+  crumbling: { base: "rgba(105,105,105,", alpha: 0.9 }, // crumbling - dim gray
+};
+const DEFAULT_PLATFORM_COLOR = PLATFORM_COLORS.normal;
 
 // Memoized Game UI Overlay - Updates only when specific gameplay values change
 const GameUI = memo(({
@@ -108,7 +120,7 @@ export const GameCanvas = React.memo(({
   const [isKAnimationPlaying, setIsKAnimationPlaying] = useState(false);
   const [kAnimationFrame, setKAnimationFrame] = useState(0);
   const [kAnimationPosition, setKAnimationPosition] = useState<{ x: number; y: number } | null>(null);
-  const kAnimationRef = useRef<NodeJS.Timeout | null>(null);
+  const kAnimationRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // K animation effect
   useEffect(() => {
@@ -274,20 +286,7 @@ export const GameCanvas = React.memo(({
                   return null;
                 }
 
-                const PLATFORM_COLORS: Record<string, { base: string; alpha?: number }> = {
-                  normal: { base: "rgba(120,120,120,", alpha: 0.9 }, // normal - gray
-                  moving: { base: "rgba(80,80,180,", alpha: 0.9 }, // moving - blue-gray
-                  breakable: { base: "rgba(139,69,19,", alpha: 0.9 }, // breakable - brown
-                  spring: { base: "rgba(255,215,0,", alpha: 0.95 }, // spring - gold (unused)
-                  bouncy: { base: "rgba(255,20,147,", alpha: 0.9 }, // bouncy - BRIGHTER deep pink
-                  ice: { base: "rgba(0,191,255,", alpha: 0.9 }, // ice - BRIGHTER deep sky blue
-                  conveyor: { base: "rgba(128,128,128,", alpha: 0.9 }, // conveyor - gray
-                  disappearing: { base: "rgba(147,112,219,", alpha: 0.9 }, // disappearing - medium purple
-                  crumbling: { base: "rgba(105,105,105,", alpha: 0.9 }, // crumbling - dim gray
-                };
-
-                const defaultColor = PLATFORM_COLORS.normal;
-                const platformColor = PLATFORM_COLORS[p.type] ?? defaultColor;
+                const platformColor = PLATFORM_COLORS[p.type] ?? DEFAULT_PLATFORM_COLOR;
                 let baseColor = platformColor.base;
                 let alpha = platformColor.alpha ?? 0.9;
 

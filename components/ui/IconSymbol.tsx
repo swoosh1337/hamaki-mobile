@@ -18,8 +18,8 @@ const MAPPING = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
-  'gamecontroller.fill': 'sports-esports',
-  'trophy.fill': 'emoji-events',
+  'gamecontroller.fill': 'sports_esports',
+  'trophy.fill': 'emoji_events',
   'person.3.fill': 'people',
   'person.fill': 'person',
 } as IconMapping;

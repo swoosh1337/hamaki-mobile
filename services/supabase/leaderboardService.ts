@@ -71,17 +71,17 @@ export const leaderboardService = {
 
     /**
      * Get weekly leaderboard entries
-     * Uses total_xp from weekly period entries
-     * - game_xp resets weekly
-     * - subscription_xp and video_like_xp are permanent (never reset)
+     * Uses total_xp (game_xp + subscription_xp + video_like_xp)
+     * - game_xp resets weekly (represents weekly activity)
+     * - subscription_xp and video_like_xp are permanent bonuses
      */
     async getWeeklyLeaderboard(limit = 10): Promise<Array<{
         user_id: string;
-        points: number;  // Keep name for backwards compatibility (uses total_xp)
+        points: number;  // Uses total_xp
         user: { full_name: string; avatar_url?: string };
     }>> {
         try {
-            log.debug('Fetching weekly leaderboard (total XP)', { limit });
+            log.debug('Fetching weekly leaderboard', { limit });
 
             const { data, error } = await supabase
                 .from('leaderboard_entries')
@@ -103,7 +103,7 @@ export const leaderboardService = {
 
             return (data || []).map(entry => ({
                 user_id: entry.user_id,
-                points: entry.total_xp,  // Use total_xp (includes subscription + video like XP)
+                points: entry.total_xp || 0,  // Use total_xp
                 user: Array.isArray(entry.users) ? entry.users[0] : entry.users,
             }));
         } catch (error) {
@@ -115,7 +115,8 @@ export const leaderboardService = {
     /**
      * Get leaderboard snapshot (global truth)
      *
-     * Returns top N entries ordered by total_xp.
+     * Returns top N entries ordered by total_xp for both periods.
+     *
      * This is the authoritative global leaderboard - use for display.
      * Do NOT merge with personal rank from useMyLeaderboardStatus.
      *
@@ -165,6 +166,7 @@ export const leaderboardService = {
 
             const entries = (data || []).map((entry, index) => {
                 const user = Array.isArray(entry.users) ? entry.users[0] : entry.users;
+
                 return {
                     userId: entry.user_id,
                     fullName: user?.full_name || 'Unknown',
@@ -177,7 +179,7 @@ export const leaderboardService = {
                 };
             });
 
-            log.debug('Leaderboard snapshot fetched', { count: entries.length });
+            log.debug('Leaderboard snapshot fetched', { count: entries.length, periodType });
 
             return {
                 entries,
@@ -197,6 +199,8 @@ export const leaderboardService = {
      *
      * NOTE: The rank calculated here is a fallback for initial load only.
      * Authoritative rank updates come from the award-xp Edge Function.
+     *
+     * Both periods use total_xp for ranking and display.
      */
     async getMyLeaderboardStatus(
         userId: string,
@@ -229,9 +233,6 @@ export const leaderboardService = {
                 throw entryError;
             }
 
-            // Calculate rank (count users with higher total_xp + 1)
-            // NOTE: This is fallback for initial load. Authoritative rank
-            // comes from award-xp Edge Function response.
             const { count, error: countError } = await supabase
                 .from('leaderboard_entries')
                 .select('*', { count: 'exact', head: true })
@@ -253,7 +254,8 @@ export const leaderboardService = {
             };
 
             log.debug('Personal status loaded', {
-                total: result.xp.total,
+                periodType,
+                totalXP: result.xp.total,
                 rank: result.personalRank,
             });
 

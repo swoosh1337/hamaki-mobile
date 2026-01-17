@@ -195,6 +195,13 @@ Deno.serve(async (req: Request) => {
         const videoIds = videosToCheck.map(v => v.videoId);
         const ratings = await checkVideoRatings(accessToken, videoIds);
 
+        // Log quota usage (1 unit for videos.getRating batch call)
+        await supabase.rpc('log_youtube_quota_usage', {
+            p_operation: 'videos.getRating',
+            p_units: 1,
+        });
+        console.log('[verify-video-likes] Logged 1 quota unit for videos.getRating');
+
         // Process results
         const newAwardedLikes = { ...awardedLikes };
 
@@ -240,6 +247,7 @@ Deno.serve(async (req: Request) => {
             if (awardError) {
                 console.error('[verify-video-likes] Failed to award XP via RPC:', awardError);
                 // Fallback: try direct upsert for both periods
+                const fallbackErrors: Array<{ periodType: string; error: Error }> = [];
                 for (const periodType of ['monthly', 'weekly']) {
                     const { data: existing, error: existingError } = await supabase
                         .from('leaderboard_entries')
@@ -254,7 +262,8 @@ Deno.serve(async (req: Request) => {
                             periodType,
                             error: existingError,
                         });
-                        throw existingError;
+                        fallbackErrors.push({ periodType, error: existingError });
+                        continue;
                     }
 
                     const existingVideoXP = existing?.video_like_xp || 0;
@@ -280,8 +289,14 @@ Deno.serve(async (req: Request) => {
                             totalXPAwarded,
                             error: upsertError,
                         });
-                        throw upsertError;
+                        fallbackErrors.push({ periodType, error: upsertError });
                     }
+                }
+                if (fallbackErrors.length > 0) {
+                    const summary = fallbackErrors
+                        .map(entry => `${entry.periodType}: ${entry.error.message}`)
+                        .join('; ');
+                    throw new Error(`[verify-video-likes] Fallback upsert failures: ${summary}`);
                 }
                 console.log(`[verify-video-likes] Awarded ${totalXPAwarded} via fallback upsert`, {
                     userId,

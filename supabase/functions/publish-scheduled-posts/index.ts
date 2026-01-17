@@ -94,17 +94,17 @@ Deno.serve(async (req) => {
 
             const oldPostIds = oldPosts.map(post => post.id)
 
-                const { error: unfeaturedError } = await supabase
-                    .from('content_posts')
-                    .update({
-                        is_featured: false,
-                        featured_order: 0,
-                        is_published: false // Also unpublish old posts from regular feed
-                    })
-                    .in('id', oldPostIds)
+            const { error: unfeaturedError } = await supabase
+                .from('content_posts')
+                .update({
+                    is_featured: false,
+                    featured_order: 0,
+                    is_published: false // Also unpublish old posts from regular feed
+                })
+                .in('id', oldPostIds)
 
-                if (unfeaturedError) {
-                    console.error('Error unfeaturing old posts:', unfeaturedError)
+            if (unfeaturedError) {
+                console.error('Error unfeaturing old posts:', unfeaturedError)
             } else {
                 console.log(`Successfully unpublished ${oldPostIds.length} old posts`)
                 oldPosts.forEach(post => {

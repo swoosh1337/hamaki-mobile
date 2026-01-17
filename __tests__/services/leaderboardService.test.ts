@@ -34,8 +34,10 @@ describe('leaderboardService', () => {
 
             (mockSupabase.from as jest.Mock).mockReturnValue({
                 select: jest.fn().mockReturnValue({
-                    order: jest.fn().mockReturnValue({
-                        limit: jest.fn().mockResolvedValue({ data: mockEntries, error: null }),
+                    eq: jest.fn().mockReturnValue({
+                        order: jest.fn().mockReturnValue({
+                            limit: jest.fn().mockResolvedValue({ data: mockEntries, error: null }),
+                        }),
                     }),
                 }),
             });
@@ -54,8 +56,10 @@ describe('leaderboardService', () => {
             const limitMock = jest.fn().mockResolvedValue({ data: mockUsers, error: null });
             (mockSupabase.from as jest.Mock).mockReturnValue({
                 select: jest.fn().mockReturnValue({
-                    order: jest.fn().mockReturnValue({
-                        limit: limitMock,
+                    eq: jest.fn().mockReturnValue({
+                        order: jest.fn().mockReturnValue({
+                            limit: limitMock,
+                        }),
                     }),
                 }),
             });
@@ -68,8 +72,10 @@ describe('leaderboardService', () => {
         it('should return empty array on error', async () => {
             (mockSupabase.from as jest.Mock).mockReturnValue({
                 select: jest.fn().mockReturnValue({
-                    order: jest.fn().mockReturnValue({
-                        limit: jest.fn().mockResolvedValue({ data: null, error: { message: 'DB Error' } }),
+                    eq: jest.fn().mockReturnValue({
+                        order: jest.fn().mockReturnValue({
+                            limit: jest.fn().mockResolvedValue({ data: null, error: { message: 'DB Error' } }),
+                        }),
                     }),
                 }),
             });
@@ -86,7 +92,9 @@ describe('leaderboardService', () => {
 
             (mockSupabase.from as jest.Mock).mockReturnValue({
                 select: jest.fn().mockReturnValue({
-                    order: orderMock,
+                    eq: jest.fn().mockReturnValue({
+                        order: orderMock,
+                    }),
                 }),
             });
 
@@ -99,8 +107,10 @@ describe('leaderboardService', () => {
             const limitMock = jest.fn().mockResolvedValue({ data: [], error: null });
             (mockSupabase.from as jest.Mock).mockReturnValue({
                 select: jest.fn().mockReturnValue({
-                    order: jest.fn().mockReturnValue({
-                        limit: limitMock,
+                    eq: jest.fn().mockReturnValue({
+                        order: jest.fn().mockReturnValue({
+                            limit: limitMock,
+                        }),
                     }),
                 }),
             });
@@ -114,14 +124,16 @@ describe('leaderboardService', () => {
     describe('getWeeklyLeaderboard', () => {
         it('should return competitive leaderboard entries with user info', async () => {
             const mockEntries = [
-                { user_id: 'user-1', game_xp: 500, users: { full_name: 'Weekly Leader', avatar_url: 'url1' } },
-                { user_id: 'user-2', game_xp: 400, users: { full_name: 'Second', avatar_url: null } },
+                { user_id: 'user-1', total_xp: 5000, users: { full_name: 'Weekly Leader', avatar_url: 'url1' } },
+                { user_id: 'user-2', total_xp: 4000, users: { full_name: 'Second', avatar_url: null } },
             ];
 
             (mockSupabase.from as jest.Mock).mockReturnValue({
                 select: jest.fn().mockReturnValue({
-                    order: jest.fn().mockReturnValue({
-                        limit: jest.fn().mockResolvedValue({ data: mockEntries, error: null }),
+                    eq: jest.fn().mockReturnValue({
+                        order: jest.fn().mockReturnValue({
+                            limit: jest.fn().mockResolvedValue({ data: mockEntries, error: null }),
+                        }),
                     }),
                 }),
             });
@@ -130,7 +142,7 @@ describe('leaderboardService', () => {
 
             expect(result).toHaveLength(2);
             expect(result[0].user_id).toBe('user-1');
-            expect(result[0].points).toBe(500); // Maps game_xp to points
+            expect(result[0].points).toBe(5000); // Maps total_xp to points
             expect(result[0].user.full_name).toBe('Weekly Leader');
         });
 
@@ -140,8 +152,10 @@ describe('leaderboardService', () => {
         it('should return empty array on error', async () => {
             (mockSupabase.from as jest.Mock).mockReturnValue({
                 select: jest.fn().mockReturnValue({
-                    order: jest.fn().mockReturnValue({
-                        limit: jest.fn().mockResolvedValue({ data: null, error: { message: 'Error' } }),
+                    eq: jest.fn().mockReturnValue({
+                        order: jest.fn().mockReturnValue({
+                            limit: jest.fn().mockResolvedValue({ data: null, error: { message: 'Error' } }),
+                        }),
                     }),
                 }),
             });
@@ -153,13 +167,15 @@ describe('leaderboardService', () => {
 
         it('should handle array users from join', async () => {
             const mockEntries = [
-                { user_id: 'user-1', game_xp: 500, users: [{ full_name: 'Leader', avatar_url: 'url' }] },
+                { user_id: 'user-1', total_xp: 5000, users: [{ full_name: 'Leader', avatar_url: 'url' }] },
             ];
 
             (mockSupabase.from as jest.Mock).mockReturnValue({
                 select: jest.fn().mockReturnValue({
-                    order: jest.fn().mockReturnValue({
-                        limit: jest.fn().mockResolvedValue({ data: mockEntries, error: null }),
+                    eq: jest.fn().mockReturnValue({
+                        order: jest.fn().mockReturnValue({
+                            limit: jest.fn().mockResolvedValue({ data: mockEntries, error: null }),
+                        }),
                     }),
                 }),
             });
@@ -177,8 +193,10 @@ describe('leaderboardService', () => {
         it('should handle network errors gracefully in getLeaderboard', async () => {
             (mockSupabase.from as jest.Mock).mockReturnValue({
                 select: jest.fn().mockReturnValue({
-                    order: jest.fn().mockReturnValue({
-                        limit: jest.fn().mockRejectedValue(new Error('Network error')),
+                    eq: jest.fn().mockReturnValue({
+                        order: jest.fn().mockReturnValue({
+                            limit: jest.fn().mockRejectedValue(new Error('Network error')),
+                        }),
                     }),
                 }),
             });
@@ -191,8 +209,10 @@ describe('leaderboardService', () => {
         it('should handle network errors gracefully in getWeeklyLeaderboard', async () => {
             (mockSupabase.from as jest.Mock).mockReturnValue({
                 select: jest.fn().mockReturnValue({
-                    order: jest.fn().mockReturnValue({
-                        limit: jest.fn().mockRejectedValue(new Error('Network error')),
+                    eq: jest.fn().mockReturnValue({
+                        order: jest.fn().mockReturnValue({
+                            limit: jest.fn().mockRejectedValue(new Error('Network error')),
+                        }),
                     }),
                 }),
             });
