@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase/client';
+import type { ContentPost } from '@/types';
 import { sortPostsHybrid } from '@/utils/contentSorting';
 import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 import { createLogger } from '@/utils/logger';
@@ -7,42 +8,30 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 
 const log = createLogger('Content');
 
-// Types from our unified model
-interface Post {
-  id: string;
-  type: 'video' | 'blog' | 'hiring' | 'announcement';
-  title: string;
-  excerpt: string;
-  content: string;
-  thumbnail: string;
-  isPublished: boolean;
-  publishedAt: string;
-  isFeatured: boolean;
-  featuredOrder: number;
-  metadata: {
-    videoId?: string;
-    duration?: string;
-    viewCount?: string;
-    position?: string;
-    company?: string;
-    applicationUrl?: string;
-    badge?: string;
-    priority?: 'low' | 'medium' | 'high';
-    tags?: string[];
-    readTimeMinutes?: number;
-  };
-  createdAt: string;
-  updatedAt: string;
-}
-
 interface ContentContextType {
-  posts: Post[];
-  featuredPosts: Post[];
+  posts: ContentPost[];
+  featuredPosts: ContentPost[];
   isLoading: boolean;
   error: string | null;
   hasNewContent: boolean;
   refreshContent: () => Promise<void>;
   isNetworkError: boolean;
+}
+
+interface DbContentPost {
+  id: string;
+  type: string;
+  title: string | null;
+  excerpt: string | null;
+  content: string | null;
+  thumbnail: string | null;
+  is_published: boolean | null;
+  published_at: string | null;
+  is_featured: boolean | null;
+  featured_order: number | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 const ContentContext = createContext<ContentContextType | undefined>(undefined);
@@ -56,27 +45,32 @@ export const useContent = () => {
 };
 
 export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<ContentPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasNewContent, setHasNewContent] = useState(false);
   const [isNetworkError, setIsNetworkError] = useState(false);
+  const isLoadingRef = React.useRef(isLoading);
 
-  // Transform database rows to our Post interface
-  const transformDatabasePost = (dbPost: any): Post => ({
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
+
+  // Transform database rows to our ContentPost interface
+  const transformDatabasePost = (dbPost: DbContentPost): ContentPost => ({
     id: dbPost.id,
     type: dbPost.type,
     title: decodeHtmlEntities(dbPost.title), // Decode HTML entities from YouTube API
     excerpt: decodeHtmlEntities(dbPost.excerpt),
     content: dbPost.content,
     thumbnail: dbPost.thumbnail,
-    isPublished: dbPost.is_published,
-    publishedAt: dbPost.published_at,
-    isFeatured: dbPost.is_featured,
-    featuredOrder: dbPost.featured_order,
+    isPublished: dbPost.is_published ?? false,
+    publishedAt: dbPost.published_at ?? '',
+    isFeatured: dbPost.is_featured ?? false,
+    featuredOrder: dbPost.featured_order ?? 0,
     metadata: dbPost.metadata || {},
-    createdAt: dbPost.created_at,
-    updatedAt: dbPost.updated_at
+    createdAt: dbPost.created_at ?? '',
+    updatedAt: dbPost.updated_at ?? ''
   });
 
   // Fetch content from database
@@ -89,7 +83,7 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .from('content_posts')
         .select('*')
         .eq('is_published', true)
-        .order('created_at', { ascending: false });
+        .order('published_at', { ascending: false });  // Order by YouTube publish time, not DB insertion time
 
       if (fetchError) {
         log.error('Error fetching content:', fetchError);
@@ -227,13 +221,13 @@ export const ContentProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Check for new content periodically (fallback)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!isLoading) {
+      if (!isLoadingRef.current) {
         fetchContent();
       }
     }, 5 * 60 * 1000); // Check every 5 minutes as fallback
 
     return () => clearInterval(interval);
-  }, [isLoading]);
+  }, []);
 
   const contextValue: ContentContextType = {
     posts,

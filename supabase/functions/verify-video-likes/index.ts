@@ -65,6 +65,21 @@ async function checkVideoRatings(
     if (!response.ok) {
         const error = await response.json();
         console.error('[verify-video-likes] YouTube API error:', error);
+
+        // Check for quota exhaustion (403 with specific reason)
+        const errorReason = error?.error?.errors?.[0]?.reason;
+        const isQuotaError = response.status === 403 && (
+            errorReason === 'quotaExceeded' ||
+            errorReason === 'dailyLimitExceeded' ||
+            errorReason === 'rateLimitExceeded' ||
+            error?.error?.message?.toLowerCase()?.includes('quota')
+        );
+
+        if (isQuotaError) {
+            console.error('[verify-video-likes] YouTube quota exhausted!');
+            throw new Error('YOUTUBE_QUOTA_EXHAUSTED');
+        }
+
         throw new Error(`YouTube API error: ${response.status}`);
     }
 
@@ -180,6 +195,13 @@ Deno.serve(async (req: Request) => {
         const videoIds = videosToCheck.map(v => v.videoId);
         const ratings = await checkVideoRatings(accessToken, videoIds);
 
+        // Log quota usage (1 unit for videos.getRating batch call)
+        await supabase.rpc('log_youtube_quota_usage', {
+            p_operation: 'videos.getRating',
+            p_units: 1,
+        });
+        console.log('[verify-video-likes] Logged 1 quota unit for videos.getRating');
+
         // Process results
         const newAwardedLikes = { ...awardedLikes };
 
@@ -214,27 +236,78 @@ Deno.serve(async (req: Request) => {
                 })
                 .eq('id', userId);
 
-            // Also update leaderboard_entries.video_like_xp
-            // First get current value
-            const { data: leaderboardData } = await supabase
-                .from('leaderboard_entries')
-                .select('video_like_xp')
-                .eq('user_id', userId)
-                .single();
+            // Update leaderboard_entries.video_like_xp for BOTH monthly and weekly
+            // Using the award_xp RPC function which handles both periods correctly
+            const { error: awardError } = await supabase.rpc('award_xp', {
+                p_user_id: userId,
+                p_xp_type: 'video_like',
+                p_amount: totalXPAwarded,
+            });
 
-            const currentVideoLikeXP = leaderboardData?.video_like_xp || 0;
+            if (awardError) {
+                console.error('[verify-video-likes] Failed to award XP via RPC:', awardError);
+                // Fallback: try direct upsert for both periods
+                const fallbackErrors: Array<{ periodType: string; error: Error }> = [];
+                for (const periodType of ['monthly', 'weekly']) {
+                    const { data: existing, error: existingError } = await supabase
+                        .from('leaderboard_entries')
+                        .select('video_like_xp, game_xp, subscription_xp')
+                        .eq('user_id', userId)
+                        .eq('period_type', periodType)
+                        .maybeSingle();
 
-            // Upsert with new value
-            await supabase
-                .from('leaderboard_entries')
-                .upsert({
-                    user_id: userId,
-                    video_like_xp: currentVideoLikeXP + totalXPAwarded,
-                }, {
-                    onConflict: 'user_id'
+                    if (existingError) {
+                        console.error('[verify-video-likes] Failed to load leaderboard entry for fallback', {
+                            userId,
+                            periodType,
+                            error: existingError,
+                        });
+                        fallbackErrors.push({ periodType, error: existingError });
+                        continue;
+                    }
+
+                    const existingVideoXP = existing?.video_like_xp || 0;
+                    const existingGameXP = existing?.game_xp || 0;
+                    const existingSubscriptionXP = existing?.subscription_xp || 0;
+
+                    const { error: upsertError } = await supabase
+                        .from('leaderboard_entries')
+                        .upsert({
+                            user_id: userId,
+                            period_type: periodType,
+                            video_like_xp: existingVideoXP + totalXPAwarded,
+                            game_xp: existingGameXP,
+                            subscription_xp: existingSubscriptionXP,
+                        }, {
+                            onConflict: 'user_id,period_type'
+                        });
+
+                    if (upsertError) {
+                        console.error('[verify-video-likes] Failed to upsert leaderboard entry for fallback', {
+                            userId,
+                            periodType,
+                            totalXPAwarded,
+                            error: upsertError,
+                        });
+                        fallbackErrors.push({ periodType, error: upsertError });
+                    }
+                }
+                if (fallbackErrors.length > 0) {
+                    const summary = fallbackErrors
+                        .map(entry => `${entry.periodType}: ${entry.error.message}`)
+                        .join('; ');
+                    throw new Error(`[verify-video-likes] Fallback upsert failures: ${summary}`);
+                }
+                console.log(`[verify-video-likes] Awarded ${totalXPAwarded} via fallback upsert`, {
+                    userId,
+                    totalXPAwarded,
                 });
-
-            console.log(`[verify-video-likes] Updated leaderboard_entries.video_like_xp: ${currentVideoLikeXP} -> ${currentVideoLikeXP + totalXPAwarded}`);
+            } else {
+                console.log(`[verify-video-likes] Awarded ${totalXPAwarded} video_like XP via RPC`, {
+                    userId,
+                    totalXPAwarded,
+                });
+            }
         }
 
         console.log(`[verify-video-likes] Complete. Total XP: ${totalXPAwarded}`);

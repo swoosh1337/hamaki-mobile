@@ -11,15 +11,15 @@
  * All data comes through hooks which use services.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-    Alert,
-    Image,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View
+  Alert,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 
 import { CreatePostFAB } from '@/components/community/CreatePostFAB';
@@ -32,7 +32,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePosts, useRealtimeSubscription } from '@/hooks';
 import { postService } from '@/services/supabase/postService';
 import type { PostSortOption } from '@/types';
-import { isNetworkError as checkNetworkError, getUserFriendlyErrorMessage } from '@/utils/errorHandling';
+import { getUserFriendlyErrorMessage } from '@/utils/errorHandling';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('Community');
@@ -66,18 +66,9 @@ export default function IdeasScreen() {
   });
 
   // Error handling state
-  const [isNetworkError, setIsNetworkError] = useState(false);
-  const [showPartialError, setShowPartialError] = useState(false);
 
   // Convert hook error to string for compatibility with existing error UI
   const error = postsError ? getUserFriendlyErrorMessage(postsError) : null;
-
-  // Update network error state when hook error changes
-  useEffect(() => {
-    if (postsError) {
-      setIsNetworkError(checkNetworkError(postsError));
-    }
-  }, [postsError]);
 
   // Realtime subscription for approved posts changes (uses unified hook)
   useRealtimeSubscription<{ id: string; status: string }>({
@@ -105,7 +96,6 @@ export default function IdeasScreen() {
   // Refresh posts
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    setShowPartialError(false);
     await refetch();
     setIsRefreshing(false);
   }, [refetch]);
@@ -252,15 +242,6 @@ export default function IdeasScreen() {
               </View>
             )}
 
-            {/* Partial Error Banner */}
-            {showPartialError && (
-              <View style={styles.errorBanner}>
-                <Text style={styles.errorBannerText}>
-                  ⚠️ Connection issue. Some content may not load.
-                </Text>
-              </View>
-            )}
-
             {/* Sort Toggle Buttons */}
             <SortFilter sortBy={sortBy} onSortChange={setSortBy} />
           </View>
@@ -335,32 +316,6 @@ const styles = StyleSheet.create({
     color: '#FFA500',
     textAlign: 'center',
   },
-  errorBanner: {
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 107, 107, 0.3)',
-  },
-  errorBannerText: {
-    fontSize: 13,
-    fontFamily: 'HamakiGeo',
-    color: '#FF6B6B',
-    textAlign: 'center',
-  },
-  connectionStatus: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    marginTop: 8,
-  },
-  connectionStatusText: {
-    fontSize: 14,
-    fontFamily: 'HamakiGeo',
-    color: Colors.dark.tint,
-    opacity: 0.7,
-  },
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -385,6 +340,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     marginBottom: 12,
     gap: 12,
+    marginLeft: -22, // Offset left by (icon width 32 + gap 12) / 2 to center text over subtitle
   },
   topTitleIcon: {
     width: 32,
@@ -393,7 +349,7 @@ const styles = StyleSheet.create({
   },
   topTitleText: {
     fontSize: 32,
-    fontFamily: 'HamakiEng',
+    fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
     textAlign: 'center',
   },
@@ -404,6 +360,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     marginBottom: 14,
     textAlign: 'center',
+    width: '100%',
+    paddingHorizontal: 0,
   },
   postsContainer: {
     padding: 20,

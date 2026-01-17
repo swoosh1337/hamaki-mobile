@@ -16,6 +16,8 @@ const catchItemSound = require('../sounds/Crash Bandicoot Sounds - Wumpa Fruit.m
 const catchPepperSound = require('../sounds/catch_pepper.mp3');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const catchShockerSound = require('../sounds/catch_shocker.mp3');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const eggCrackSound = require('../sounds/egg-crack.mp3');
 
 // Miro quotes - plays when Miro catches good items
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -47,6 +49,7 @@ export const NOPOGOD_SOUNDS = {
     CATCH_ITEM: 'catchItem',
     CATCH_PEPPER: 'catchPepper',
     CATCH_SHOCKER: 'catchShocker',
+    EGG_CRACK: 'eggCrack',
     // Miro quotes
     MIRO_QUOTE_1: 'miroQuote1',
     MIRO_QUOTE_2: 'miroQuote2',
@@ -107,11 +110,17 @@ export class NoPogodAudioManager extends BaseAudioManager {
                     id: NOPOGOD_SOUNDS.CATCH_PEPPER,
                     source: catchPepperSound,
                     volume: 0.8,
+                    startPositionMs: 1000, // Skip first 1 second, only play last 1 second
                 },
                 {
                     id: NOPOGOD_SOUNDS.CATCH_SHOCKER,
                     source: catchShockerSound,
                     volume: 0.8,
+                },
+                {
+                    id: NOPOGOD_SOUNDS.EGG_CRACK,
+                    source: eggCrackSound,
+                    volume: 0.4,
                 },
                 // Miro quotes
                 {
@@ -238,11 +247,10 @@ export class NoPogodAudioManager extends BaseAudioManager {
     }
 
     /**
-     * Play the miss item sound
-     * (Placeholder for future implementation)
+     * Play the egg crack sound when an egg is missed
      */
-    async playMissSound(): Promise<void> {
-        // await this.playSound(NOPOGOD_SOUNDS.MISS_ITEM);
+    async playEggCrackSound(): Promise<void> {
+        await this.playSound(NOPOGOD_SOUNDS.EGG_CRACK);
     }
 }
 

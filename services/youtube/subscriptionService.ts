@@ -133,8 +133,8 @@ export async function areAllChannelsVerified(userId: string): Promise<boolean> {
 
     const statuses = await getSubscriptionStatuses(userId);
 
-    // Must have all 4 channels and all must have XP awarded
-    const allChannelKeys = ['hamaki', 'miro', 'bastos', 'koro'];
+    // Must have all configured channels and all must have XP awarded
+    const allChannelKeys = Object.keys(CHANNELS) as ChannelKey[];
     if (statuses.length !== allChannelKeys.length) {
         return false;
     }
@@ -162,7 +162,7 @@ export async function verifyAndAwardSubscriptionXP(
     };
 
     try {
-        const channelKeys: ChannelKey[] = ['hamaki', 'miro', 'bastos', 'koro'];
+        const channelKeys = Object.keys(CHANNELS) as ChannelKey[];
 
         // Build channel list for Edge Function
         const channels = channelKeys.map(key => ({

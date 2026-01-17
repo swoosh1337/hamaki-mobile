@@ -50,6 +50,31 @@ describe('Component Preloading Tests', () => {
         ...overrides,
     });
 
+    // Base mock return value with quota state properties
+    const createBaseMockReturn = (overrides: Partial<ReturnType<typeof useYouTubeVerificationModule.useYouTubeVerification>> = {}) => ({
+        videoLikeStatuses: [],
+        isLoadingVideoLikes: false,
+        videoLikeError: null,
+        verifyVideoLikes: jest.fn(),
+        totalVideoLikeXP: 500,
+        earnedSubscriptionXP: 0,
+        subscriptionStatuses: [],
+        isLoadingSubscriptions: false,
+        subscriptionError: null,
+        verifySubscriptions: jest.fn(),
+        totalSubscriptionXP: 0,
+        pendingActionCount: 0,
+        pendingSubscriptionCount: 0,
+        pendingVideoLikeCount: 0,
+        lastSubscriptionCheck: null,
+        refreshAll: jest.fn(),
+        // Quota state properties
+        isQuotaExhausted: false,
+        quotaResetTimeRemaining: null,
+        quotaExhaustedMessage: null,
+        ...overrides,
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
 
@@ -69,24 +94,10 @@ describe('Component Preloading Tests', () => {
     describe('VideoLikesManager Preloading', () => {
         it('should show initialStatuses immediately when hook has no data yet', () => {
             // Hook returns empty (still loading)
-            mockUseYouTubeVerification.mockReturnValue({
+            mockUseYouTubeVerification.mockReturnValue(createBaseMockReturn({
                 videoLikeStatuses: [], // Hook hasn't loaded yet
                 isLoadingVideoLikes: true,
-                videoLikeError: null,
-                verifyVideoLikes: jest.fn(),
-                totalVideoLikeXP: 500,
-                earnedSubscriptionXP: 0,
-                subscriptionStatuses: [],
-                isLoadingSubscriptions: false,
-                subscriptionError: null,
-                verifySubscriptions: jest.fn(),
-                totalSubscriptionXP: 0,
-                pendingActionCount: 0,
-                pendingSubscriptionCount: 0,
-                pendingVideoLikeCount: 0,
-                lastSubscriptionCheck: null,
-                refreshAll: jest.fn(),
-            });
+            }));
 
             const initialStatuses = [
                 createMockVideoStatus({ channelKey: 'hamaki', channelName: 'HamaKi', xpAwarded: true }),
@@ -106,24 +117,9 @@ describe('Component Preloading Tests', () => {
                 createMockVideoStatus({ channelKey: 'hamaki', channelName: 'HamaKi Updated', xpAwarded: true }),
             ];
 
-            mockUseYouTubeVerification.mockReturnValue({
+            mockUseYouTubeVerification.mockReturnValue(createBaseMockReturn({
                 videoLikeStatuses: hookStatuses, // Hook has data
-                isLoadingVideoLikes: false,
-                videoLikeError: null,
-                verifyVideoLikes: jest.fn(),
-                totalVideoLikeXP: 500,
-                earnedSubscriptionXP: 0,
-                subscriptionStatuses: [],
-                isLoadingSubscriptions: false,
-                subscriptionError: null,
-                verifySubscriptions: jest.fn(),
-                pendingSubscriptionCount: 0,
-                pendingVideoLikeCount: 0,
-                totalSubscriptionXP: 0,
-                pendingActionCount: 0,
-                lastSubscriptionCheck: null,
-                refreshAll: jest.fn(),
-            });
+            }));
 
             const initialStatuses = [
                 createMockVideoStatus({ channelKey: 'hamaki', channelName: 'HamaKi Old', xpAwarded: false }),
@@ -137,24 +133,9 @@ describe('Component Preloading Tests', () => {
         });
 
         it('should handle empty initialStatuses gracefully', () => {
-            mockUseYouTubeVerification.mockReturnValue({
-                videoLikeStatuses: [],
+            mockUseYouTubeVerification.mockReturnValue(createBaseMockReturn({
                 isLoadingVideoLikes: true,
-                videoLikeError: null,
-                verifyVideoLikes: jest.fn(),
-                totalVideoLikeXP: 500,
-                earnedSubscriptionXP: 0,
-                subscriptionStatuses: [],
-                isLoadingSubscriptions: false,
-                pendingSubscriptionCount: 0,
-                pendingVideoLikeCount: 0,
-                subscriptionError: null,
-                verifySubscriptions: jest.fn(),
-                totalSubscriptionXP: 0,
-                pendingActionCount: 0,
-                lastSubscriptionCheck: null,
-                refreshAll: jest.fn(),
-            });
+            }));
 
             render(<VideoLikesManager initialStatuses={[]} />);
 
@@ -163,24 +144,9 @@ describe('Component Preloading Tests', () => {
         });
 
         it('should work without initialStatuses prop (backward compatibility)', () => {
-            mockUseYouTubeVerification.mockReturnValue({
+            mockUseYouTubeVerification.mockReturnValue(createBaseMockReturn({
                 videoLikeStatuses: [createMockVideoStatus({ channelName: 'From Hook' })],
-                isLoadingVideoLikes: false,
-                videoLikeError: null,
-                verifyVideoLikes: jest.fn(),
-                totalVideoLikeXP: 500,
-                earnedSubscriptionXP: 0,
-                pendingSubscriptionCount: 0,
-                pendingVideoLikeCount: 0,
-                subscriptionStatuses: [],
-                isLoadingSubscriptions: false,
-                subscriptionError: null,
-                verifySubscriptions: jest.fn(),
-                totalSubscriptionXP: 0,
-                pendingActionCount: 0,
-                lastSubscriptionCheck: null,
-                refreshAll: jest.fn(),
-            });
+            }));
 
             render(<VideoLikesManager />);
 
@@ -190,24 +156,10 @@ describe('Component Preloading Tests', () => {
 
     describe('ChannelSubscriptionManager Preloading', () => {
         it('should show initialStatuses immediately when hook has no data yet', () => {
-            mockUseYouTubeVerification.mockReturnValue({
-                videoLikeStatuses: [],
-                isLoadingVideoLikes: false,
-                videoLikeError: null,
-                verifyVideoLikes: jest.fn(),
-                pendingSubscriptionCount: 0,
-                pendingVideoLikeCount: 0,
-                totalVideoLikeXP: 0,
-                earnedSubscriptionXP: 0,
-                subscriptionStatuses: [], // Hook hasn't loaded yet
+            mockUseYouTubeVerification.mockReturnValue(createBaseMockReturn({
                 isLoadingSubscriptions: true,
-                subscriptionError: null,
-                verifySubscriptions: jest.fn(),
                 totalSubscriptionXP: 3100,
-                pendingActionCount: 0,
-                lastSubscriptionCheck: null,
-                refreshAll: jest.fn(),
-            });
+            }));
 
             const initialStatuses = [
                 createMockSubStatus({ channelKey: 'hamaki', channelName: 'HamaKi', xpAwarded: true }),
@@ -226,24 +178,11 @@ describe('Component Preloading Tests', () => {
                 createMockSubStatus({ channelKey: 'hamaki', channelName: 'HamaKi Updated', xpAwarded: true }),
             ];
 
-            mockUseYouTubeVerification.mockReturnValue({
-                videoLikeStatuses: [],
-                isLoadingVideoLikes: false,
-                pendingSubscriptionCount: 0,
-                pendingVideoLikeCount: 0,
-                videoLikeError: null,
-                verifyVideoLikes: jest.fn(),
-                totalVideoLikeXP: 0,
+            mockUseYouTubeVerification.mockReturnValue(createBaseMockReturn({
                 earnedSubscriptionXP: 1000,
                 subscriptionStatuses: hookStatuses, // Hook has data
-                isLoadingSubscriptions: false,
-                subscriptionError: null,
-                verifySubscriptions: jest.fn(),
                 totalSubscriptionXP: 3100,
-                pendingActionCount: 0,
-                lastSubscriptionCheck: null,
-                refreshAll: jest.fn(),
-            });
+            }));
 
             const initialStatuses = [
                 createMockSubStatus({ channelKey: 'hamaki', channelName: 'HamaKi Old', xpAwarded: false }),
@@ -257,24 +196,11 @@ describe('Component Preloading Tests', () => {
         });
 
         it('should work without initialStatuses prop (backward compatibility)', () => {
-            mockUseYouTubeVerification.mockReturnValue({
-                pendingSubscriptionCount: 0,
-                pendingVideoLikeCount: 0,
-                videoLikeStatuses: [],
-                isLoadingVideoLikes: false,
-                videoLikeError: null,
-                verifyVideoLikes: jest.fn(),
-                totalVideoLikeXP: 0,
+            mockUseYouTubeVerification.mockReturnValue(createBaseMockReturn({
                 earnedSubscriptionXP: 1000,
                 subscriptionStatuses: [createMockSubStatus({ channelName: 'From Hook' })],
-                isLoadingSubscriptions: false,
-                subscriptionError: null,
-                verifySubscriptions: jest.fn(),
                 totalSubscriptionXP: 3100,
-                pendingActionCount: 0,
-                lastSubscriptionCheck: null,
-                refreshAll: jest.fn(),
-            });
+            }));
 
             render(<ChannelSubscriptionManager />);
 
@@ -284,24 +210,7 @@ describe('Component Preloading Tests', () => {
 
     describe('XP Calculation with Preloaded Data', () => {
         it('should calculate earned XP correctly from initialStatuses', () => {
-            mockUseYouTubeVerification.mockReturnValue({
-                videoLikeStatuses: [],
-                isLoadingVideoLikes: false,
-                videoLikeError: null,
-                verifyVideoLikes: jest.fn(),
-                totalVideoLikeXP: 500,
-                earnedSubscriptionXP: 0,
-                subscriptionStatuses: [],
-                isLoadingSubscriptions: false,
-                subscriptionError: null,
-                verifySubscriptions: jest.fn(),
-                totalSubscriptionXP: 0,
-                pendingActionCount: 0,
-                pendingSubscriptionCount: 0,
-                pendingVideoLikeCount: 0,
-                lastSubscriptionCheck: null,
-                refreshAll: jest.fn(),
-            });
+            mockUseYouTubeVerification.mockReturnValue(createBaseMockReturn());
 
             const initialStatuses = [
                 createMockVideoStatus({ xpReward: 200, xpAwarded: true }),

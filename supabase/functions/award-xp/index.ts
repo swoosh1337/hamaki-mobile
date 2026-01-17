@@ -26,6 +26,84 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-idempotency-key',
 };
 
+// =============================================================================
+// RATE LIMITING CONFIGURATION
+// =============================================================================
+// Maximum XP that can be awarded in a single request per type
+// This prevents malicious clients from inflating their XP
+const MAX_XP_PER_AWARD: Record<string, number> = {
+    game: 500,           // Max ~25,000 score in Hammock Jump (score/50) or 5000 in No Pogodi (score/10)
+    subscription: 100,   // Fixed XP per channel subscription
+    video_like: 50,      // Fixed XP per video like
+};
+
+// Minimum XP per award (catches invalid/negative values that bypass basic validation)
+const MIN_XP_PER_AWARD = 1;
+
+// =============================================================================
+// RANK CACHING CONFIGURATION
+// =============================================================================
+// Cache rank calculations to reduce database load
+// TTL is short (5 seconds) to ensure ranks stay reasonably fresh
+// Note: Each Edge Function instance has its own cache (not shared across instances)
+// This still provides significant benefit by reducing redundant calculations
+const RANK_CACHE_TTL_MS = 5000;
+
+interface RankCacheEntry {
+    rank: number;
+    expiresAt: number;
+}
+
+// Simple in-memory cache for rank calculations
+// Key: `${userId}:${totalXP}` - rank only changes when XP changes
+const rankCache = new Map<string, RankCacheEntry>();
+
+/**
+ * Get cached rank or null if not found/expired
+ */
+function getCachedRank(userId: string, totalXP: number): number | null {
+    const key = `${userId}:${totalXP}`;
+    const entry = rankCache.get(key);
+
+    if (!entry) return null;
+
+    if (Date.now() > entry.expiresAt) {
+        rankCache.delete(key);
+        return null;
+    }
+
+    return entry.rank;
+}
+
+/**
+ * Cache a rank calculation result
+ */
+function setCachedRank(userId: string, totalXP: number, rank: number): void {
+    const key = `${userId}:${totalXP}`;
+    rankCache.set(key, {
+        rank,
+        expiresAt: Date.now() + RANK_CACHE_TTL_MS,
+    });
+
+    // Cleanup when cache exceeds limit
+    if (rankCache.size > 1000) {
+        const now = Date.now();
+        // First: remove expired entries
+        for (const [k, v] of rankCache.entries()) {
+            if (now > v.expiresAt) {
+                rankCache.delete(k);
+            }
+        }
+        // Second: evict oldest entries until under limit (FIFO order via Map insertion)
+        const iterator = rankCache.keys();
+        while (rankCache.size > 1000) {
+            const oldestKey = iterator.next().value;
+            if (oldestKey) rankCache.delete(oldestKey);
+            else break;
+        }
+    }
+}
+
 type XPType = 'game' | 'subscription' | 'video_like';
 
 interface AwardXPRequest {
@@ -55,13 +133,26 @@ interface AwardXPResponse {
 /**
  * Calculate user's current rank based on total_xp
  * Returns count of users with higher total_xp + 1
+ *
+ * Uses in-memory cache to reduce database load:
+ * - Cache key: `${userId}:${totalXP}` (rank only changes when XP changes)
+ * - TTL: 5 seconds (short to keep ranks fresh)
+ * - Note: Uses new composite index idx_leaderboard_period_total_xp for O(log n) lookup
  */
 async function calculatePersonalRank(
     supabase: ReturnType<typeof createClient>,
     userId: string,
     userTotalXP: number
 ): Promise<number> {
+    // Check cache first
+    const cachedRank = getCachedRank(userId, userTotalXP);
+    if (cachedRank !== null) {
+        console.log('[award-xp] Rank cache hit', { userId: userId.slice(0, 8), rank: cachedRank });
+        return cachedRank;
+    }
+
     // Count users with higher total_xp (only monthly entries for ranking)
+    // Uses idx_leaderboard_period_total_xp index for O(log n) performance
     const { count, error } = await supabase
         .from('leaderboard_entries')
         .select('*', { count: 'exact', head: true })
@@ -75,7 +166,13 @@ async function calculatePersonalRank(
     }
 
     // Rank = number of users with higher XP + 1
-    return (count || 0) + 1;
+    const rank = (count || 0) + 1;
+
+    // Cache the result
+    setCachedRank(userId, userTotalXP, rank);
+    console.log('[award-xp] Rank calculated and cached', { userId: userId.slice(0, 8), rank });
+
+    return rank;
 }
 
 /**
@@ -233,10 +330,36 @@ Deno.serve(async (req: Request) => {
             );
         }
 
-        // Validate amount
+        // Validate amount - basic check
         if (typeof amount !== 'number' || amount <= 0) {
             return new Response(
                 JSON.stringify({ success: false, error: 'Amount must be a positive number' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // Validate amount - rate limiting (prevents malicious XP inflation)
+        const maxAllowed = MAX_XP_PER_AWARD[xpType] || 100;
+        if (amount > maxAllowed) {
+            console.warn('[award-xp] XP amount exceeds limit:', {
+                userId,
+                xpType,
+                amount,
+                maxAllowed,
+                rejected: true
+            });
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: `XP amount ${amount} exceeds maximum allowed (${maxAllowed}) for ${xpType}`
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        if (amount < MIN_XP_PER_AWARD) {
+            return new Response(
+                JSON.stringify({ success: false, error: `XP amount must be at least ${MIN_XP_PER_AWARD}` }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }

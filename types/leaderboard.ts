@@ -6,8 +6,9 @@
  * Period types for leaderboard
  * - weekly: Resets every Sunday (no CSV export)
  * - monthly: Resets monthly (CSV export saved to bucket)
+ * - all_time: Lifetime XP that never resets
  */
-export type LeaderboardPeriod = 'weekly' | 'monthly';
+export type LeaderboardPeriod = 'weekly' | 'monthly' | 'all_time';
 
 /**
  * XP breakdown by source

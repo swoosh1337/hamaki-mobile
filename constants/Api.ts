@@ -21,6 +21,8 @@ export const API = {
         leaderboard: 1 * 60 * 1000,
         /** 24 hours */
         subscriptionVerification: 24 * 60 * 60 * 1000,
+        /** 4 hours */
+        videoLikeTTL: 4 * 60 * 60 * 1000,
     },
 
     /** Polling intervals in milliseconds */
@@ -45,6 +47,7 @@ export const API = {
     },
 } as const;
 
+/** Video like cache TTL (4 hours) */
 /**
  * Game cooldowns in milliseconds
  */

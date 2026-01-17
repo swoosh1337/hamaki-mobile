@@ -69,35 +69,35 @@ export interface GameAnimations {
 export const loadNoPogodGameAssets = (): NoPogodGameAssets => {
   try {
     const assets: NoPogodGameAssets = {
-      background: require('@/assets/images/game/bg.png'),
+      background: require('../assets/bg.png'),
 
       miro: {
-        idle: require('@/assets/images/game/miro/პროფილი დგომა.png'),
-        step1: require('@/assets/images/game/miro/ნაბიჯი 1.png'),
-        step2: require('@/assets/images/game/miro/ნაბიჯი 2.png'),
-        profile: require('@/assets/images/game/miro/პროფილი დგომა.png'),
-        angle45: require('@/assets/images/game/miro/დგომა 45 გრადუსი.png'),
-        angle90: require('@/assets/images/game/miro/დგომა 90 გრადუსი.png'),
+        idle: require('../assets/miro/პროფილი დგომა.png'),
+        step1: require('../assets/miro/ნაბიჯი 1.png'),
+        step2: require('../assets/miro/ნაბიჯი 2.png'),
+        profile: require('../assets/miro/პროფილი დგომა.png'),
+        angle45: require('../assets/miro/დგომა 45 გრადუსი.png'),
+        angle90: require('../assets/miro/დგომა 90 გრადუსი.png'),
       },
 
       shonzika: {
-        idle: require('@/assets/images/game/shonzika/დგომა პროფილი.png'),
-        walking1: require('@/assets/images/game/shonzika/სიარული 1.png'),
-        walking2: require('@/assets/images/game/shonzika/სიარული 2~.png'),
-        profile: require('@/assets/images/game/shonzika/დგომა პროფილი.png'),
-        angle45: require('@/assets/images/game/shonzika/დგომა 45გრადუსი.png'),
-        angle90: require('@/assets/images/game/shonzika/დგომა 90 გრადუსი.png'),
-        handProfile: require('@/assets/images/game/shonzika/ხელი პროფილი.png'),
-        hand45: require('@/assets/images/game/shonzika/ხელი 45 აგრადუსი.png'),
-        hand90: require('@/assets/images/game/shonzika/ხელი 90 გრადუსი.png'),
+        idle: require('../assets/shonzika/დგომა პროფილი.png'),
+        walking1: require('../assets/shonzika/სიარული 1.png'),
+        walking2: require('../assets/shonzika/სიარული 2~.png'),
+        profile: require('../assets/shonzika/დგომა პროფილი.png'),
+        angle45: require('../assets/shonzika/დგომა 45გრადუსი.png'),
+        angle90: require('../assets/shonzika/დგომა 90 გრადუსი.png'),
+        handProfile: require('../assets/shonzika/ხელი პროფილი.png'),
+        hand45: require('../assets/shonzika/ხელი 45 აგრადუსი.png'),
+        hand90: require('../assets/shonzika/ხელი 90 გრადუსი.png'),
       },
 
       items: {
-        egg: require('@/assets/images/game/items/კვერცხი.png'),
-        tomato: require('@/assets/images/game/items/პომიდორი.png'),
-        pepper: require('@/assets/images/game/items/წიწაკა.png'),
-        electricShock: require('@/assets/images/game/items/ელექტროშოკი.png'),
-        bomb: require('@/assets/images/game/items/ბომბი.png'),
+        egg: require('../assets/items/კვერცხი.png'),
+        tomato: require('../assets/items/პომიდორი.png'),
+        pepper: require('../assets/items/წიწაკა.png'),
+        electricShock: require('../assets/items/ელექტროშოკი.png'),
+        bomb: require('../assets/items/ბომბი.png'),
       },
     };
 

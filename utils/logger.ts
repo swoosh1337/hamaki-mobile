@@ -115,6 +115,15 @@ class Logger {
         this.module = module;
     }
 
+    private maskEmail(email: string): string {
+        const [local, domain] = email.split('@');
+        if (domain && local) {
+            return `${local[0]}***@${domain}`;
+        }
+        const localPrefix = local ? local.substring(0, 3) : '';
+        return `${localPrefix}***`;
+    }
+
     /**
      * Internal log handler
      */
@@ -128,9 +137,9 @@ class Logger {
         const timestamp = new Date().toISOString();
         const prefix = `[${timestamp}] [${module}]`;
 
-        // 2. Build message with context
+        // 2. Build message with context (prefer email for readability, fallback to truncated ID)
         const userPrefix = globalUserContext
-            ? ` [User: ${globalUserContext.userId.substring(0, 8)}...]`
+            ? ` [User: ${globalUserContext.email ? this.maskEmail(globalUserContext.email) : globalUserContext.userId.substring(0, 8)}]`
             : '';
         const corrPrefix = correlationId ? ` [${correlationId}]` : '';
         const messageWithPrefix = `${prefix}${userPrefix}${corrPrefix} ${message}`;

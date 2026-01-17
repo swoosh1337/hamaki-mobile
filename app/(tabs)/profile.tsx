@@ -5,7 +5,6 @@ import { Alert, Image, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Tex
 
 import { AvatarPicker } from '@/components/profile/AvatarPicker';
 import { StatsCard } from '@/components/profile/StatsCard';
-import { SettingsModal } from '@/components/ui/SettingsModal';
 import { ProfilePostSkeleton } from '@/components/ui/SkeletonLoader';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,7 +12,6 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
 import { postService } from '@/services/supabase/postService';
 import type { Post as UserPost } from '@/types/post';
-import type { XPStats } from '@/types/user';
 import { getAvatarSource } from '@/utils/avatars';
 import { createLogger } from '@/utils/logger';
 
@@ -34,8 +32,8 @@ export default function ProfileScreen() {
     autoFetch: true,
   });
 
-  // Get pending XP count for settings badge (with refresh function)
-  const { pendingActionCount: pendingXPCount, refreshAll } = useYouTubeVerification();
+  // Get refresh function for YouTube verification data
+  const { refreshAll } = useYouTubeVerification();
 
   // Refresh YouTube verification data when Profile screen is focused (Google users only)
   // Note: XP stats now use caching in useUserProfile, so we don't need to refetch on every focus
@@ -58,17 +56,8 @@ export default function ProfileScreen() {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const POSTS_PER_PAGE = 10;
-
-  // Demo data for demo mode
-  const demoXPStats: XPStats = {
-    totalXP: 1250,
-    weeklyXP: 350,
-    weeklyStartDate: new Date().toISOString(),
-    weeklyEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-  };
 
   const demoPosts: (UserPost & { isUpvoted?: boolean })[] = [
     {
@@ -265,19 +254,6 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Settings Button */}
-      <TouchableOpacity
-        style={styles.settingsButton}
-        onPress={() => setShowSettingsModal(true)}
-      >
-        <Ionicons name="settings-outline" size={24} color={Colors.dark.text} />
-        {pendingXPCount > 0 && (
-          <View style={styles.settingsBadge}>
-            <Text style={styles.settingsBadgeText}>{pendingXPCount}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
       {/* Demo Mode Indicator */}
       {isDemoMode && (
         <View style={styles.demoModeIndicator}>
@@ -428,12 +404,6 @@ export default function ProfileScreen() {
           )}
         </View>
       </ScrollView>
-
-      {/* Settings Modal */}
-      <SettingsModal
-        visible={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
-      />
     </SafeAreaView>
   );
 }
@@ -442,35 +412,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.background,
-  },
-  settingsButton: {
-    position: 'absolute',
-    top: 60,
-    right: 20,
-    zIndex: 10,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(245, 245, 245, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  settingsBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#FF3B30',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  settingsBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
   },
   demoModeIndicator: {
     position: 'absolute',

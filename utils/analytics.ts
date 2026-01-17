@@ -1,13 +1,17 @@
 /**
- * PostHog Analytics
+ * PostHog Analytics with Database Dual-Write
  *
  * Provides comprehensive analytics tracking using PostHog.
- * Uses PostHogProvider for proper React Native integration.
+ * Also writes key events to Supabase analytics_events table for admin dashboard.
  *
  * Setup: Wrap your app with PostHogProvider in _layout.tsx
  */
 
+import { supabase } from '@/services/supabase/client';
 import { PostHog } from 'posthog-react-native';
+import { createLogger } from './logger';
+
+const log = createLogger('Analytics');
 
 // PostHog configuration
 export const POSTHOG_API_KEY = process.env.EXPO_PUBLIC_POSTHOG_API_KEY || '';
@@ -39,6 +43,45 @@ export function getPostHogClient(): PostHog | null {
   return posthogClient;
 }
 
+// Events that should be written to the database for admin dashboard
+const DB_TRACKED_EVENTS = new Set([
+  'video_watch',
+  'game_play',
+  'game_start',
+  'game_end',
+  'sponsor_view',
+  'sponsor_click',
+  'sign_in',
+  'sign_up',
+]);
+
+/**
+ * Write an event to the Supabase analytics_events table
+ * Non-blocking - errors are logged but don't affect the app
+ */
+async function writeToDatabase(
+  eventName: string,
+  userId: string | null,
+  properties?: Record<string, any>
+): Promise<void> {
+  try {
+    const { error } = await supabase.from('analytics_events').insert({
+      event_name: eventName,
+      user_id: userId || 'anonymous',
+      post_id: properties?.post_id || properties?.video_id || null,
+      post_type: properties?.post_type || properties?.content_type || null,
+      screen: properties?.screen || null,
+      context: properties || {},
+    });
+
+    if (error) {
+      log.debug('Failed to write analytics event to DB', { eventName, error: error.message });
+    }
+  } catch (err) {
+    log.debug('Error writing analytics to DB', { eventName, err });
+  }
+}
+
 /**
  * Analytics client wrapper for convenience functions
  */
@@ -56,6 +99,13 @@ class AnalyticsClient {
     } else if (posthogClient && !userId) {
       posthogClient.reset();
     }
+  }
+
+  /**
+   * Get the current user ID
+   */
+  getUserId(): string | null {
+    return this.userId;
   }
 
   /**
@@ -79,10 +129,23 @@ class AnalyticsClient {
 
   /**
    * Track a custom event
+   * Automatically dual-writes to database for important events
    */
-  track(eventName: string, properties?: Record<string, any>) {
+  async track(eventName: string, properties?: Record<string, any>): Promise<void> {
+    // Send to PostHog
     if (posthogClient) {
       posthogClient.capture(eventName, properties);
+    }
+
+    // Dual-write to database for important events
+    if (DB_TRACKED_EVENTS.has(eventName)) {
+      const dbWrite = writeToDatabase(eventName, this.userId, properties);
+      const isCriticalEvent = eventName === 'sign_in' || eventName === 'sign_up';
+      if (isCriticalEvent) {
+        await dbWrite;
+        return;
+      }
+      return dbWrite;
     }
   }
 
@@ -272,5 +335,76 @@ export function trackApiCall(
     duration_ms: durationMs,
     success,
     ...properties,
+  });
+}
+
+// ============================================================
+// Video Watch Tracking (for admin dashboard)
+// ============================================================
+
+/**
+ * Track when user clicks "Watch" button on a video
+ * Dual-writes to PostHog and Supabase for admin dashboard
+ */
+export function trackVideoWatch(
+  videoId: string,
+  channelKey: string,
+  videoTitle?: string,
+  channelName?: string
+) {
+  if (!videoId || videoId.trim() === '') {
+    return;
+  }
+  analytics.track('video_watch', {
+    video_id: videoId,
+    channel_key: channelKey,
+    video_title: videoTitle || null,
+    channel_name: channelName || null,
+    content_type: 'video',
+  });
+}
+
+// ============================================================
+// Game Play Tracking (for admin dashboard)
+// ============================================================
+
+/**
+ * Track when user opens/starts a game
+ * Dual-writes to PostHog and Supabase for admin dashboard
+ */
+export function trackGamePlay(gameId: string, gameName: string) {
+  analytics.track('game_play', {
+    game_id: gameId,
+    game_name: gameName,
+    content_type: 'game',
+  });
+}
+
+// ============================================================
+// Sponsor Tracking (for admin dashboard)
+// ============================================================
+
+/**
+ * Track when user views or interacts with a sponsor
+ * Dual-writes to PostHog and Supabase for admin dashboard
+ */
+export function trackSponsorView(sponsorId: string, sponsorName: string) {
+  analytics.track('sponsor_view', {
+    sponsor_id: sponsorId,
+    sponsor_name: sponsorName,
+    content_type: 'sponsor',
+    action: 'view',
+  });
+}
+
+/**
+ * Track when user clicks/expands a sponsor prize section
+ */
+export function trackSponsorClick(sponsorId: string, sponsorName: string) {
+  analytics.track('sponsor_click', {
+    sponsor_id: sponsorId,
+    sponsor_name: sponsorName,
+    content_type: 'sponsor',
+    action: 'expand',
   });
 }

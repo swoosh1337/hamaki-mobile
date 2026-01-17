@@ -54,19 +54,28 @@ export interface ResponsiveSizes {
   };
 }
 
+export interface SafeAreaInsets {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
 export class ResponsiveScalingManager {
   private config: ScalingConfig;
   private positions: ResponsivePositions;
   private sizes: ResponsiveSizes;
+  private safeAreaInsets?: SafeAreaInsets;
 
-  constructor(screenWidth?: number, screenHeight?: number) {
-    const dimensions = screenWidth && screenHeight 
+  constructor(screenWidth?: number, screenHeight?: number, safeAreaInsets?: SafeAreaInsets) {
+    const dimensions = screenWidth && screenHeight
       ? { width: screenWidth, height: screenHeight }
       : Dimensions.get('window');
-    
+
     this.config = this.calculateScalingConfig(dimensions.width, dimensions.height);
     this.positions = this.calculateResponsivePositions();
     this.sizes = this.calculateResponsiveSizes();
+    this.safeAreaInsets = safeAreaInsets;
   }
 
   // Calculate scaling configuration based on screen dimensions
@@ -74,22 +83,22 @@ export class ResponsiveScalingManager {
     // Calculate scale factors
     const scaleX = screenWidth / BASE_WIDTH;
     const scaleY = screenHeight / BASE_HEIGHT;
-    
+
     // Use the smaller scale factor for uniform scaling to maintain aspect ratio
     const uniformScale = Math.min(scaleX, scaleY);
-    
+
     // Clamp scale factors to prevent extreme scaling
     const clampedScaleX = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scaleX));
     const clampedScaleY = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scaleY));
     const clampedUniformScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, uniformScale));
-    
+
     // Determine device type
     const isTablet = screenWidth >= 768 || screenHeight >= 1024;
     const isLandscape = screenWidth > screenHeight;
-    
+
     // Calculate specific scale factors for different elements
     const characterScale = clampedUniformScale * (isTablet ? 1.2 : 1.0);
-    const itemScale = characterScale * 0.6;
+    const itemScale = characterScale * 0.75; // Increased from 0.6 for larger items
     const uiScale = clampedUniformScale * (isTablet ? 1.1 : 1.0);
 
     return {
@@ -113,7 +122,7 @@ export class ResponsiveScalingManager {
     // Adjust ground level based on screen aspect ratio
     const groundYRatio = isLandscape ? 0.75 : 0.8;
     const shonzikaYRatio = isLandscape ? 0.20 : 0.22;  // Moved up to 22% for better visual with rope
-    
+
     return {
       miroGroundY: screenHeight * groundYRatio,
       shonzikaY: screenHeight * shonzikaYRatio,
@@ -130,11 +139,11 @@ export class ResponsiveScalingManager {
   // Calculate responsive sizes for all game elements
   private calculateResponsiveSizes(): ResponsiveSizes {
     const { characterScale, itemScale, uiScale, isTablet } = this.config;
-    
+
     // Base sizes - increased for better visibility
     const baseCharacterSize = 150; // Increased from 80
     const baseItemSize = 80; // Increased from 40
-    
+
     // Font sizes with tablet adjustments
     const baseFontSizes = {
       title: isTablet ? 56 : 48,
@@ -142,7 +151,7 @@ export class ResponsiveScalingManager {
       ui: isTablet ? 18 : 16,
       button: isTablet ? 24 : 20,
     };
-    
+
     // Spacing with scale adjustments
     const baseSpacing = {
       small: 8,
@@ -192,7 +201,7 @@ export class ResponsiveScalingManager {
   // Get touch zones for player movement
   public getTouchZones(): Array<{ x: number; y: number; width: number; height: number; position: 'LEFT' | 'CENTER' | 'RIGHT' }> {
     const zoneWidth = this.config.screenWidth / 3;
-    
+
     return [
       {
         x: 0,
@@ -258,7 +267,7 @@ export class ResponsiveScalingManager {
     spriteType: 'character' | 'item'
   ): { x: number; y: number; width: number; height: number } {
     const size = spriteType === 'character' ? this.sizes.characterSize : this.sizes.itemSize;
-    
+
     return {
       x: centerX - size / 2,
       y: centerY - size / 2,
@@ -274,11 +283,20 @@ export class ResponsiveScalingManager {
     left: number;
     right: number;
   } {
+    if (this.safeAreaInsets) {
+      return {
+        top: this.safeAreaInsets.top,
+        bottom: this.safeAreaInsets.bottom,
+        left: this.safeAreaInsets.left,
+        right: this.safeAreaInsets.right,
+      };
+    }
+
     const { isTablet, screenWidth, screenHeight } = this.config;
-    
+
     // Estimate safe area based on screen dimensions and device type
     const hasNotch = screenHeight > 800 && screenWidth < 500; // Rough iPhone X+ detection
-    
+
     return {
       top: hasNotch ? 44 : (isTablet ? 20 : 20),
       bottom: hasNotch ? 34 : (isTablet ? 20 : 0),
@@ -295,10 +313,10 @@ export class ResponsiveScalingManager {
     uiTransition: number;
   } {
     const { isTablet } = this.config;
-    
+
     // Tablets can handle slightly longer animations for smoother experience
     const multiplier = isTablet ? 1.2 : 1.0;
-    
+
     return {
       playerMovement: 200 * multiplier,
       itemFall: 100 * multiplier,
@@ -310,11 +328,11 @@ export class ResponsiveScalingManager {
   // Check if current configuration is suitable for gameplay
   public isConfigurationValid(): boolean {
     const { screenWidth, screenHeight } = this.config;
-    
+
     // Minimum viable screen size
     const minWidth = 320;
     const minHeight = 480;
-    
+
     return screenWidth >= minWidth && screenHeight >= minHeight;
   }
 
@@ -322,11 +340,12 @@ export class ResponsiveScalingManager {
   public getDebugInfo(): string {
     const { screenWidth, screenHeight, uniformScale, isTablet, isLandscape } = this.config;
     const { characterSize, itemSize } = this.sizes;
-    
+
     return `Screen: ${screenWidth}x${screenHeight}, Scale: ${uniformScale.toFixed(2)}, ` +
-           `Character: ${characterSize.toFixed(0)}px, Item: ${itemSize.toFixed(0)}px, ` +
-           `Tablet: ${isTablet}, Landscape: ${isLandscape}`;
+      `Character: ${characterSize.toFixed(0)}px, Item: ${itemSize.toFixed(0)}px, ` +
+      `Tablet: ${isTablet}, Landscape: ${isLandscape}`;
   }
+
 }
 
 // Utility functions for responsive scaling
@@ -356,4 +375,31 @@ export const ResponsiveUtils = {
 };
 
 // Export singleton instance for global use
-export const GlobalResponsiveScaling = new ResponsiveScalingManager();
+let globalResponsiveScaling: ResponsiveScalingManager | null = null;
+let hasRegisteredListener = false;
+let globalResponsiveScalingListener: { remove: () => void } | null = null;
+
+export const getGlobalResponsiveScaling = (): ResponsiveScalingManager => {
+  if (!globalResponsiveScaling) {
+    globalResponsiveScaling = new ResponsiveScalingManager();
+  }
+
+  if (!hasRegisteredListener) {
+    const { width, height } = Dimensions.get('window');
+    globalResponsiveScaling?.updateScreenSize(width, height);
+    globalResponsiveScalingListener = Dimensions.addEventListener('change', ({ window }) => {
+      globalResponsiveScaling?.updateScreenSize(window.width, window.height);
+    });
+    hasRegisteredListener = true;
+  }
+
+  return globalResponsiveScaling;
+};
+
+export const removeGlobalResponsiveScalingListener = (): void => {
+  if (globalResponsiveScalingListener) {
+    globalResponsiveScalingListener.remove();
+    globalResponsiveScalingListener = null;
+    hasRegisteredListener = false;
+  }
+};

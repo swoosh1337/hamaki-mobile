@@ -35,8 +35,13 @@ import {
   isRetryableError,
 } from '@/types/edgeFunctionQueue';
 import type { AwardXPResult } from '@/types/leaderboard';
+import { trackGameEnd, trackGameStart, trackXPEarned } from '@/utils/analytics';
 import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
+import { GAME_COOLDOWN_MS } from '@/utils/gameCooldowns';
 import { createLogger } from '@/utils/logger';
+import { emitXPAwarded } from '@/utils/xpEvents';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { NoPogodGameCanvasAtlas } from './NoPogodGameCanvasAtlas';
 
 const log = createLogger('NoPogodGame');
@@ -54,6 +59,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   visible,
   onClose,
 }) => {
+  const insets = useSafeAreaInsets();
   const { userProfile, updateUserProfile, isDemoMode } = useAuth();
 
   // Personal leaderboard status for instant rank updates
@@ -73,17 +79,15 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const [roundsPlayed, setRoundsPlayed] = useState(0);
   const [showCooldownScreen, setShowCooldownScreen] = useState(false);
   const MAX_ROUNDS = 3; // Maximum rounds before cooldown
-  const COOLDOWN_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
 
   // Game cooldown hook - persists across app restarts
   const {
-    canPlay: canPlayFromCooldown,
     remainingFormatted: cooldownRemainingFormatted,
     isOnCooldown,
     startCooldown,
   } = useGameCooldown({
     gameId: 'nopogod',
-    cooldownMs: COOLDOWN_DURATION_MS,
+    cooldownMs: GAME_COOLDOWN_MS,
     persist: true,
   });
 
@@ -125,7 +129,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
 
       gameEngineRef.current = new NoPogodEngine(SCREEN_WIDTH, SCREEN_HEIGHT, NOPOGOD_GAME_ASSETS);
       spriteRendererRef.current = new NoPogodSpriteRenderer(NOPOGOD_GAME_ASSETS, SCREEN_WIDTH, SCREEN_HEIGHT);
-      responsiveScalingRef.current = new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT);
+      responsiveScalingRef.current = new ResponsiveScalingManager(SCREEN_WIDTH, SCREEN_HEIGHT, insets);
 
       // Initialize audio manager and load sounds
       audioManagerRef.current = new NoPogodAudioManager();
@@ -143,9 +147,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       gameEngineRef.current.onItemCaught = (itemType: string) => {
         if (audioManagerRef.current) {
           // Play item-specific sounds
-          if (itemType === 'PEPPER') {
-            audioManagerRef.current.playCatchPepperSound();
-          } else if (itemType === 'ELECTRIC_SHOCK') {
+          if (itemType === 'ELECTRIC_SHOCK') {
             audioManagerRef.current.playCatchShockerSound();
           } else {
             audioManagerRef.current.playCatchItemSound();
@@ -161,9 +163,16 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         }
       };
 
+      // Set up callback for missed items (egg crack sound)
+      gameEngineRef.current.onItemMissed = (itemType: string) => {
+        if (audioManagerRef.current && itemType === 'EGG') {
+          audioManagerRef.current.playEggCrackSound();
+        }
+      };
+
       setGameState(gameEngineRef.current.getState());
     }
-  }, [visible]);
+  }, [visible, insets]);
 
   const loadHighScore = async () => {
     try {
@@ -176,7 +185,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     }
   };
 
-  const checkAndSaveHighScore = async (score: number) => {
+  const checkAndSaveHighScore = useCallback(async (score: number) => {
     if (score > highScore) {
       setIsNewHighScore(true);
       setHighScore(score);
@@ -189,7 +198,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     } else {
       setIsNewHighScore(false);
     }
-  };
+  }, [highScore]);
 
   // Handle game state updates
   const updateGameState = useCallback(() => {
@@ -212,6 +221,9 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       sessionIdRef.current = generateSessionId();
       log.debug('New game session', { sessionId: sessionIdRef.current });
 
+      // Track game start for analytics dashboard
+      trackGameStart(NOPOGOD_GAME_ID, { sessionId: sessionIdRef.current });
+
       gameEngineRef.current.startGame();
       updateGameState();
       // Background music already playing from menu
@@ -230,11 +242,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     if (gameEngineRef.current) {
       gameEngineRef.current.pauseGame();
       updateGameState();
-
-      // Pause background music
-      if (audioManagerRef.current) {
-        audioManagerRef.current.pauseBackground();
-      }
+      // Music continues playing during pause
     }
   }, [updateGameState]);
 
@@ -242,11 +250,6 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     if (gameEngineRef.current) {
       gameEngineRef.current.resumeGame();
       updateGameState();
-
-      // Resume background music
-      if (audioManagerRef.current) {
-        audioManagerRef.current.resumeBackground();
-      }
     }
   }, [updateGameState]);
 
@@ -373,6 +376,12 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
           audioManagerRef.current.stopBackground();
         }
 
+        // Track game end for analytics dashboard
+        trackGameEnd(NOPOGOD_GAME_ID, gameState.score, {
+          sessionId: sessionIdRef.current,
+          lives: gameState.lives,
+        });
+
         // Check for high score
         await checkAndSaveHighScore(gameState.score);
 
@@ -413,6 +422,17 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
                 duplicate: result.data.duplicate,
               });
 
+              // Track XP earned and emit event for leaderboard refresh
+              if (!result.data.duplicate) {
+                trackXPEarned(xpToAward, 'game', {
+                  game_name: 'nopogod',
+                  score: gameState.score,
+                });
+
+                // Emit XP event to trigger global leaderboard refresh
+                emitXPAwarded(xpToAward);
+              }
+
               // Instantly update personal leaderboard rank (no 5-minute wait!)
               updateFromAwardXP(result.data);
               log.debug('Personal leaderboard rank updated instantly');
@@ -427,10 +447,9 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
               }
             } else {
               // Edge Function failed - check if retryable
-              const newXP = userProfile.xp_points + xpToAward;
-
               if (isRetryableError(result.status)) {
-                // Add to queue for retry (optimistic XP derived from queue)
+                // Add to queue for retry - apply optimistic XP since it will be synced
+                const newXP = userProfile.xp_points + xpToAward;
                 await edgeFunctionQueueService.addToQueue({
                   id: `xp-${sessionId}-${xpToAward}`,
                   idempotencyKey,
@@ -452,26 +471,27 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
                   amount: xpToAward,
                   status: result.status,
                 });
+
+                // Update local profile and leaderboard state (optimistic - will sync later)
+                updateUserProfile({ xp_points: newXP });
+                updateFromAwardXP({
+                  success: true,
+                  new_total_xp: newXP,
+                  personal_rank: 0, // Unknown rank when offline
+                  xp_breakdown: {
+                    game: xpToAward, // Only the game XP delta (not cumulative, but best we can do offline)
+                    subscription: 0,
+                    video_like: 0,
+                  },
+                });
               } else {
-                // Permanent error (400, 401, 403, 404, 422) - log and discard
-                log.error('Permanent XP award failure, not queuing', {
+                // Permanent error (400, 401, 403, 404, 422) - DO NOT apply optimistic updates
+                // The XP will never be synced, so don't mislead the user
+                log.error('Permanent XP award failure, XP not applied', {
                   status: result.status,
                   error: result.error,
                 });
               }
-
-              // Update local profile and leaderboard state
-              updateUserProfile({ xp_points: newXP });
-              updateFromAwardXP({
-                success: true,
-                new_total_xp: newXP,
-                personal_rank: 0, // Unknown rank when offline
-                xp_breakdown: {
-                  game: newXP,
-                  subscription: 0,
-                  video_like: 0,
-                },
-              });
             }
           } catch (error) {
             // Unexpected error - add to queue for safety
@@ -501,7 +521,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
               new_total_xp: newXP,
               personal_rank: 0, // Unknown rank when offline
               xp_breakdown: {
-                game: newXP,
+                game: xpToAward, // Only the game XP delta (not cumulative, but best we can do offline)
                 subscription: 0,
                 video_like: 0,
               },
@@ -538,7 +558,19 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     awardXP().catch((error) => {
       log.error('Critical error in awardXP:', error);
     });
-  }, [gameState?.phase, gameState?.score, xpAwarded, userProfile, updateUserProfile, isDemoMode, roundsPlayed, startCooldown]);
+  }, [
+    gameState?.phase,
+    gameState?.score,
+    gameState?.lives,
+    xpAwarded,
+    userProfile,
+    updateUserProfile,
+    updateFromAwardXP,
+    isDemoMode,
+    roundsPlayed,
+    startCooldown,
+    checkAndSaveHighScore,
+  ]);
 
   // Cleanup on close - including releasing atlas assets and audio
   useEffect(() => {
@@ -568,7 +600,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const renderMenuState = () => (
     <View style={styles.menuContainer}>
       <Image
-        source={require('@/assets/images/game/launch_Screen.png')}
+        source={require('@/features/games/noPogod/assets/launch_Screen.png')}
         style={styles.menuBackgroundImage}
         resizeMode="contain"
       />
@@ -665,6 +697,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     if (gameState?.phase !== 'GAME_OVER') return null;
 
     const xpEarned = Math.floor(gameState.score / 10);
+    const displayedRound = xpAwarded ? roundsPlayed : roundsPlayed + 1;
 
     return (
       <View style={styles.gameOverContainer}>
@@ -688,9 +721,10 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         )}
 
         {/* Show rounds info for non-demo users */}
+        {/* Use xpAwarded to determine if state has updated: if false, show +1 for immediate feedback */}
         {!isDemoMode && (
           <Text style={styles.roundsInfo}>
-            Round {roundsPlayed}/{MAX_ROUNDS}
+            Round {displayedRound}/{MAX_ROUNDS}
           </Text>
         )}
 

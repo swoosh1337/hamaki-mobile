@@ -10,6 +10,7 @@
  * - Calculates pending action count for badge
  */
 
+import { API } from '@/constants/Api';
 import { useAuth } from '@/contexts/AuthContext';
 import { tokenManager } from '@/services/auth';
 import {
@@ -19,7 +20,7 @@ import {
     verifyAndAwardSubscriptionXP,
 } from '@/services/youtube/subscriptionService';
 import { verificationCacheService } from '@/services/youtube/verificationCacheService';
-import { getDataVersion } from '@/services/youtube/verificationDataVersion';
+import { getDataVersion, incrementDataVersion } from '@/services/youtube/verificationDataVersion';
 import {
     getTotalPossibleVideoLikeXP,
     getVideoStatusesFromDB,
@@ -29,7 +30,13 @@ import type {
     SubscriptionStatus,
     VideoLikeStatus,
 } from '@/types/youtube';
+import { YOUTUBE_CHANNELS } from '@/types/youtube';
 import { createLogger } from '@/utils/logger';
+import {
+    youtubeQuotaState,
+    isQuotaExhaustedError,
+    QUOTA_EXHAUSTED_MESSAGES,
+} from '@/utils/youtubeQuotaState';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const log = createLogger('UseYouTubeVerification');
@@ -58,6 +65,11 @@ interface UseYouTubeVerificationReturn {
     totalSubscriptionXP: number;
     earnedSubscriptionXP: number;
     totalVideoLikeXP: number;
+
+    // Quota state
+    isQuotaExhausted: boolean;
+    quotaResetTimeRemaining: string | null;
+    quotaExhaustedMessage: string | null;
 }
 
 export function useYouTubeVerification(): UseYouTubeVerificationReturn {
@@ -76,8 +88,41 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
     // Cache state
     const [lastSubscriptionCheck, setLastSubscriptionCheck] = useState<Date | null>(null);
 
+    // Quota state
+    const [isQuotaExhausted, setIsQuotaExhausted] = useState(false);
+    const [quotaResetTimeRemaining, setQuotaResetTimeRemaining] = useState<string | null>(null);
+
     // Track data version to detect background updates
     const lastDataVersionRef = useRef<number>(0);
+
+    /**
+     * Initialize quota state and subscribe to changes
+     */
+    useEffect(() => {
+        // Initialize quota state manager
+        youtubeQuotaState.initialize().then(() => {
+            setIsQuotaExhausted(youtubeQuotaState.isQuotaExhausted());
+            setQuotaResetTimeRemaining(youtubeQuotaState.getFormattedTimeUntilReset());
+        });
+
+        // Subscribe to quota state changes
+        const unsubscribe = youtubeQuotaState.subscribe((exhausted) => {
+            setIsQuotaExhausted(exhausted);
+            setQuotaResetTimeRemaining(youtubeQuotaState.getFormattedTimeUntilReset());
+        });
+
+        // Update time remaining every minute
+        const intervalId = setInterval(() => {
+            if (youtubeQuotaState.isQuotaExhausted()) {
+                setQuotaResetTimeRemaining(youtubeQuotaState.getFormattedTimeUntilReset());
+            }
+        }, 60000);
+
+        return () => {
+            unsubscribe();
+            clearInterval(intervalId);
+        };
+    }, []);
 
     /**
      * Load cached data on mount and poll for background updates (Google users only)
@@ -92,29 +137,21 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
         // Initial load
         loadCachedData();
 
-        // Poll for data version changes (detects background verification)
-        // Stops after first change since verification only happens once per login
-        let isPolling = true;
+        // Poll for data version changes (detects background and manual verification)
         const checkIntervalId = setInterval(async () => {
-            if (!isPolling) return;
-
             const currentVersion = await getDataVersion();
             if (currentVersion > lastDataVersionRef.current) {
-                log.info('Data version changed, refreshing and stopping poll', {
+                log.info('Data version changed, refreshing', {
                     old: lastDataVersionRef.current,
                     new: currentVersion
                 });
                 lastDataVersionRef.current = currentVersion;
                 loadCachedData();
-
-                // Stop polling - verification only happens once per login
-                isPolling = false;
                 clearInterval(checkIntervalId);
             }
         }, 2000);
 
         return () => {
-            isPolling = false;
             clearInterval(checkIntervalId);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,20 +170,37 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
             const subs = await getSubscriptionStatuses(userProfile.id);
             setSubscriptionStatuses(subs);
 
+            const expectedChannelCount = Object.keys(YOUTUBE_CHANNELS).length;
+            // Cache TTL: 4 hours (matches sync interval)
+            const VIDEO_LIKE_CACHE_TTL = API.cache.videoLikeTTL;
+
             // First try to load video like statuses from cache (instant)
             const hasCache = await verificationCacheService.hasVideoLikeCache();
             if (hasCache) {
                 const cachedStatuses = await verificationCacheService.getCachedVideoLikeStatuses();
-                if (cachedStatuses.length > 0) {
-                    log.debug('Loaded video like statuses from cache', { count: cachedStatuses.length });
+                const lastCheck = await verificationCacheService.getLastSubscriptionCheckTime();
+                const cacheAge = lastCheck ? Date.now() - lastCheck : Infinity;
+                const isCacheFresh = cacheAge < VIDEO_LIKE_CACHE_TTL;
+
+                // Only use cache if it has ALL expected channels AND is fresh
+                if (cachedStatuses.length >= expectedChannelCount && isCacheFresh) {
+                    log.debug('Loaded video like statuses from cache', {
+                        count: cachedStatuses.length,
+                        ageMinutes: Math.round(cacheAge / 60000)
+                    });
                     setVideoLikeStatuses(cachedStatuses);
 
-                    // Get last check time
-                    const lastCheck = await verificationCacheService.getLastSubscriptionCheckTime();
                     if (lastCheck) {
                         setLastSubscriptionCheck(new Date(lastCheck));
                     }
-                    return; // Don't fetch from DB if we have cache
+                    return; // Don't fetch from DB if we have complete and fresh cache
+                } else {
+                    log.info('Cache invalid, fetching from DB', {
+                        cached: cachedStatuses.length,
+                        expected: expectedChannelCount,
+                        isFresh: isCacheFresh,
+                        ageHours: Math.round(cacheAge / 3600000)
+                    });
                 }
             }
 
@@ -179,6 +233,16 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
             return;
         }
 
+        // Check if quota is exhausted before making API calls
+        if (youtubeQuotaState.isQuotaExhausted()) {
+            log.warn('YouTube quota exhausted, using cached data');
+            setSubscriptionError(new Error(QUOTA_EXHAUSTED_MESSAGES.short));
+            // Load cached data instead
+            const dbStatuses = await getSubscriptionStatuses(userProfile.id);
+            setSubscriptionStatuses(dbStatuses);
+            return;
+        }
+
         setIsLoadingSubscriptions(true);
         setSubscriptionError(null);
 
@@ -202,11 +266,29 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
                 if (result.totalXPAwarded > 0) {
                     log.info(`Awarded ${result.totalXPAwarded} XP for subscriptions`);
                 }
+
+                // Increment data version so other hook instances (e.g., home screen badge) refresh
+                await incrementDataVersion();
             } else if (result.errors.length > 0) {
+                // Check if the error is quota-related
+                if (isQuotaExhaustedError(result.errors[0])) {
+                    log.warn('Quota exhausted error in subscription verification');
+                    await youtubeQuotaState.setQuotaExhausted(); // Persist to AsyncStorage
+                    setIsQuotaExhausted(true);
+                    setQuotaResetTimeRemaining(youtubeQuotaState.getFormattedTimeUntilReset());
+                }
                 throw new Error(result.errors[0]);
             }
         } catch (error) {
             log.error('Error verifying subscriptions', error);
+
+            // Check if it's a quota error and update state
+            if (isQuotaExhaustedError(error)) {
+                await youtubeQuotaState.setQuotaExhausted(); // Persist to AsyncStorage
+                setIsQuotaExhausted(true);
+                setQuotaResetTimeRemaining(youtubeQuotaState.getFormattedTimeUntilReset());
+            }
+
             setSubscriptionError(error instanceof Error ? error : new Error('Unknown error'));
             throw error; // Re-throw so caller can handle
         } finally {
@@ -220,6 +302,21 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
     const verifyVideoLikes = useCallback(async () => {
         if (!userProfile?.id) {
             setVideoLikeError(new Error('User not authenticated'));
+            return;
+        }
+
+        // Check if quota is exhausted before making API calls
+        if (youtubeQuotaState.isQuotaExhausted()) {
+            log.warn('YouTube quota exhausted, using cached video like data');
+            setVideoLikeError(new Error(QUOTA_EXHAUSTED_MESSAGES.short));
+            // Load cached data instead
+            const cachedStatuses = await verificationCacheService.getCachedVideoLikeStatuses();
+            if (cachedStatuses.length > 0) {
+                setVideoLikeStatuses(cachedStatuses);
+            } else {
+                const dbStatuses = await getVideoStatusesFromDB(userProfile.id);
+                setVideoLikeStatuses(dbStatuses);
+            }
             return;
         }
 
@@ -266,11 +363,29 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
                 if (result.totalXPAwarded > 0) {
                     log.info(`Awarded ${result.totalXPAwarded} XP for video likes`);
                 }
+
+                // Increment data version so other hook instances (e.g., home screen badge) refresh
+                await incrementDataVersion();
             } else if (result.errors.length > 0) {
+                // Check if the error is quota-related
+                if (isQuotaExhaustedError(result.errors[0])) {
+                    log.warn('Quota exhausted error in video like verification');
+                    await youtubeQuotaState.setQuotaExhausted(); // Persist to AsyncStorage
+                    setIsQuotaExhausted(true);
+                    setQuotaResetTimeRemaining(youtubeQuotaState.getFormattedTimeUntilReset());
+                }
                 throw new Error(result.errors[0]);
             }
         } catch (error) {
             log.error('Error verifying video likes', error);
+
+            // Check if it's a quota error and update state
+            if (isQuotaExhaustedError(error)) {
+                await youtubeQuotaState.setQuotaExhausted(); // Persist to AsyncStorage
+                setIsQuotaExhausted(true);
+                setQuotaResetTimeRemaining(youtubeQuotaState.getFormattedTimeUntilReset());
+            }
+
             setVideoLikeError(error instanceof Error ? error : new Error('Unknown error'));
             throw error; // Re-throw so caller can handle
         } finally {
@@ -323,6 +438,15 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
     const earnedSubscriptionXP = getEarnedSubscriptionXP(subscriptionStatuses);
     const totalVideoLikeXP = getTotalPossibleVideoLikeXP();
 
+    /**
+     * Compute quota exhausted message with time remaining
+     */
+    const quotaExhaustedMessage = isQuotaExhausted
+        ? quotaResetTimeRemaining
+            ? QUOTA_EXHAUSTED_MESSAGES.withTimeRemaining(quotaResetTimeRemaining)
+            : QUOTA_EXHAUSTED_MESSAGES.short
+        : null;
+
     return {
         // Subscription state
         subscriptionStatuses,
@@ -347,5 +471,10 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
         totalSubscriptionXP,
         earnedSubscriptionXP,
         totalVideoLikeXP,
+
+        // Quota state
+        isQuotaExhausted,
+        quotaResetTimeRemaining,
+        quotaExhaustedMessage,
     };
 }

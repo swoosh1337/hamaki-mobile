@@ -9,8 +9,8 @@ import { createLogger } from './logger';
 
 const log = createLogger('GameCooldown');
 
-// Cooldown duration in milliseconds (2 hours)
-export const GAME_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 hours
+// Cooldown duration in milliseconds (1 hour)
+export const GAME_COOLDOWN_MS = 1 * 60 * 60 * 1000; // 1 hour
 
 export type GameType = 'nopogod' | 'hammockjump';
 

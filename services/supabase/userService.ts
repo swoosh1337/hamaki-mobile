@@ -290,25 +290,26 @@ export const userService = {
             weekEnd.setDate(weekStart.getDate() + 6);
             weekEnd.setHours(23, 59, 59, 999);
 
-            // Fetch BOTH monthly and weekly entries
+            // Fetch all three period types: monthly, weekly, and all_time
             const { data: leaderboardEntries, error: leaderboardError } = await supabase
                 .from('leaderboard_entries')
                 .select('period_type, total_xp, game_xp, subscription_xp, video_like_xp')
                 .eq('user_id', userProfile.id)
-                .in('period_type', ['monthly', 'weekly']);
+                .in('period_type', ['monthly', 'weekly', 'all_time']);
 
             if (leaderboardError && leaderboardError.code !== 'PGRST116') {
                 log.error('Error fetching leaderboard XP:', leaderboardError);
             }
 
-            // Find monthly and weekly entries
+            // Find monthly, weekly, and all_time entries
             const monthlyEntry = leaderboardEntries?.find(e => e.period_type === 'monthly');
             const weeklyEntry = leaderboardEntries?.find(e => e.period_type === 'weekly');
+            const allTimeEntry = leaderboardEntries?.find(e => e.period_type === 'all_time');
 
-            // Total XP comes from monthly entry (the "main" leaderboard)
-            // Weekly XP comes from weekly entry's game_xp (resets each week)
-            const totalXP = monthlyEntry?.total_xp || userProfile.xp_points || 0;
-            const weeklyXP = weeklyEntry?.game_xp || 0;
+            // Total XP comes from all_time entry (lifetime, never resets)
+            // Weekly XP comes from weekly entry's total_xp (all XP types combined)
+            const totalXP = allTimeEntry?.total_xp || monthlyEntry?.total_xp || userProfile.xp_points || 0;
+            const weeklyXP = weeklyEntry?.total_xp || 0;
 
             return {
                 totalXP,

@@ -59,15 +59,25 @@ interface YouTubeSubscription {
 }
 
 /**
+ * Result from checking subscriptions including quota usage
+ */
+interface CheckSubscriptionsResult {
+    foundChannels: Set<string>;
+    pagesChecked: number;  // Each page = 1 quota unit
+}
+
+/**
  * Fetch user's subscriptions with early-exit pagination
  * Stops as soon as all required channels are found
+ * Returns found channels AND pages checked (for quota tracking)
  */
 async function checkSubscriptions(
     accessToken: string,
     requiredChannels: Set<string>
-): Promise<Set<string>> {
+): Promise<CheckSubscriptionsResult> {
     const foundChannels = new Set<string>();
     let nextPageToken: string | undefined;
+    let pagesChecked = 0;
 
     // Copy to track remaining (for early exit)
     const remaining = new Set(requiredChannels);
@@ -88,8 +98,26 @@ async function checkSubscriptions(
         if (!response.ok) {
             const error = await response.json();
             console.error('[verify-subscriptions] YouTube API error:', error);
+
+            // Check for quota exhaustion (403 with specific reason)
+            const errorReason = error?.error?.errors?.[0]?.reason;
+            const isQuotaError = response.status === 403 && (
+                errorReason === 'quotaExceeded' ||
+                errorReason === 'dailyLimitExceeded' ||
+                errorReason === 'rateLimitExceeded' ||
+                error?.error?.message?.toLowerCase()?.includes('quota')
+            );
+
+            if (isQuotaError) {
+                console.error('[verify-subscriptions] YouTube quota exhausted!');
+                throw new Error('YOUTUBE_QUOTA_EXHAUSTED');
+            }
+
             throw new Error(`YouTube API error: ${response.status}`);
         }
+
+        // Count this page (1 quota unit per subscriptions.list call)
+        pagesChecked++;
 
         const data = await response.json();
 
@@ -116,7 +144,7 @@ async function checkSubscriptions(
         }
     }
 
-    return foundChannels;
+    return { foundChannels, pagesChecked };
 }
 
 Deno.serve(async (req: Request) => {
@@ -235,7 +263,16 @@ Deno.serve(async (req: Request) => {
             console.log(`[verify-subscriptions] Checking ${needsCheck.length} channels`);
 
             const requiredIds = new Set(needsCheck.map(c => c.channelId));
-            const foundIds = await checkSubscriptions(accessToken, requiredIds);
+            const { foundChannels: foundIds, pagesChecked } = await checkSubscriptions(accessToken, requiredIds);
+
+            // Log quota usage (1 unit per page of subscriptions.list)
+            if (pagesChecked > 0) {
+                await supabase.rpc('log_youtube_quota_usage', {
+                    p_operation: 'subscriptions.list',
+                    p_units: pagesChecked,
+                });
+                console.log(`[verify-subscriptions] Logged ${pagesChecked} quota units for subscriptions.list`);
+            }
 
             // Step 3: Process results and award XP
             for (const channel of needsCheck) {
@@ -278,26 +315,67 @@ Deno.serve(async (req: Request) => {
                         .update({ xp_points: (user?.xp_points || 0) + xpAmount })
                         .eq('id', userId);
 
-                    // Also update leaderboard_entries.subscription_xp
-                    const { data: leaderboardData } = await supabase
-                        .from('leaderboard_entries')
-                        .select('subscription_xp')
-                        .eq('user_id', userId)
-                        .single();
+                    // Update leaderboard_entries.subscription_xp for BOTH monthly and weekly
+                    // Using the award_xp RPC function which handles both periods correctly
+                    const { error: awardError } = await supabase.rpc('award_xp', {
+                        p_user_id: userId,
+                        p_xp_type: 'subscription',
+                        p_amount: xpAmount,
+                    });
 
-                    const currentSubXP = leaderboardData?.subscription_xp || 0;
+                    let usedFallback = false;
+                    if (awardError) {
+                        console.error(`[${channel.channelKey}] Failed to award XP via RPC:`, awardError);
+                        // Fallback: try direct upsert for both periods
+                        for (const periodType of ['monthly', 'weekly']) {
+                            const { data: existing, error: existingError } = await supabase
+                                .from('leaderboard_entries')
+                                .select('subscription_xp, game_xp, video_like_xp')
+                                .eq('user_id', userId)
+                                .eq('period_type', periodType)
+                                .maybeSingle();
 
-                    await supabase
-                        .from('leaderboard_entries')
-                        .upsert({
-                            user_id: userId,
-                            subscription_xp: currentSubXP + xpAmount,
-                        }, {
-                            onConflict: 'user_id'
-                        });
+                            if (existingError) {
+                                console.error(`[${channel.channelKey}] Failed to load leaderboard entry for fallback`, {
+                                    userId,
+                                    periodType,
+                                    error: existingError,
+                                });
+                                throw existingError;
+                            }
+
+                            const currentXP = existing?.subscription_xp || 0;
+                            const existingGame = existing?.game_xp || 0;
+                            const existingVideo = existing?.video_like_xp || 0;
+
+                            const { error: fallbackUpsertError } = await supabase
+                                .from('leaderboard_entries')
+                                .upsert({
+                                    user_id: userId,
+                                    period_type: periodType,
+                                    subscription_xp: currentXP + xpAmount,
+                                    game_xp: existingGame,
+                                    video_like_xp: existingVideo,
+                                }, {
+                                    onConflict: 'user_id,period_type'
+                                });
+
+                            if (fallbackUpsertError) {
+                                console.error(`[${channel.channelKey}] Failed to upsert leaderboard entry for fallback`, {
+                                    userId,
+                                    periodType,
+                                    error: fallbackUpsertError,
+                                });
+                                throw fallbackUpsertError;
+                            }
+                        }
+                        usedFallback = true;
+                    }
 
                     totalXPAwarded += xpAmount;
-                    console.log(`[${channel.channelKey}] Awarded ${xpAmount} XP (leaderboard: ${currentSubXP} -> ${currentSubXP + xpAmount})`);
+                    console.log(
+                        `[${channel.channelKey}] Awarded ${xpAmount} subscription XP via ${usedFallback ? 'fallback upsert' : 'RPC'}`
+                    );
                 }
 
                 results.push({

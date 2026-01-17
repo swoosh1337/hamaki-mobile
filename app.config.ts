@@ -70,6 +70,9 @@ export default {
     experiments: {
       typedRoutes: true
     },
+    assetBundlePatterns: [
+      "**/*"
+    ],
     extra: {
       eas: {
         projectId: "0d720c0f-ee9a-4dbf-ad18-707be00e7765"

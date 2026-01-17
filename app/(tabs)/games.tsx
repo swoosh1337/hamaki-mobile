@@ -1,16 +1,14 @@
-import GamesIcon from '@/components/GamesIcon';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { GamesIcon } from '@/components/GamesIcon';
 import { HammockJumpGame } from '@/components/games/HammockJumpGame';
 import { NoPogodGame } from '@/components/games/NoPogodGame';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameCooldown } from '@/hooks/useGameCooldown';
-import { createLogger } from '@/utils/logger';
-
-const log = createLogger('Games');
+import { trackGamePlay } from '@/utils/analytics';
 
 interface GameItem {
   id: string;
@@ -77,6 +75,10 @@ export default function GamesScreen() {
       );
       return;
     }
+
+    // Track game play for analytics dashboard
+    const game = GAMES.find(g => g.id === gameId);
+    trackGamePlay(gameId, game?.title || gameId);
 
     // Open selected game
     setSelectedGame(gameId);
@@ -214,7 +216,7 @@ const styles = StyleSheet.create({
   },
   topTitleText: {
     fontSize: 32,
-    fontFamily: 'HamakiEng',
+    fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
     textAlign: 'center',
   },
