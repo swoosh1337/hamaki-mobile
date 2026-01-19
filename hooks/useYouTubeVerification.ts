@@ -56,6 +56,7 @@ interface UseYouTubeVerificationReturn {
     verifySubscriptions: () => Promise<void>;
     verifyVideoLikes: () => Promise<void>;
     refreshAll: () => Promise<void>;
+    reloadFromCache: () => Promise<void>;
 
     // Computed values
     pendingActionCount: number;
@@ -126,7 +127,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
 
     /**
      * Load cached data on mount and poll for background updates (Google users only)
-     * Polling stops after first version change is detected
+     * Polling continues throughout the session to detect changes from other hook instances
      */
     useEffect(() => {
         // Only poll for Google users - magic link users don't have verification
@@ -138,6 +139,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
         loadCachedData();
 
         // Poll for data version changes (detects background and manual verification)
+        // Continues polling to catch multiple verification events
         const checkIntervalId = setInterval(async () => {
             const currentVersion = await getDataVersion();
             if (currentVersion > lastDataVersionRef.current) {
@@ -147,7 +149,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
                 });
                 lastDataVersionRef.current = currentVersion;
                 loadCachedData();
-                clearInterval(checkIntervalId);
+                // Don't clear interval - keep polling for subsequent changes
             }
         }, 2000);
 
@@ -178,8 +180,9 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
             const hasCache = await verificationCacheService.hasVideoLikeCache();
             if (hasCache) {
                 const cachedStatuses = await verificationCacheService.getCachedVideoLikeStatuses();
-                const lastCheck = await verificationCacheService.getLastSubscriptionCheckTime();
-                const cacheAge = lastCheck ? Date.now() - lastCheck : Infinity;
+                // Use video like cache's own timestamp, not subscription check time
+                const lastVideoLikeCheck = await verificationCacheService.getLastVideoLikeCheckTime();
+                const cacheAge = lastVideoLikeCheck ? Date.now() - lastVideoLikeCheck : Infinity;
                 const isCacheFresh = cacheAge < VIDEO_LIKE_CACHE_TTL;
 
                 // Only use cache if it has ALL expected channels AND is fresh
@@ -190,8 +193,10 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
                     });
                     setVideoLikeStatuses(cachedStatuses);
 
-                    if (lastCheck) {
-                        setLastSubscriptionCheck(new Date(lastCheck));
+                    // Update subscription check time for display
+                    const lastSubCheck = await verificationCacheService.getLastSubscriptionCheckTime();
+                    if (lastSubCheck) {
+                        setLastSubscriptionCheck(new Date(lastSubCheck));
                     }
                     return; // Don't fetch from DB if we have complete and fresh cache
                 } else {
@@ -199,7 +204,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
                         cached: cachedStatuses.length,
                         expected: expectedChannelCount,
                         isFresh: isCacheFresh,
-                        ageHours: Math.round(cacheAge / 3600000)
+                        ageMinutes: Math.round(cacheAge / 60000)
                     });
                 }
             }
@@ -394,11 +399,19 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
     }, [userProfile?.id]);
 
     /**
-     * Refresh all verification data
+     * Refresh all verification data (makes API calls)
      */
     const refreshAll = useCallback(async () => {
         await Promise.all([verifySubscriptions(), verifyVideoLikes()]);
     }, [verifySubscriptions, verifyVideoLikes]);
+
+    /**
+     * Reload data from cache/DB without making API calls
+     * Use this when you know data was updated elsewhere (e.g., by another hook instance)
+     */
+    const reloadFromCache = useCallback(async () => {
+        await loadCachedData();
+    }, [loadCachedData]);
 
     /**
      * Calculate pending action count for badge
@@ -462,6 +475,7 @@ export function useYouTubeVerification(): UseYouTubeVerificationReturn {
         verifySubscriptions,
         verifyVideoLikes,
         refreshAll,
+        reloadFromCache,
 
         // Computed values
         pendingActionCount: pendingCounts.total,

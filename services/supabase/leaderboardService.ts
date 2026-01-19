@@ -31,6 +31,7 @@ export const leaderboardService = {
                     game_xp,
                     subscription_xp,
                     video_like_xp,
+                    created_at,
                     users!leaderboard_entries_user_id_fkey(
                         id,
                         google_id,
@@ -41,7 +42,10 @@ export const leaderboardService = {
                     )
                 `)
                 .eq('period_type', 'monthly')
+                // Deterministic ordering: higher XP first, then earlier entries, then by ID
                 .order('total_xp', { ascending: false })
+                .order('created_at', { ascending: true })
+                .order('user_id', { ascending: true })
                 .limit(limit);
 
             if (error) {
@@ -88,10 +92,14 @@ export const leaderboardService = {
                 .select(`
                     user_id,
                     total_xp,
+                    created_at,
                     users!leaderboard_entries_user_id_fkey(full_name, avatar_url)
                 `)
                 .eq('period_type', 'weekly')
+                // Deterministic ordering: higher XP first, then earlier entries, then by ID
                 .order('total_xp', { ascending: false })
+                .order('created_at', { ascending: true })
+                .order('user_id', { ascending: true })
                 .limit(limit);
 
             if (error) {
@@ -150,13 +158,17 @@ export const leaderboardService = {
                     game_xp,
                     subscription_xp,
                     video_like_xp,
+                    created_at,
                     users!leaderboard_entries_user_id_fkey(
                         full_name,
                         avatar_url
                     )
                 `)
                 .eq('period_type', periodType)
+                // Deterministic ordering: higher XP first, then earlier entries, then by ID
                 .order('total_xp', { ascending: false })
+                .order('created_at', { ascending: true })
+                .order('user_id', { ascending: true })
                 .limit(limit);
 
             if (error) {

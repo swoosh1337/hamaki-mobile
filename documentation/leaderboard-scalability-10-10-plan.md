@@ -9,6 +9,29 @@ Already implemented:
 - ✅ Server-side XP rate limiting (max 500 per award)
 - ✅ Jitter for realtime refresh (0-3s random delay)
 - ✅ In-memory rank caching (5s TTL in Edge Function)
+- ✅ Retry with exponential backoff (`utils/retry.ts`, `utils/edgeFunctionClient.ts`)
+- ✅ Offline queue with persistence (`services/queue/edgeFunctionQueueService.ts`)
+- ✅ YouTube quota circuit breaker (`utils/youtubeQuotaState.ts`)
+- ✅ React state-based caching (`hooks/useLeaderboardSnapshot.ts`)
+
+---
+
+## Prerequisites
+
+**Required:**
+- Supabase project (any tier for basic features)
+- Composite indexes on `leaderboard_entries` (already implemented)
+
+**For Pre-Computed Ranks (pg_cron):**
+- ⚠️ **Supabase Pro/Enterprise tier required** - pg_cron extension not available on Free tier
+- Enable via Dashboard → Database → Extensions → pg_cron
+- **Alternative for Free tier:** Use GitHub Actions or external scheduler to call a webhook
+
+**For AsyncStorage Cache:**
+- Note: AsyncStorage has ~6MB limit on some platforms
+- Leaderboard snapshot (100 entries) is ~50KB - well within limits
+
+---
 
 ## Remaining Improvements (5 items)
 
@@ -32,33 +55,47 @@ ALTER TABLE leaderboard_entries ADD COLUMN rank INTEGER DEFAULT 0;
 -- Create index for rank lookups
 CREATE INDEX idx_leaderboard_rank ON leaderboard_entries(period_type, rank);
 
--- Function to recompute all ranks
+-- Function to recompute all ranks with deterministic tie-breaker
 CREATE OR REPLACE FUNCTION recompute_leaderboard_ranks()
 RETURNS void AS $$
 BEGIN
-    -- Update monthly ranks using window function
-    UPDATE leaderboard_entries le
-    SET rank = ranked.new_rank
-    FROM (
-        SELECT id, ROW_NUMBER() OVER (ORDER BY total_xp DESC) as new_rank
+    -- Update monthly ranks using atomic CTE pattern with tie-breaker
+    WITH ranked AS (
+        SELECT id,
+               ROW_NUMBER() OVER (
+                   ORDER BY total_xp DESC,
+                   created_at ASC,  -- Earlier users rank higher on tie
+                   id ASC           -- Final deterministic tie-breaker
+               ) as new_rank
         FROM leaderboard_entries
         WHERE period_type = 'monthly'
-    ) ranked
-    WHERE le.id = ranked.id AND le.period_type = 'monthly';
-
-    -- Update weekly ranks
+        FOR UPDATE  -- Lock rows during computation
+    )
     UPDATE leaderboard_entries le
     SET rank = ranked.new_rank
-    FROM (
-        SELECT id, ROW_NUMBER() OVER (ORDER BY total_xp DESC) as new_rank
+    FROM ranked
+    WHERE le.id = ranked.id;
+
+    -- Update weekly ranks with same pattern
+    WITH ranked AS (
+        SELECT id,
+               ROW_NUMBER() OVER (
+                   ORDER BY total_xp DESC,
+                   created_at ASC,
+                   id ASC
+               ) as new_rank
         FROM leaderboard_entries
         WHERE period_type = 'weekly'
-    ) ranked
-    WHERE le.id = ranked.id AND le.period_type = 'weekly';
+        FOR UPDATE
+    )
+    UPDATE leaderboard_entries le
+    SET rank = ranked.new_rank
+    FROM ranked
+    WHERE le.id = ranked.id;
 END;
 $$ LANGUAGE plpgsql;
 
--- Schedule cron job every 2 minutes
+-- Schedule cron job every 2 minutes (requires pg_cron extension)
 SELECT cron.schedule('recompute-ranks', '*/2 * * * *', 'SELECT recompute_leaderboard_ranks()');
 ```
 
@@ -138,49 +175,92 @@ If database is slow/down, clients keep retrying → cascading failure.
 ### Solution
 Add circuit breaker to `edgeFunctionClient.ts` that fails fast after N consecutive failures.
 
+> **Note:** A YouTube-specific circuit breaker already exists in `utils/youtubeQuotaState.ts`.
+> This implementation is for general Edge Function calls.
+
 ### Files to Modify
 
 **A. New File: `utils/circuitBreaker.ts`**
 ```typescript
-interface CircuitState {
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('CircuitBreaker');
+
+// 3-state circuit breaker (CLOSED → OPEN → HALF_OPEN → CLOSED)
+type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+
+interface CircuitInfo {
+    state: CircuitState;
     failures: number;
     lastFailure: number;
-    isOpen: boolean;
+    halfOpenAttempts: number;
 }
 
 const FAILURE_THRESHOLD = 5;
 const RESET_TIMEOUT_MS = 30000; // 30 seconds
+const HALF_OPEN_MAX_ATTEMPTS = 1;
 
 class CircuitBreaker {
-    private states: Map<string, CircuitState> = new Map();
+    private circuits: Map<string, CircuitInfo> = new Map();
 
     canExecute(functionName: string): boolean {
-        const state = this.states.get(functionName);
-        if (!state || !state.isOpen) return true;
+        const circuit = this.circuits.get(functionName);
+        if (!circuit) return true;
 
-        // Check if reset timeout has passed
-        if (Date.now() - state.lastFailure > RESET_TIMEOUT_MS) {
-            state.isOpen = false;
-            state.failures = 0;
-            return true;
+        switch (circuit.state) {
+            case 'CLOSED':
+                return true;
+            case 'OPEN':
+                // Check if timeout passed → transition to HALF_OPEN
+                if (Date.now() - circuit.lastFailure > RESET_TIMEOUT_MS) {
+                    circuit.state = 'HALF_OPEN';
+                    circuit.halfOpenAttempts = 0;
+                    log.info('Circuit entering HALF_OPEN', { functionName });
+                    return true;
+                }
+                return false;
+            case 'HALF_OPEN':
+                // Allow limited attempts to test if service recovered
+                return circuit.halfOpenAttempts < HALF_OPEN_MAX_ATTEMPTS;
         }
-        return false;
     }
 
     recordSuccess(functionName: string): void {
-        this.states.set(functionName, { failures: 0, lastFailure: 0, isOpen: false });
+        const circuit = this.circuits.get(functionName);
+        if (circuit?.state === 'HALF_OPEN') {
+            log.info('Circuit closed after successful HALF_OPEN test', { functionName });
+        }
+        this.circuits.set(functionName, {
+            state: 'CLOSED',
+            failures: 0,
+            lastFailure: 0,
+            halfOpenAttempts: 0,
+        });
     }
 
     recordFailure(functionName: string): void {
-        const state = this.states.get(functionName) || { failures: 0, lastFailure: 0, isOpen: false };
-        state.failures++;
-        state.lastFailure = Date.now();
+        const circuit = this.circuits.get(functionName) || {
+            state: 'CLOSED' as CircuitState,
+            failures: 0,
+            lastFailure: 0,
+            halfOpenAttempts: 0,
+        };
 
-        if (state.failures >= FAILURE_THRESHOLD) {
-            state.isOpen = true;
-            log.warn('Circuit breaker opened', { functionName, failures: state.failures });
+        circuit.failures++;
+        circuit.lastFailure = Date.now();
+
+        if (circuit.state === 'HALF_OPEN') {
+            circuit.halfOpenAttempts++;
+            if (circuit.halfOpenAttempts >= HALF_OPEN_MAX_ATTEMPTS) {
+                circuit.state = 'OPEN';
+                log.warn('Circuit re-opened after HALF_OPEN failure', { functionName });
+            }
+        } else if (circuit.failures >= FAILURE_THRESHOLD) {
+            circuit.state = 'OPEN';
+            log.warn('Circuit opened', { functionName, failures: circuit.failures });
         }
-        this.states.set(functionName, state);
+
+        this.circuits.set(functionName, circuit);
     }
 }
 
@@ -202,10 +282,13 @@ Every client fetches leaderboard from DB (same data for everyone).
 ### Solution
 Cache snapshot in AsyncStorage with 60-second TTL.
 
+> **Note:** React state caching with 5-minute staleness is already implemented in `hooks/useLeaderboardSnapshot.ts`.
+> AsyncStorage caching provides persistence across app restarts.
+
 ### Files to Modify
 
 **A. Modify: `services/supabase/leaderboardService.ts`**
-Add caching to `getLeaderboardSnapshot()`:
+Add caching to `getLeaderboardSnapshot()` with promise deduplication:
 
 ```typescript
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -213,21 +296,37 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const SNAPSHOT_CACHE_KEY = 'leaderboard_snapshot';
 const SNAPSHOT_CACHE_TTL_MS = 60000; // 60 seconds
 
+// Prevent concurrent fetches for same period type
+private pendingFetches: Map<string, Promise<LeaderboardSnapshot>> = new Map();
+
 async getLeaderboardSnapshot(limit = 100, periodType = 'monthly') {
-    // Try cache first
+    // Check for in-flight request first (promise deduplication)
+    const pendingKey = `${periodType}:${limit}`;
+    const pending = this.pendingFetches.get(pendingKey);
+    if (pending) {
+        log.debug('Returning pending fetch promise', { periodType });
+        return pending;
+    }
+
+    // Try cache
     const cached = await this.getCachedSnapshot(periodType);
     if (cached) {
         log.debug('Returning cached leaderboard snapshot');
         return cached;
     }
 
-    // Fetch from database
-    const snapshot = await this.fetchSnapshotFromDB(limit, periodType);
+    // Create and track the fetch promise
+    const fetchPromise = this.fetchSnapshotFromDB(limit, periodType)
+        .then(async (snapshot) => {
+            await this.cacheSnapshot(periodType, snapshot);
+            return snapshot;
+        })
+        .finally(() => {
+            this.pendingFetches.delete(pendingKey);
+        });
 
-    // Cache result
-    await this.cacheSnapshot(periodType, snapshot);
-
-    return snapshot;
+    this.pendingFetches.set(pendingKey, fetchPromise);
+    return fetchPromise;
 }
 
 private async getCachedSnapshot(periodType: string) {
@@ -358,6 +457,20 @@ $$ LANGUAGE plpgsql VOLATILE;
 
 ---
 
+## Implementation Recommendation
+
+Based on codebase analysis, **most scalability features are already implemented**:
+
+| Feature | Recommendation | Reason |
+|---------|----------------|--------|
+| Pre-computed ranks | **Defer** | Requires pg_cron (Supabase Pro). Current 5s in-memory cache is sufficient. |
+| Per-user rate limiting | **Consider** | Worth adding if spam becomes an issue. |
+| General circuit breaker | **Skip** | YouTube quota breaker + offline queue already handles this pattern. |
+| AsyncStorage leaderboard cache | **Skip** | React state with 5-min staleness + jitter is working well. |
+| Combined award_xp_v2 | **Consider** | Worth adding if query count becomes bottleneck. |
+
+---
+
 ## Files Summary
 
 | File | Changes |
@@ -377,17 +490,21 @@ $$ LANGUAGE plpgsql VOLATILE;
 1. **Pre-computed ranks**:
    - Run migration, verify cron job runs every 2 min
    - Check rank column populated correctly
+   - Verify tie-breaker produces consistent ordering
 
 2. **Rate limiting**:
    - Try awarding XP 11 times in 1 minute → should get 429 on 11th
 
 3. **Circuit breaker**:
-   - Simulate 5 failures → circuit opens
-   - Wait 30 seconds → circuit closes
+   - Simulate 5 failures → circuit opens (OPEN state)
+   - Wait 30 seconds → circuit enters HALF_OPEN
+   - Success → circuit closes (CLOSED state)
+   - Failure in HALF_OPEN → circuit re-opens
 
 4. **Edge cache**:
    - Fetch leaderboard, check AsyncStorage has cached data
    - Fetch again within 60s → should be from cache
+   - Verify concurrent fetches return same promise
 
 5. **Combined queries**:
    - Award XP, check only 1 RPC call in logs (not 3)

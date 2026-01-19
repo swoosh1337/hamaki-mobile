@@ -287,6 +287,14 @@ export const verificationCacheService = {
     },
 
     /**
+     * Get the timestamp of last full video like check
+     */
+    async getLastVideoLikeCheckTime(): Promise<number> {
+        const cache = await this.getCache();
+        return cache.videoLikes.lastFullCheck;
+    },
+
+    /**
      * Check if any video caches need refresh
      */
     async getChannelsNeedingVideoRefresh(): Promise<ChannelKey[]> {

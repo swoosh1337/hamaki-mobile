@@ -2,11 +2,12 @@
  * verify-subscriptions Edge Function
  *
  * Verifies YouTube channel subscriptions for a user.
- * 
+ *
  * CRITICAL RULES:
  * ✅ DB short-circuit: If already verified, return immediately (0 API calls)
  * ✅ Early-exit pagination: Stop as soon as all channels found
  * ✅ XP awarded once, never revoked
+ * ✅ AUTH REQUIRED: User must be authenticated and can only verify their own subscriptions
  * ❌ No auto-scheduling
  * ❌ No background rechecks
  */
@@ -15,6 +16,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
 // XP rewards per channel
 const CHANNEL_XP: Record<string, number> = {
@@ -159,50 +161,125 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-        // Parse request body first to get access token
-        let body: { channels?: ChannelToVerify[]; userId?: string; accessToken?: string };
+        // ========================================
+        // STEP 1: Parse request body first
+        // ========================================
+        let body: { channels?: ChannelToVerify[]; accessToken?: string };
         try {
             body = await req.json();
             console.log('[verify-subscriptions] Request body received:', {
                 channelCount: body?.channels?.length,
-                userId: body?.userId ? 'present' : 'missing',
                 hasAccessToken: !!body?.accessToken,
                 accessTokenLength: body?.accessToken?.length || 0,
             });
         } catch (parseError) {
             console.error('[verify-subscriptions] Failed to parse request body:', parseError);
             return new Response(
-                JSON.stringify({ error: 'Invalid JSON body' }),
+                JSON.stringify({ success: false, error: 'Invalid JSON body' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
-        const { channels, userId, accessToken } = body;
+        const { channels, accessToken } = body;
 
         // Validate required fields
-        if (!channels?.length || !userId) {
-            console.error('[verify-subscriptions] Missing required fields:', { channels: !!channels?.length, userId: !!userId });
+        if (!channels?.length) {
+            console.error('[verify-subscriptions] Missing channels');
             return new Response(
-                JSON.stringify({ error: 'Missing channels or userId' }),
+                JSON.stringify({ success: false, error: 'Missing channels' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
-        // Validate access token
+        // Validate YouTube access token (required for YouTube API calls)
         if (!accessToken?.trim()) {
-            console.error('[verify-subscriptions] Missing or empty access token');
+            console.error('[verify-subscriptions] Missing or empty YouTube access token');
             return new Response(
-                JSON.stringify({ error: 'Missing access token' }),
-                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                JSON.stringify({ success: false, error: 'Missing YouTube access token' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
-        console.log('[verify-subscriptions] Access token validated:', {
+        // Service role client for database operations
+        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+        // ========================================
+        // STEP 2: Verify User Identity
+        // ========================================
+        // Support two auth methods:
+        // 1. Magic Link users: Have Supabase JWT in Authorization header
+        // 2. Google OAuth users: Have YouTube access token (can verify via Google API)
+        let userId: string;
+        let authMethod: 'supabase_jwt' | 'youtube_token' = 'youtube_token';
+
+        const authHeader = req.headers.get('Authorization');
+
+        // Try Supabase JWT first (Magic Link users)
+        if (authHeader?.startsWith('Bearer ')) {
+            const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                auth: { persistSession: false }
+            });
+
+            const { data: { user: authUser }, error: authError } = await supabaseAuth.auth.getUser(
+                authHeader.replace('Bearer ', '')
+            );
+
+            if (!authError && authUser) {
+                userId = authUser.id;
+                authMethod = 'supabase_jwt';
+                console.log('[verify-subscriptions] Auth via Supabase JWT:', userId);
+            }
+        }
+
+        // Fallback: Use YouTube token to verify identity (Google OAuth users)
+        // The YouTube token proves ownership of the Google account
+        if (!userId!) {
+            // Get Google user info using the YouTube access token
+            const googleResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                headers: { Authorization: `Bearer ${accessToken}` },
+            });
+
+            if (!googleResponse.ok) {
+                console.error('[verify-subscriptions] Failed to verify Google identity');
+                return new Response(
+                    JSON.stringify({ success: false, error: 'Invalid YouTube access token' }),
+                    { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            const googleUser = await googleResponse.json();
+            if (!googleUser.id) {
+                console.error('[verify-subscriptions] No Google ID in response');
+                return new Response(
+                    JSON.stringify({ success: false, error: 'Could not verify user identity' }),
+                    { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            // Look up user by Google ID in our database
+            const { data: dbUser, error: dbError } = await supabase
+                .from('users')
+                .select('id')
+                .eq('google_id', googleUser.id)
+                .single();
+
+            if (dbError || !dbUser) {
+                console.error('[verify-subscriptions] User not found for Google ID:', googleUser.id);
+                return new Response(
+                    JSON.stringify({ success: false, error: 'User not found' }),
+                    { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            userId = dbUser.id;
+            console.log('[verify-subscriptions] Auth via YouTube token, Google ID:', googleUser.id, '-> User:', userId);
+        }
+
+        console.log('[verify-subscriptions] User verified:', { userId, authMethod });
+        console.log('[verify-subscriptions] YouTube access token validated:', {
             length: accessToken.trim().length,
             prefix: accessToken.trim().substring(0, 10),
         });
-
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
         // Fetch user details for logging
         const { data: userData } = await supabase
@@ -274,117 +351,111 @@ Deno.serve(async (req: Request) => {
                 console.log(`[verify-subscriptions] Logged ${pagesChecked} quota units for subscriptions.list`);
             }
 
-            // Step 3: Process results and award XP
+            // Step 3: Process results - build batched operations
+            const verificationRecords: Array<{
+                user_id: string;
+                channel_id: string;
+                channel_key: string;
+                subscribed: boolean;
+                xp_awarded: boolean;
+                verified_at: string;
+                updated_at: string;
+            }> = [];
+
             for (const channel of needsCheck) {
                 const isSubscribed = foundIds.has(channel.channelId);
                 const xpAmount = isSubscribed ? CHANNEL_XP[channel.channelKey] || 0 : 0;
 
-                // Upsert verification result - specify conflict resolution
-                const { error: upsertError } = await supabase
-                    .from('youtube_subscription_verifications')
-                    .upsert(
-                        {
-                            user_id: userId,
-                            channel_id: channel.channelId,
-                            channel_key: channel.channelKey,
-                            subscribed: isSubscribed,
-                            xp_awarded: isSubscribed,
-                            verified_at: new Date().toISOString(),
-                            updated_at: new Date().toISOString(),
-                        },
-                        { onConflict: 'user_id,channel_id' }
-                    );
+                // Collect verification record for batch upsert
+                verificationRecords.push({
+                    user_id: userId,
+                    channel_id: channel.channelId,
+                    channel_key: channel.channelKey,
+                    subscribed: isSubscribed,
+                    xp_awarded: isSubscribed,
+                    verified_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                });
 
-                if (upsertError) {
-                    console.error(`[${channel.channelKey}] Upsert error:`, upsertError);
-                } else {
-                    console.log(`[${channel.channelKey}] Saved to DB: subscribed=${isSubscribed}, xpAwarded=${isSubscribed}`);
-                }
-
-                // Award XP if subscribed
+                // Track XP to award
                 if (isSubscribed && xpAmount > 0) {
-                    // Update users.xp_points
-                    const { data: user } = await supabase
-                        .from('users')
-                        .select('xp_points')
-                        .eq('id', userId)
-                        .single();
-
-                    await supabase
-                        .from('users')
-                        .update({ xp_points: (user?.xp_points || 0) + xpAmount })
-                        .eq('id', userId);
-
-                    // Update leaderboard_entries.subscription_xp for BOTH monthly and weekly
-                    // Using the award_xp RPC function which handles both periods correctly
-                    const { error: awardError } = await supabase.rpc('award_xp', {
-                        p_user_id: userId,
-                        p_xp_type: 'subscription',
-                        p_amount: xpAmount,
-                    });
-
-                    let usedFallback = false;
-                    if (awardError) {
-                        console.error(`[${channel.channelKey}] Failed to award XP via RPC:`, awardError);
-                        // Fallback: try direct upsert for both periods
-                        for (const periodType of ['monthly', 'weekly']) {
-                            const { data: existing, error: existingError } = await supabase
-                                .from('leaderboard_entries')
-                                .select('subscription_xp, game_xp, video_like_xp')
-                                .eq('user_id', userId)
-                                .eq('period_type', periodType)
-                                .maybeSingle();
-
-                            if (existingError) {
-                                console.error(`[${channel.channelKey}] Failed to load leaderboard entry for fallback`, {
-                                    userId,
-                                    periodType,
-                                    error: existingError,
-                                });
-                                throw existingError;
-                            }
-
-                            const currentXP = existing?.subscription_xp || 0;
-                            const existingGame = existing?.game_xp || 0;
-                            const existingVideo = existing?.video_like_xp || 0;
-
-                            const { error: fallbackUpsertError } = await supabase
-                                .from('leaderboard_entries')
-                                .upsert({
-                                    user_id: userId,
-                                    period_type: periodType,
-                                    subscription_xp: currentXP + xpAmount,
-                                    game_xp: existingGame,
-                                    video_like_xp: existingVideo,
-                                }, {
-                                    onConflict: 'user_id,period_type'
-                                });
-
-                            if (fallbackUpsertError) {
-                                console.error(`[${channel.channelKey}] Failed to upsert leaderboard entry for fallback`, {
-                                    userId,
-                                    periodType,
-                                    error: fallbackUpsertError,
-                                });
-                                throw fallbackUpsertError;
-                            }
-                        }
-                        usedFallback = true;
-                    }
-
                     totalXPAwarded += xpAmount;
-                    console.log(
-                        `[${channel.channelKey}] Awarded ${xpAmount} subscription XP via ${usedFallback ? 'fallback upsert' : 'RPC'}`
-                    );
+                    console.log(`[${channel.channelKey}] Subscribed, will award ${xpAmount} XP`);
                 }
 
                 results.push({
                     channelId: channel.channelId,
                     channelKey: channel.channelKey,
                     subscribed: isSubscribed,
-                    xpAwarded: xpAmount,
+                    xpAwarded: isSubscribed ? xpAmount : 0,
                     alreadyVerified: false,
                 });
+            }
+
+            // BATCH OPERATION 1: Upsert all verification records at once
+            if (verificationRecords.length > 0) {
+                const { error: batchUpsertError } = await supabase
+                    .from('youtube_subscription_verifications')
+                    .upsert(verificationRecords, { onConflict: 'user_id,channel_id' });
+
+                if (batchUpsertError) {
+                    console.error('[verify-subscriptions] Batch upsert error:', batchUpsertError);
+                } else {
+                    console.log(`[verify-subscriptions] Batch upserted ${verificationRecords.length} verification records`);
+                }
+            }
+
+            // BATCH OPERATION 2: Award total XP in one call
+            if (totalXPAwarded > 0) {
+                // Get current user XP once
+                const { data: user } = await supabase
+                    .from('users')
+                    .select('xp_points')
+                    .eq('id', userId)
+                    .single();
+
+                // Update user XP once with total
+                await supabase
+                    .from('users')
+                    .update({ xp_points: (user?.xp_points || 0) + totalXPAwarded })
+                    .eq('id', userId);
+
+                // Call award_xp RPC once with total XP
+                const { error: awardError } = await supabase.rpc('award_xp', {
+                    p_user_id: userId,
+                    p_xp_type: 'subscription',
+                    p_amount: totalXPAwarded,
+                });
+
+                if (awardError) {
+                    console.error('[verify-subscriptions] Failed to award XP via RPC:', awardError);
+                    // Fallback: direct upsert for both periods (still batched - one per period)
+                    for (const periodType of ['monthly', 'weekly']) {
+                        const { data: existing } = await supabase
+                            .from('leaderboard_entries')
+                            .select('subscription_xp, game_xp, video_like_xp')
+                            .eq('user_id', userId)
+                            .eq('period_type', periodType)
+                            .maybeSingle();
+
+                        const { error: fallbackError } = await supabase
+                            .from('leaderboard_entries')
+                            .upsert({
+                                user_id: userId,
+                                period_type: periodType,
+                                subscription_xp: (existing?.subscription_xp || 0) + totalXPAwarded,
+                                game_xp: existing?.game_xp || 0,
+                                video_like_xp: existing?.video_like_xp || 0,
+                            }, { onConflict: 'user_id,period_type' });
+
+                        if (fallbackError) {
+                            console.error(`[verify-subscriptions] Fallback upsert failed for ${periodType}:`, fallbackError);
+                        }
+                    }
+                    console.log(`[verify-subscriptions] Awarded ${totalXPAwarded} subscription XP via fallback`);
+                } else {
+                    console.log(`[verify-subscriptions] Awarded ${totalXPAwarded} subscription XP via RPC`);
+                }
             }
         }
 
@@ -403,7 +474,7 @@ Deno.serve(async (req: Request) => {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error('[verify-subscriptions] Error:', errorMessage);
         return new Response(
-            JSON.stringify({ error: errorMessage }),
+            JSON.stringify({ success: false, error: errorMessage }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }

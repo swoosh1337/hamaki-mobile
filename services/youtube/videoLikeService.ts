@@ -32,6 +32,7 @@ interface EdgeFunctionResult {
         channelKey: string;
         liked: boolean;
         xpAwarded: number;
+        alreadyAwarded?: boolean;  // True if XP was previously awarded
     }>;
     totalXPAwarded: number;
     error?: string;
@@ -40,7 +41,7 @@ interface EdgeFunctionResult {
 /**
  * Get video statuses from database
  * ✅ Reads from server-synced youtube_channel_state table
- * ✅ Reads user's video_like_xp_awarded to determine XP status
+ * ✅ Reads from user_video_like_awards table to determine XP status (same source as Edge Function)
  * ✅ Zero YouTube API calls
  */
 export async function getVideoStatusesFromDB(userId?: string): Promise<VideoLikeStatus[]> {
@@ -49,21 +50,16 @@ export async function getVideoStatusesFromDB(userId?: string): Promise<VideoLike
     try {
         const channelStates = await channelStateService.getAll();
 
-        // Get user's awarded video likes if userId provided
+        // Get user's awarded video likes from the tracking table (same as Edge Function)
         let awardedVideoIds = new Set<string>();
         if (userId) {
-            const { data: userData } = await supabase
-                .from('users')
-                .select('video_like_xp_awarded')
-                .eq('id', userId)
-                .single();
+            const { data: awardedData } = await supabase
+                .from('user_video_like_awards')
+                .select('video_id')
+                .eq('user_id', userId);
 
-            if (userData?.video_like_xp_awarded) {
-                awardedVideoIds = new Set(
-                    Object.keys(userData.video_like_xp_awarded).filter(
-                        videoId => userData.video_like_xp_awarded?.[videoId] === true
-                    )
-                );
+            if (awardedData) {
+                awardedVideoIds = new Set(awardedData.map(a => a.video_id));
             }
         }
 
@@ -112,23 +108,20 @@ export async function verifyAndAwardVideoLikeXP(
         // Get all channel states from database
         const channelStates = await channelStateService.getAll();
 
-        // Get user's video_like_xp_awarded JSONB to check which videos already have XP
+        // Get user's awarded video likes from the tracking table (same as Edge Function)
         log.debug('Checking for existing awarded videos');
-        const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('video_like_xp_awarded')
-            .eq('id', userId)
-            .single();
+        const { data: awardedData, error: awardedError } = await supabase
+            .from('user_video_like_awards')
+            .select('video_id')
+            .eq('user_id', userId);
 
-        if (userError) {
-            log.error('Error checking existing awarded videos:', userError);
+        if (awardedError) {
+            log.error('Error checking existing awarded videos:', awardedError);
             // Continue anyway - worst case we re-verify
         }
 
         const awardedVideoIds = new Set<string>(
-            Object.keys(userData?.video_like_xp_awarded || {}).filter(
-                videoId => userData?.video_like_xp_awarded?.[videoId] === true
-            )
+            (awardedData || []).map(a => a.video_id)
         );
 
         log.debug(`Found ${awardedVideoIds.size} videos already awarded XP`);
@@ -236,16 +229,14 @@ export async function verifyAndAwardVideoLikeXP(
         }
 
         // Convert Edge Function results to VideoLikeStatus
-        // Build a set of video IDs that were just awarded XP in this request
-        const justAwardedVideoIds = new Set(
-            data.results.filter(r => (r.xpAwarded ?? 0) > 0).map(r => r.videoId)
-        );
-
+        // Use Edge Function's alreadyAwarded flag which is authoritative (from user_video_like_awards table)
         for (const state of channelStates) {
             const edgeResult = data.results.find(r => r.videoId === state.latest_video_id);
-            // Check: was it awarded before OR was it just awarded in this request?
-            const wasAlreadyAwarded = state.latest_video_id ? awardedVideoIds.has(state.latest_video_id) : false;
-            const wasJustAwarded = state.latest_video_id ? justAwardedVideoIds.has(state.latest_video_id) : false;
+
+            // Determine if XP was awarded:
+            // 1. alreadyAwarded = true from Edge Function means it was previously awarded
+            // 2. xpAwarded > 0 means it was just awarded in this request
+            const isXpAwarded = edgeResult?.alreadyAwarded === true || (edgeResult?.xpAwarded ?? 0) > 0;
 
             result.statuses.push({
                 channelKey: state.channel_key,
@@ -253,9 +244,9 @@ export async function verifyAndAwardVideoLikeXP(
                 latestVideoId: state.latest_video_id,
                 videoTitle: decodeHtmlEntities(state.latest_video_title),
                 videoThumbnail: state.latest_video_thumbnail || undefined,
-                isLiked: edgeResult?.liked ?? wasAlreadyAwarded ?? wasJustAwarded,
+                isLiked: edgeResult?.liked ?? false,
                 xpReward: VIDEO_LIKE_XP[state.channel_key] || 0,
-                xpAwarded: wasAlreadyAwarded || wasJustAwarded,  // Fixed: correctly includes just-awarded videos
+                xpAwarded: isXpAwarded,
                 lastChecked: Date.now(),
             });
         }

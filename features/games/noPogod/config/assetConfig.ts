@@ -8,9 +8,9 @@
 import type { GameAssetConfig } from '@/features/games/shared';
 
 // Import atlas JSON definitions
-import itemsAtlasJson from '@/assets/images/game/atlases/items.json';
-import miroAtlasJson from '@/assets/images/game/atlases/miro.json';
-import shonzikaAtlasJson from '@/assets/images/game/atlases/shonzika.json';
+import itemsAtlasJson from '../assets/atlases/items.json';
+import miroAtlasJson from '../assets/atlases/miro.json';
+import shonzikaAtlasJson from '../assets/atlases/shonzika.json';
 
 // Type for NoPogod atlas names
 export type NoPogodAtlasNames = 'miro' | 'shonzika' | 'items';
@@ -20,18 +20,18 @@ export type NoPogodAtlasNames = 'miro' | 'shonzika' | 'items';
  * Pass this to useGameAssets('noPogod', NOPOGOD_ASSET_CONFIG)
  */
 export const NOPOGOD_ASSET_CONFIG: Omit<GameAssetConfig, 'gameId'> = {
-    background: require('@/assets/images/game/atlases/bg.webp'),
+    background: require('../assets/atlases/bg.webp'),
     atlases: {
         miro: {
-            image: require('@/assets/images/game/atlases/miro.webp'),
+            image: require('../assets/atlases/miro.webp'),
             definition: miroAtlasJson as any,
         },
         shonzika: {
-            image: require('@/assets/images/game/atlases/shonzika.webp'),
+            image: require('../assets/atlases/shonzika.webp'),
             definition: shonzikaAtlasJson as any,
         },
         items: {
-            image: require('@/assets/images/game/atlases/items.webp'),
+            image: require('../assets/atlases/items.webp'),
             definition: itemsAtlasJson as any,
         },
     },

@@ -1,6 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BlurView } from 'expo-blur';
+import React, { useEffect, useState } from 'react';
+import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, {
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withSequence,
+    withTiming
+} from 'react-native-reanimated';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 import { GamesIcon } from '@/components/GamesIcon';
 import { HammockJumpGame } from '@/components/games/HammockJumpGame';
@@ -9,6 +19,7 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameCooldown } from '@/hooks/useGameCooldown';
 import { trackGamePlay } from '@/utils/analytics';
+import { GAME_COOLDOWN_MS, getAllGameCooldowns } from '@/utils/gameCooldowns';
 
 interface GameItem {
   id: string;
@@ -44,19 +55,51 @@ const GAMES: GameItem[] = [
 export default function GamesScreen() {
   const { userProfile, isDemoMode } = useAuth();
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
+  const [serverCooldownsSynced, setServerCooldownsSynced] = useState(false);
 
   // Use cooldown hooks for each game
+  // IDs must match server-side GameType: 'nopogod' and 'hammockjump'
   const noPogodCooldown = useGameCooldown({
-    gameId: 'no-pogodi',
-    cooldownMs: isDemoMode ? 0 : 15 * 60 * 1000, // 15 minutes, or no cooldown in demo
+    gameId: 'nopogod',
+    cooldownMs: isDemoMode ? 0 : GAME_COOLDOWN_MS, // 1 hour, or no cooldown in demo
     persist: true,
   });
 
   const hammockJumpCooldown = useGameCooldown({
-    gameId: 'hammock-jump',
-    cooldownMs: isDemoMode ? 0 : 15 * 60 * 1000, // 15 minutes, or no cooldown in demo
+    gameId: 'hammockjump',
+    cooldownMs: isDemoMode ? 0 : GAME_COOLDOWN_MS, // 1 hour, or no cooldown in demo
     persist: true,
   });
+
+  // Sync cooldown state from server on mount
+  // This ensures the UI reflects the actual server-side cooldown state
+  useEffect(() => {
+    if (!userProfile?.id || serverCooldownsSynced || isDemoMode) return;
+
+    const syncCooldowns = async () => {
+      try {
+        const serverCooldowns = await getAllGameCooldowns(userProfile.id, isDemoMode);
+
+        // Sync nopogod cooldown
+        const nopogodStatus = serverCooldowns.nopogod;
+        if (nopogodStatus && !nopogodStatus.canPlay && nopogodStatus.cooldownEndsAt) {
+          await noPogodCooldown.syncFromServer(nopogodStatus.cooldownEndsAt.getTime());
+        }
+
+        // Sync hammockjump cooldown
+        const hammockStatus = serverCooldowns.hammockjump;
+        if (hammockStatus && !hammockStatus.canPlay && hammockStatus.cooldownEndsAt) {
+          await hammockJumpCooldown.syncFromServer(hammockStatus.cooldownEndsAt.getTime());
+        }
+
+        setServerCooldownsSynced(true);
+      } catch (error) {
+        console.error('Failed to sync game cooldowns from server:', error);
+      }
+    };
+
+    syncCooldowns();
+  }, [userProfile?.id, serverCooldownsSynced, isDemoMode]);
 
   const handleGamePress = async (gameId: string) => {
     if (!userProfile?.id) {
@@ -65,6 +108,7 @@ export default function GamesScreen() {
     }
 
     // Check cooldown based on game
+    // Map display IDs to server IDs: 'no-pogodi' -> 'nopogod', 'hammock-jump' -> 'hammockjump'
     const cooldown = gameId === 'no-pogodi' ? noPogodCooldown : hammockJumpCooldown;
 
     if (cooldown.isOnCooldown) {
@@ -93,17 +137,58 @@ export default function GamesScreen() {
     const cooldown = game.id === 'no-pogodi' ? noPogodCooldown : hammockJumpCooldown;
     const isOnCooldown = cooldown.isOnCooldown;
 
+    // Pulse animation for lock icon
+    const pulse = useSharedValue(1);
+    
+    useEffect(() => {
+      if (isOnCooldown) {
+        pulse.value = withRepeat(
+          withSequence(
+            withTiming(1.2, { duration: 1000 }),
+            withTiming(1, { duration: 1000 })
+          ),
+          -1,
+          true
+        );
+      } else {
+        pulse.value = 1;
+      }
+    }, [isOnCooldown]);
+
+    const animatedLockStyle = useAnimatedStyle(() => ({
+      transform: [{ scale: pulse.value }],
+      opacity: pulse.value === 1 ? 1 : 0.8,
+    }));
+
     return (
       <TouchableOpacity
         key={game.id}
         style={[
           styles.gameCard,
-          { borderColor: game.color },
+          { borderColor: game.color + '40' },
           (!game.isAvailable || isOnCooldown) && styles.gameCardDisabled
         ]}
         onPress={() => handleGamePress(game.id)}
         disabled={!game.isAvailable || isOnCooldown}
       >
+        {/* Cooldown overlay with lock icon and countdown */}
+        {game.isAvailable && isOnCooldown && (
+          <BlurView intensity={80} tint="dark" style={styles.cooldownOverlay}>
+            <View style={styles.cooldownInner}>
+              <Animated.View style={[styles.lockIconContainer, animatedLockStyle]}>
+                <Ionicons name="lock-closed" size={20} color={Colors.dark.tint} />
+              </Animated.View>
+              <View style={styles.timerContainer}>
+                <Text style={styles.cooldownTimerText}>
+                  {cooldown.remainingFormatted}
+                </Text>
+                <View style={styles.cooldownBadge}>
+                  <Text style={styles.cooldownLabelText}>COOLDOWN</Text>
+                </View>
+              </View>
+            </View>
+          </BlurView>
+        )}
         <View style={[styles.gameIconContainer, { backgroundColor: game.color + '20' }]}>
           {game.id === 'no-pogodi' ? (
             <Ionicons
@@ -124,14 +209,6 @@ export default function GamesScreen() {
           </Text>
           {!game.isAvailable && (
             <Text style={styles.comingSoonBadge}>Coming Soon</Text>
-          )}
-          {game.isAvailable && isOnCooldown && (
-            <View style={styles.cooldownBadge}>
-              <Ionicons name="time-outline" size={14} color="#FFA500" />
-              <Text style={styles.cooldownText}>
-                {cooldown.remainingFormatted}
-              </Text>
-            </View>
           )}
         </View>
       </TouchableOpacity>
@@ -234,15 +311,67 @@ const styles = StyleSheet.create({
   },
   gameCard: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(245, 245, 245, 0.05)',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(196, 255, 0, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(196, 255, 0, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
   gameCardDisabled: {
-    opacity: 0.5,
-    borderColor: 'rgba(245, 245, 245, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  cooldownOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    overflow: 'hidden',
+  },
+  cooldownInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: 20,
+  },
+  lockIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(196, 255, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timerContainer: {
+    alignItems: 'flex-start',
+  },
+  cooldownTimerText: {
+    fontSize: 32,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.tint,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  cooldownBadge: {
+    backgroundColor: 'rgba(196, 255, 0, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 2,
+  },
+  cooldownLabelText: {
+    fontSize: 10,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.tint,
+    letterSpacing: 1,
+    fontWeight: 'bold',
   },
   gameIconContainer: {
     width: 60,
@@ -287,23 +416,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     alignSelf: 'flex-start',
     fontWeight: 'bold',
-  },
-  cooldownBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: 'rgba(255, 165, 0, 0.2)',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  cooldownText: {
-    fontSize: 12,
-    fontFamily: 'HamakiEng',
-    color: '#FFA500',
-    fontWeight: '600',
   },
   xpInfoContainer: {
     flexDirection: 'row',

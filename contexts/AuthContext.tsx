@@ -408,6 +408,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   /**
    * Handle deep link for magic link callback
+   *
+   * SECURITY: Validates URL scheme and origin before processing
    */
   const handleDeepLink = useCallback(async (url: string) => {
     if (!url) return;
@@ -418,6 +420,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Filter out internal Expo router paths if they aren't auth related
     if (url.includes('expo-router')) {
       log.debug('Ignoring internal expo-router URL');
+      return;
+    }
+
+    // SECURITY: Validate URL scheme
+    // Only accept URLs from our registered schemes
+    const ALLOWED_SCHEMES = [
+      'hamaki://',
+      'com.googleusercontent.apps.986216455734-m439aeo0u7s8et0gvhgcs9t54j8uabn3://',
+      'exp://', // Dev mode
+      'https://xzuvhsybjmdkhyfreybo.supabase.co', // Supabase auth callback
+    ];
+
+    const isValidScheme = ALLOWED_SCHEMES.some(scheme =>
+      url.toLowerCase().startsWith(scheme.toLowerCase())
+    );
+
+    if (!isValidScheme) {
+      log.warn('SECURITY: Rejecting deep link with unknown scheme:', { url: url.substring(0, 50) });
       return;
     }
 

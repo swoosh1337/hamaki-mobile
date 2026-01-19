@@ -185,6 +185,17 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // Start cron job logging
+    let logId: string | null = null;
+    try {
+        const { data: startData } = await supabase.rpc('start_cron_job', {
+            p_job_name: 'sync-youtube-videos'
+        });
+        logId = startData;
+    } catch (logError) {
+        console.error('[sync-youtube-videos] Failed to start cron job log:', logError);
+    }
+
     const results = {
         updated: [] as string[],
         unchanged: [] as string[],
@@ -407,8 +418,30 @@ Deno.serve(async (req: Request) => {
 
     console.log('[sync-youtube-videos] Completed', results);
 
+    // Complete cron job logging
+    if (logId) {
+        try {
+            const hasErrors = results.errors.length > 0;
+            if (hasErrors) {
+                await supabase.rpc('fail_cron_job', {
+                    p_log_id: logId,
+                    p_error_message: `Errors in channels: ${results.errors.join(', ')}`,
+                    p_result: results
+                });
+            } else {
+                await supabase.rpc('complete_cron_job', {
+                    p_log_id: logId,
+                    p_result: results
+                });
+            }
+        } catch (logError) {
+            console.error('[sync-youtube-videos] Failed to complete cron job log:', logError);
+        }
+    }
+
     return new Response(
         JSON.stringify({
+            success: true,
             message: 'YouTube sync completed',
             results,
         }),

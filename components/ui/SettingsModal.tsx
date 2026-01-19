@@ -37,7 +37,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     pendingVideoLikeCount,
     subscriptionStatuses,
     videoLikeStatuses,
-    refreshAll
+    reloadFromCache,
   } = useYouTubeVerification();
 
   // Use pre-calculated counts from hook (ensures consistency with profile badge)
@@ -50,22 +50,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Refresh data when video likes or subscriptions modals close
   // This ensures badges update after user verifies likes/subscriptions
+  // Uses reloadFromCache (not refreshAll) since child component already updated the cache
   React.useEffect(() => {
-    // If modal just closed, refresh data
+    // If modal just closed, reload cached data to update badge counts
     if ((prevShowVideoLikes.current && !showVideoLikes) || (prevShowSubscriptions.current && !showSubscriptions)) {
-      refreshAll();
+      reloadFromCache();
     }
 
     // Update refs for next render
     prevShowVideoLikes.current = showVideoLikes;
     prevShowSubscriptions.current = showSubscriptions;
-  }, [showVideoLikes, showSubscriptions, refreshAll]);
+  }, [showVideoLikes, showSubscriptions, reloadFromCache]);
 
   const handleSignOut = async () => {
     const title = isDemoMode ? 'Exit Demo' : 'Sign Out';
     const message = isDemoMode
       ? 'Are you sure you want to exit demo mode?'
-      : 'Are you sure you want to sign out?';
+      : 'დარწმუნებული ხარ რომ გინდა გამოსვლა?';
     const buttonText = isDemoMode ? 'Exit Demo' : 'Sign Out';
 
     Alert.alert(

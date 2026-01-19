@@ -1,17 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  Dimensions,
-  Image,
-  Modal,
-  PanResponder,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    Dimensions,
+    Image,
+    ImageBackground,
+    Modal,
+    PanResponder,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -30,9 +32,9 @@ import { useGameCooldown } from '@/hooks/useGameCooldown';
 import { useMyLeaderboardStatus } from '@/hooks/useMyLeaderboardStatus';
 import { edgeFunctionQueueService } from '@/services/queue';
 import {
-  generateSessionId,
-  generateXPIdempotencyKey,
-  isRetryableError,
+    generateSessionId,
+    generateXPIdempotencyKey,
+    isRetryableError,
 } from '@/types/edgeFunctionQueue';
 import type { AwardXPResult } from '@/types/leaderboard';
 import { trackGameEnd, trackGameStart, trackXPEarned } from '@/utils/analytics';
@@ -76,18 +78,20 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const [xpAwarded, setXpAwarded] = useState(false);
   const [highScore, setHighScore] = useState<number>(0);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
-  const [roundsPlayed, setRoundsPlayed] = useState(0);
   const [showCooldownScreen, setShowCooldownScreen] = useState(false);
-  const MAX_ROUNDS = 3; // Maximum rounds before cooldown
 
-  // Game cooldown hook - persists across app restarts
+  // Game cooldown hook - persists cooldown AND rounds across app restarts
   const {
     remainingFormatted: cooldownRemainingFormatted,
     isOnCooldown,
     startCooldown,
+    roundsPlayed,
+    maxRounds: MAX_ROUNDS,
+    incrementRounds,
   } = useGameCooldown({
     gameId: 'nopogod',
     cooldownMs: GAME_COOLDOWN_MS,
+    maxRounds: 3,
     persist: true,
   });
 
@@ -371,6 +375,15 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
       if (gameState?.phase === 'GAME_OVER' && !xpAwarded && userProfile && gameState.score > 0) {
         setXpAwarded(true);
 
+        // Increment rounds played (persisted to storage via hook)
+        // incrementRounds updates state immediately, then persists async
+        const newRoundsPlayed = await incrementRounds();
+        log.debug(`Round ${newRoundsPlayed}/${MAX_ROUNDS} completed`);
+
+        // Check if user has reached max rounds (only for non-demo users)
+        // Skip cooldown if DISABLE_GAME_COOLDOWN flag is enabled
+        const shouldStartCooldown = !isDemoMode && !DISABLE_GAME_COOLDOWN && newRoundsPlayed >= MAX_ROUNDS;
+
         // Stop background music
         if (audioManagerRef.current) {
           audioManagerRef.current.stopBackground();
@@ -529,19 +542,23 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
           }
         }
 
-        // Increment rounds played
-        const newRoundsPlayed = roundsPlayed + 1;
-        setRoundsPlayed(newRoundsPlayed);
-
-        // Check if user has reached max rounds (only for non-demo users)
-        // Skip cooldown if DISABLE_GAME_COOLDOWN flag is enabled
-        if (!isDemoMode && !DISABLE_GAME_COOLDOWN && newRoundsPlayed >= MAX_ROUNDS) {
+        // Start cooldown if max rounds reached (checked earlier synchronously)
+        if (shouldStartCooldown) {
           log.info(`Max rounds reached (${MAX_ROUNDS}). Starting cooldown...`);
 
           // Start the cooldown using the hook (persists to AsyncStorage)
           try {
             await startCooldown();
             log.info('Game cooldown started via hook');
+
+            // Also record cooldown on the server (for cross-device sync)
+            try {
+              const { recordGamePlay } = await import('@/utils/gameCooldowns');
+              await recordGamePlay(userProfile.id, NOPOGOD_GAME_ID, isDemoMode);
+              log.info('Game cooldown recorded on server');
+            } catch (serverError) {
+              log.error('Error recording cooldown on server (non-fatal):', serverError);
+            }
 
             // Show cooldown screen after a short delay
             setTimeout(() => {
@@ -567,7 +584,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
     updateUserProfile,
     updateFromAwardXP,
     isDemoMode,
-    roundsPlayed,
+    incrementRounds,
     startCooldown,
     checkAndSaveHighScore,
   ]);
@@ -729,17 +746,14 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
         )}
 
         <View style={styles.gameOverButtons}>
-          {/* Try Again button - always visible */}
-          <TouchableOpacity style={styles.startButton} onPress={() => {
-            // Reset rounds if at max
-            if (roundsPlayed >= MAX_ROUNDS) {
-              setRoundsPlayed(0);
-              setXpAwarded(false);
-            }
-            restartGame();
-          }} activeOpacity={0.8}>
-            <Text style={styles.buttonText}>TRY AGAIN</Text>
-          </TouchableOpacity>
+          {/* Try Again button - hidden if cooldown is active */}
+          {!isOnCooldown && (
+            <TouchableOpacity style={styles.startButton} onPress={() => {
+              restartGame();
+            }} activeOpacity={0.8}>
+              <Text style={styles.buttonText}>TRY AGAIN</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.exitButton} onPress={exitGame} activeOpacity={0.8}>
             <Text style={styles.exitButtonText}>EXIT</Text>
           </TouchableOpacity>
@@ -752,40 +766,47 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const renderCooldownScreen = () => {
     return (
       <View style={styles.cooldownScreenContainer}>
-        <View style={styles.cooldownContent}>
-          <Text style={styles.cooldownIcon}>⏰</Text>
-          <Text style={styles.cooldownTitle}>Cooldown-ი დაგედო</Text>
-          <Text style={styles.cooldownMessage}>
-            შენ ითამაშე {MAX_ROUNDS} ხელი!
-          </Text>
+        <ImageBackground 
+          source={require('@/features/games/noPogod/assets/launch_Screen.png')} 
+          style={styles.cooldownBackground}
+          blurRadius={10}
+        >
+          <BlurView intensity={80} tint="dark" style={styles.cooldownBlur}>
+            <View style={styles.cooldownContent}>
+              <View style={styles.cooldownIconContainer}>
+                <Ionicons name="time" size={60} color={Colors.dark.tint} />
+              </View>
+              
+              <Text style={styles.cooldownTitle}>COOLDOWN ACTIVE</Text>
+              
+              <View style={styles.timerDisplay}>
+                <Text style={styles.cooldownTimer}>{cooldownRemainingFormatted}</Text>
+              </View>
 
-          {/* Show actual remaining time from the cooldown hook */}
-          <Text style={styles.cooldownTimer}>
-            {cooldownRemainingFormatted}
-          </Text>
+              <Text style={styles.cooldownMessage}>
+                შენ ითამაშე {MAX_ROUNDS} ხელი!{'\n'}
+                დაელოდე cooldown-ს რომ თავიდან ითამაშო!
+              </Text>
 
-          <Text style={styles.cooldownSubtext}>
-            შეტყობინებას მიიღებ როცა თამაში ახლიდან შეგეძლება{'\n'}
-          </Text>
+              <View style={styles.cooldownStats}>
+                <Text style={styles.cooldownStatsText}>
+                  ხელი ნათამაშები: {MAX_ROUNDS}/{MAX_ROUNDS}
+                </Text>
+              </View>
 
-          <View style={styles.cooldownStats}>
-            <Text style={styles.cooldownStatsText}>
-              ხელი ნათამაშები: {MAX_ROUNDS}/{MAX_ROUNDS}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.cooldownButton}
-            onPress={() => {
-              setShowCooldownScreen(false);
-              // Don't reset roundsPlayed - the cooldown state is managed by the hook
-              onClose();
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.cooldownButtonText}>დაბრუნება</Text>
-          </TouchableOpacity>
-        </View>
+              <TouchableOpacity
+                style={styles.cooldownButton}
+                onPress={() => {
+                  setShowCooldownScreen(false);
+                  onClose();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cooldownButtonText}>დაბრუნება</Text>
+              </TouchableOpacity>
+            </View>
+          </BlurView>
+        </ImageBackground>
       </View>
     );
   };
@@ -1007,7 +1028,7 @@ const styles = StyleSheet.create({
   scoreText: {
     fontSize: 18,
     fontFamily: 'SpaceMono',
-    color: Colors.dark.tint,
+    color: '#FFD700', // Gold - represents points/achievement
     fontWeight: 'bold',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 1, height: 1 },
@@ -1016,7 +1037,7 @@ const styles = StyleSheet.create({
   livesText: {
     fontSize: 16,
     fontFamily: 'SpaceMono',
-    color: Colors.dark.tint,
+    color: '#FF6B6B', // Coral red - represents health/lives
     fontWeight: 'bold',
     marginTop: 4,
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
@@ -1026,7 +1047,7 @@ const styles = StyleSheet.create({
   timerText: {
     fontSize: 16,
     fontFamily: 'SpaceMono',
-    color: Colors.dark.tint,
+    color: '#4ECDC4', // Cyan/teal - represents time
     fontWeight: 'bold',
     marginTop: 4,
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
@@ -1209,83 +1230,98 @@ const styles = StyleSheet.create({
   // Cooldown Screen Styles
   cooldownScreenContainer: {
     flex: 1,
-    backgroundColor: Colors.dark.background,
+    backgroundColor: '#000',
+  },
+  cooldownBackground: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  cooldownBlur: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 30,
   },
   cooldownContent: {
-    backgroundColor: 'rgba(245, 245, 245, 0.05)',
-    borderRadius: 20,
-    padding: 40,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 165, 0, 0.3)',
-    maxWidth: 400,
     width: '100%',
   },
-  cooldownIcon: {
-    fontSize: 80,
-    marginBottom: 20,
-  },
-  cooldownTitle: {
-    fontSize: 32,
-    fontFamily: 'HamakiENG',
-    color: '#FFA500',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  cooldownMessage: {
-    fontSize: 20,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.text,
-    textAlign: 'center',
-    marginBottom: 12,
-    fontWeight: '600',
-  },
-  cooldownTimer: {
-    fontSize: 48,
-    fontFamily: 'SpaceMono',
-    color: '#FFA500',
-    textAlign: 'center',
-    marginBottom: 16,
-    fontWeight: '700',
-  },
-  cooldownSubtext: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.text,
-    textAlign: 'center',
-    opacity: 0.7,
-    lineHeight: 24,
+  cooldownIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    borderWidth: 2,
+    borderColor: 'rgba(196, 255, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 24,
   },
+  cooldownTitle: {
+    fontSize: 24,
+    fontFamily: 'SpaceMono',
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    letterSpacing: 2,
+    marginBottom: 16,
+    opacity: 0.9,
+  },
+  timerDisplay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(196, 255, 0, 0.2)',
+    marginBottom: 30,
+  },
+  cooldownTimer: {
+    fontSize: 56,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.tint,
+    fontWeight: 'bold',
+  },
+  cooldownMessage: {
+    fontSize: 16,
+    fontFamily: 'HamakiGeo',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 20,
+    opacity: 0.7,
+  },
   cooldownStats: {
-    backgroundColor: 'rgba(255, 165, 0, 0.1)',
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
     marginBottom: 32,
     borderWidth: 1,
-    borderColor: 'rgba(255, 165, 0, 0.3)',
+    borderColor: 'rgba(196, 255, 0, 0.3)',
   },
   cooldownStatsText: {
     fontSize: 16,
     fontFamily: 'SpaceMono',
-    color: '#FFA500',
+    color: Colors.dark.tint,
     fontWeight: '600',
   },
   cooldownButton: {
     backgroundColor: Colors.dark.tint,
-    paddingVertical: 16,
-    paddingHorizontal: 40,
-    borderRadius: 12,
+    paddingVertical: 18,
+    paddingHorizontal: 60,
+    borderRadius: 30,
     minWidth: 200,
     alignItems: 'center',
+    shadowColor: Colors.dark.tint,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   cooldownButtonText: {
     fontSize: 18,
-    fontFamily: 'SpaceMono',
+    fontFamily: 'HamakiGeo',
     color: Colors.dark.background,
     fontWeight: 'bold',
   },

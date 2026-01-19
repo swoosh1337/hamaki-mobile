@@ -176,8 +176,22 @@ export async function recordGamePlay(
   gameType: string, // Accept string to be more flexible, but internally map to GameType
   isDemoMode: boolean = false
 ): Promise<{ success: boolean; error?: string }> {
-  // Map game names if necessary or validate
-  const validGameType = gameType === 'hammock-jump' ? 'hammockjump' : (gameType as GameType);
+  // Map game names if necessary (different IDs used in different places)
+  // Server-side expects: 'nopogod', 'hammockjump'
+  let validGameType: GameType;
+
+  switch (gameType.toLowerCase()) {
+    case 'nopogod':
+    case 'no-pogodi':
+      validGameType = 'nopogod';
+      break;
+    case 'hammockjump':
+    case 'hammock-jump':
+      validGameType = 'hammockjump';
+      break;
+    default:
+      validGameType = gameType as GameType;
+  }
 
   return updateGameLastPlayed(userId, validGameType, isDemoMode);
 }

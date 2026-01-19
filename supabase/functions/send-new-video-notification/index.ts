@@ -123,7 +123,7 @@ Deno.serve(async (req: Request) => {
         if (req.method !== 'POST') {
             console.error('[send-new-video-notification] Method not allowed:', req.method);
             return new Response(
-                JSON.stringify({ error: 'Method not allowed' }),
+                JSON.stringify({ success: false, error: 'Method not allowed' }),
                 { status: 405, headers: { 'Content-Type': 'application/json' } }
             );
         }
@@ -140,7 +140,7 @@ Deno.serve(async (req: Request) => {
         } catch (parseError) {
             console.error('[send-new-video-notification] Failed to parse body:', parseError);
             return new Response(
-                JSON.stringify({ error: 'Invalid JSON body' }),
+                JSON.stringify({ success: false, error: 'Invalid JSON body' }),
                 { status: 400, headers: { 'Content-Type': 'application/json' } }
             );
         }
@@ -150,7 +150,7 @@ Deno.serve(async (req: Request) => {
         if (!videoId || !videoTitle) {
             console.error('[send-new-video-notification] Missing required fields');
             return new Response(
-                JSON.stringify({ error: 'Missing videoId or videoTitle' }),
+                JSON.stringify({ success: false, error: 'Missing videoId or videoTitle' }),
                 { status: 400, headers: { 'Content-Type': 'application/json' } }
             );
         }
@@ -168,7 +168,7 @@ Deno.serve(async (req: Request) => {
         if (error) {
             console.error('Failed to query users:', error);
             return new Response(
-                JSON.stringify({ error: 'Failed to query users' }),
+                JSON.stringify({ success: false, error: 'Failed to query users' }),
                 { status: 500, headers: { 'Content-Type': 'application/json' } }
             );
         }
@@ -244,6 +244,7 @@ Deno.serve(async (req: Request) => {
         console.error('Error sending notifications:', error);
         return new Response(
             JSON.stringify({
+                success: false,
                 error: 'Failed to send notifications',
                 details: error instanceof Error ? error.message : String(error)
             }),
