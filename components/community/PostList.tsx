@@ -54,9 +54,9 @@ export const PostList: React.FC<PostListProps> = ({
         return (
             <View style={styles.emptyPostsContainer}>
                 <Ionicons name="people-outline" size={64} color={Colors.dark.tabIconDefault} />
-                <Text style={styles.emptyTitle}>No Community Posts Yet</Text>
+                <Text style={styles.emptyTitle}>Community-ის პოსტები არ არსებობს</Text>
                 <Text style={styles.emptyDescription}>
-                    Be the first to share a video idea! Your suggestions help shape future content.
+                   იყავი პირველი ვინც დაპოსტავს
                 </Text>
             </View>
         );
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     },
     emptyTitle: {
         fontSize: 24,
-        fontFamily: 'HamakiEng',
+        fontFamily: 'SpaceMono',
         color: Colors.dark.tint,
         marginTop: 16,
         marginBottom: 8,

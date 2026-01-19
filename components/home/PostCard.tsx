@@ -72,9 +72,20 @@ export const PostCard: React.FC<PostCardProps> = ({
     e.stopPropagation();
     if (post.type === 'hiring' && post.metadata.applicationUrl) {
       try {
-        const canOpen = await Linking.canOpenURL(post.metadata.applicationUrl);
+        let url = post.metadata.applicationUrl;
+
+        // Add proper scheme if missing
+        if (url.includes('@') && !url.includes(':')) {
+          // It's an email address without mailto: scheme
+          url = `mailto:${url}`;
+        } else if (!url.includes('://')) {
+          // It's a URL without scheme
+          url = `https://${url}`;
+        }
+
+        const canOpen = await Linking.canOpenURL(url);
         if (canOpen) {
-          await Linking.openURL(post.metadata.applicationUrl);
+          await Linking.openURL(url);
         } else {
           Alert.alert(
             'ბმული მიუწვდომელია',

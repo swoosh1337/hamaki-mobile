@@ -340,40 +340,16 @@ export default function GamesScreen() {
 
   const renderGameCard = (game: GameItem) => {
     const cooldown = game.id === 'no-pogodi' ? noPogodCooldown : hammockJumpCooldown;
-    const isOnCooldown = cooldown.isOnCooldown;
 
-    // Pulse animation for lock icon
-    const pulse = useSharedValue(1);
-    
-    useEffect(() => {
-      if (isOnCooldown) {
-        pulse.value = withRepeat(
-          withSequence(
-            withTiming(1.2, { duration: 1000 }),
-            withTiming(1, { duration: 1000 })
-          ),
-          -1,
-          true
-        );
-      } else {
-        pulse.value = 1;
-      }
-    }, [isOnCooldown]);
-
-    const animatedLockStyle = useAnimatedStyle(() => ({
-      transform: [{ scale: pulse.value }],
-      opacity: pulse.value === 1 ? 1 : 0.8,
-    }));
-
-  return (
-    <GameCard
-      key={game.id}
-      game={game}
-      cooldown={cooldown}
-      onPress={handleGamePress}
-    />
-  );
-};
+    return (
+      <GameCard
+        key={game.id}
+        game={game}
+        cooldown={cooldown}
+        onPress={handleGamePress}
+      />
+    );
+  };
 
   return (
     <View style={styles.container}>

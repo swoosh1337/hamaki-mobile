@@ -626,6 +626,8 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
               highScore={highScore}
               isNewHighScore={isNewHighScore}
               xpEarned={gameState?.phase === 'GAME_OVER' ? Math.max(1, Math.floor((gameState?.score || 0) / 50)) : 0}
+              roundsPlayed={roundsPlayed}
+              maxRounds={MAX_ROUNDS}
             />
             {audioAvailable === false && (
               <Text style={styles.audioWarning}>ხმა დროებით მიუწვდომელია</Text>
