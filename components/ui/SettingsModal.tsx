@@ -5,6 +5,7 @@ import {
   Alert,
   Modal,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -16,6 +17,9 @@ import { VideoLikesManager } from '@/components/subscriptions/VideoLikesManager'
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('SettingsModal');
 
 interface SettingsModalProps {
   visible: boolean;
@@ -37,7 +41,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     pendingVideoLikeCount,
     subscriptionStatuses,
     videoLikeStatuses,
-    refreshAll
+    reloadFromCache,
   } = useYouTubeVerification();
 
   // Use pre-calculated counts from hook (ensures consistency with profile badge)
@@ -50,22 +54,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Refresh data when video likes or subscriptions modals close
   // This ensures badges update after user verifies likes/subscriptions
+  // Uses reloadFromCache (not refreshAll) since child component already updated the cache
   React.useEffect(() => {
-    // If modal just closed, refresh data
+    // If modal just closed, reload cached data to update badge counts
     if ((prevShowVideoLikes.current && !showVideoLikes) || (prevShowSubscriptions.current && !showSubscriptions)) {
-      refreshAll();
+      reloadFromCache();
     }
 
     // Update refs for next render
     prevShowVideoLikes.current = showVideoLikes;
     prevShowSubscriptions.current = showSubscriptions;
-  }, [showVideoLikes, showSubscriptions, refreshAll]);
+  }, [showVideoLikes, showSubscriptions, reloadFromCache]);
 
   const handleSignOut = async () => {
     const title = isDemoMode ? 'Exit Demo' : 'Sign Out';
     const message = isDemoMode
       ? 'Are you sure you want to exit demo mode?'
-      : 'Are you sure you want to sign out?';
+      : 'დარწმუნებული ხარ რომ გინდა გამოსვლა?';
     const buttonText = isDemoMode ? 'Exit Demo' : 'Sign Out';
 
     Alert.alert(
@@ -77,9 +82,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           text: buttonText,
           style: 'destructive',
           onPress: async () => {
-            onClose();
-            await signOut();
-            router.replace('/auth');
+            try {
+              await signOut();
+              onClose();
+              router.replace('/auth');
+            } catch (error) {
+              log.error('Failed to sign out', error);
+              Alert.alert('შეცდომა', 'გამოსვლა ვერ მოხერხდა. გთხოვთ სცადოთ ახლიდან.');
+            }
           },
         },
       ]
@@ -115,7 +125,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 Alert.alert('შეცდომა', 'ანგარიშის წაშლა ვერ მოხერხდა. გთხოვთ სცადოთ მოგვიანებით.');
               }
             } catch (error) {
-              console.error('Failed to delete account', error);
+              log.error('Failed to delete account', error);
               Alert.alert('შეცდომა', 'ანგარიშის წაშლა ვერ მოხერხდა. გთხოვთ სცადოთ მოგვიანებით.');
             }
           },
@@ -145,26 +155,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </View>
 
         {/* Content */}
-        <View style={styles.content}>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Account Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>პროფილი</Text>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleDot} />
+              <Text style={styles.sectionTitle}>პროფილი</Text>
+            </View>
             <View style={styles.accountInfo}>
               <View style={styles.accountRow}>
-                <Text style={styles.label}>ელფოსტა:</Text>
+                <View style={styles.labelGroup}>
+                  <Ionicons name="mail-outline" size={16} color={Colors.dark.text} style={styles.iconMuted} />
+                  <Text style={styles.label}>ელფოსტა</Text>
+                </View>
                 <Text style={styles.value}>{userProfile?.email}</Text>
               </View>
+              <View style={styles.accountRowSeparator} />
               <View style={styles.accountRow}>
-                <Text style={styles.label}>სახელი:</Text>
-                <Text style={styles.value}>{userProfile?.full_name}</Text>
+                <View style={styles.labelGroup}>
+                  <Ionicons name="person-outline" size={16} color={Colors.dark.text} style={styles.iconMuted} />
+                  <Text style={styles.label}>სახელი</Text>
+                </View>
+                <Text style={styles.value} numberOfLines={1}>{userProfile?.full_name}</Text>
               </View>
               {isDemoMode && (
-                <View style={styles.accountRow}>
-                  <Text style={styles.label}>Account Type:</Text>
-                  <View style={styles.demoTag}>
-                    <Text style={styles.demoTagText}>Demo Account</Text>
+                <>
+                  <View style={styles.accountRowSeparator} />
+                  <View style={styles.accountRow}>
+                    <View style={styles.labelGroup}>
+                      <Ionicons name="shield-checkmark-outline" size={16} color={Colors.dark.text} style={styles.iconMuted} />
+                      <Text style={styles.label}>Account Type</Text>
+                    </View>
+                    <View style={styles.demoTag}>
+                      <Text style={styles.demoTagText}>Demo Account</Text>
+                    </View>
                   </View>
-                </View>
+                </>
               )}
             </View>
           </View>
@@ -172,7 +198,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Earn XP Section */}
           {!isDemoMode && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>დააგროვე მეტი XP</Text>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleDot} />
+                <Text style={styles.sectionTitle}>დააგროვე მეტი XP</Text>
+              </View>
 
               {/* Magic Link users can't verify YouTube */}
               {authMethod !== 'google' ? (
@@ -184,7 +213,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </Text>
                 </View>
               ) : (
-                <>
+                <View style={styles.xpCardsContainer}>
                   {/* Channel Subscriptions */}
                   <TouchableOpacity
                     style={styles.subscriptionsCard}
@@ -193,7 +222,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   >
                     <View style={styles.subscriptionsCardContent}>
                       <View style={styles.subscriptionsIcon}>
-                        <Ionicons name="logo-youtube" size={24} color="#FF0000" />
+                        <View style={styles.iconCircle}>
+                          <Ionicons name="logo-youtube" size={24} color="#FF0000" />
+                        </View>
                         {/* Badge for pending subscriptions */}
                         {pendingSubscriptions > 0 && (
                           <View style={styles.badge}>
@@ -207,19 +238,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           მიიღე 3,100 XP-მდე ყველა არხის გამოწერით
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={24} color={Colors.dark.tint} />
+                      <Ionicons name="chevron-forward" size={20} color={Colors.dark.tint} style={styles.chevronMuted} />
                     </View>
                   </TouchableOpacity>
 
                   {/* Video Likes */}
                   <TouchableOpacity
-                    style={[styles.subscriptionsCard, { marginTop: 12 }]}
+                    style={styles.subscriptionsCard}
                     onPress={() => setShowVideoLikes(true)}
                     activeOpacity={0.7}
                   >
                     <View style={styles.subscriptionsCardContent}>
                       <View style={styles.subscriptionsIcon}>
-                        <Ionicons name="thumbs-up" size={24} color={Colors.dark.tint} />
+                        <View style={styles.iconCircle}>
+                          <Ionicons name="thumbs-up" size={24} color={Colors.dark.tint} />
+                        </View>
                         {/* Badge for pending video likes */}
                         {pendingVideoLikes > 0 && (
                           <View style={styles.badge}>
@@ -233,40 +266,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           დააგროვე 500 XP-მდე ბოლო ვიდეობის დალაიქებით
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={24} color={Colors.dark.tint} />
+                      <Ionicons name="chevron-forward" size={20} color={Colors.dark.tint} style={styles.chevronMuted} />
                     </View>
                   </TouchableOpacity>
-                </>
+                </View>
               )}
             </View>
           )}
 
-          {/* About Section */}
-          {/* <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About</Text>
-            <Text style={styles.description}> 
-              Hamaki v1.0.0{'\n'}
-              {isDemoMode
-                ? 'Demo Mode - For Apple Review' + '\n\n' + 'This is a demonstration version showing all app features without requiring YouTube subscription.'
-                : 'Exclusive app for HamaKi Studio subscribers' + '\n\n' + 'Stay connected with the latest content and exclusive features!'
-              }
-            </Text>
-          </View> */}
+          <View style={styles.footerActions}>
+            {/* Delete Account Button - Required for Apple App Store */}
+            {!isDemoMode && (
+              <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount} activeOpacity={0.6}>
+                <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                <Text style={styles.deleteAccountText}>ანგარიშის წაშლა</Text>
+              </TouchableOpacity>
+            )}
 
-          {/* Delete Account Button - Required for Apple App Store */}
-          {!isDemoMode && (
-            <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount}>
-              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-              <Text style={styles.deleteAccountText}>ანგარიშის წაშლა</Text>
+            {/* Sign Out Button */}
+            <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.8}>
+              <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.signOutText}>{isDemoMode ? 'Exit Demo' : 'გამოსვლა'}</Text>
             </TouchableOpacity>
-          )}
-
-          {/* Sign Out Button */}
-          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-            <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.signOutText}>{isDemoMode ? 'Exit Demo' : 'გამოსვლა'}</Text>
-          </TouchableOpacity>
-        </View>
+          </View>
+        </ScrollView>
       </SafeAreaView>
 
       {/* Channel Subscriptions Modal */}
@@ -345,10 +368,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontFamily: 'hamaki-eng',
+    fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
     fontWeight: 'bold',
-    paddingHorizontal: 3, // Prevent italic font cropping
   },
   closeButton: {
     width: 24,
@@ -367,113 +389,107 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
-    marginBottom: 15,
     fontWeight: 'bold',
     paddingHorizontal: 6, // Prevent italic font cropping
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  sectionTitleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.dark.tint,
+    marginRight: 10,
+  },
   accountInfo: {
     backgroundColor: 'rgba(245, 245, 245, 0.05)',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(196, 255, 0, 0.2)',
+    borderColor: 'rgba(196, 255, 0, 0.1)',
   },
   accountRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  accountRowSeparator: {
+    height: 1,
+    backgroundColor: 'rgba(196, 255, 0, 0.05)',
+    width: '100%',
+  },
+  labelGroup: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 2,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
-    opacity: 0.7,
+    opacity: 0.5,
+  },
+  iconMuted: {
+    opacity: 0.5,
+  },
+  chevronMuted: {
+    opacity: 0.8,
   },
   value: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
     fontWeight: '500',
-    flex: 1,
+    flexShrink: 1,
     textAlign: 'right',
-    marginLeft: 16,
+    minWidth: '50%',
   },
   demoTag: {
     backgroundColor: Colors.dark.tint,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
   },
   demoTagText: {
-    fontSize: 12,
+    fontSize: 10,
     fontFamily: 'SpaceMono',
     color: Colors.dark.background,
     fontWeight: 'bold',
   },
-  description: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.text,
-    opacity: 0.8,
-    lineHeight: 24,
-  },
-  deleteAccountButton: {
-    backgroundColor: 'transparent',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginTop: 'auto',
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-  },
-  deleteAccountText: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    color: '#FF3B30',
-    fontWeight: 'bold',
-  },
-  signOutButton: {
-    backgroundColor: '#FF6B6B',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginBottom: 40,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  signOutText: {
-    fontSize: 18,
-    fontFamily: 'SpaceMono',
-    color: '#FFFFFF',
-    fontWeight: 'bold',
+  xpCardsContainer: {
+    gap: 12,
   },
   subscriptionsCard: {
-    backgroundColor: 'rgba(196, 255, 0, 0.1)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(196, 255, 0, 0.2)',
+    borderColor: 'rgba(196, 255, 0, 0.1)',
   },
   subscriptionsCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    gap: 12,
+    gap: 16,
   },
   subscriptionsIcon: {
+    position: 'relative',
+  },
+  iconCircle: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   subscriptionsText: {
     flex: 1,
@@ -482,14 +498,57 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
-    fontWeight: '600',
+    fontWeight: 'bold',
     marginBottom: 4,
   },
   subscriptionsDescription: {
     fontSize: 12,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
-    opacity: 0.7,
+    opacity: 0.6,
+    lineHeight: 16,
+  },
+  footerActions: {
+    marginTop: 20,
+    gap: 12,
+    paddingBottom: 40,
+  },
+  deleteAccountButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.3)',
+  },
+  deleteAccountText: {
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+    color: '#FF3B30',
+    fontWeight: 'bold',
+  },
+  signOutButton: {
+    backgroundColor: '#FF6B6B',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  signOutText: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   subscriptionsModal: {
     flex: 1,

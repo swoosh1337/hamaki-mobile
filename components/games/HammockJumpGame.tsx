@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Accelerometer } from 'expo-sensors';
+import { Accelerometer, type Subscription } from 'expo-sensors';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
@@ -7,13 +7,17 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 
+import { DISABLE_GAME_COOLDOWN } from '@/config/featureFlags';
+import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { HammockJumpAudioManager } from '@/features/games/hammockJump/audio';
-import { GameAssets, HammockGameEngine } from '@/features/games/hammockJump/engine/HammockJumpEngine';
+import { GameAssets, GameState, HammockGameEngine } from '@/features/games/hammockJump/engine/HammockJumpEngine';
 import { HAMMOCK_JUMP_ASSETS } from '@/features/games/hammockJump/utils/assets';
+import { useGameCooldown } from '@/hooks/useGameCooldown';
 import type { AwardXPResult } from '@/hooks/useMyLeaderboardStatus';
 import { useMyLeaderboardStatus } from '@/hooks/useMyLeaderboardStatus';
 import { edgeFunctionQueueService } from '@/services/queue';
@@ -24,8 +28,10 @@ import {
 } from '@/types/edgeFunctionQueue';
 import { trackGameEnd, trackGameStart, trackXPEarned } from '@/utils/analytics';
 import { invokeEdgeFunction } from '@/utils/edgeFunctionClient';
+import { GAME_COOLDOWN_MS } from '@/utils/gameCooldowns';
 import { createLogger } from '@/utils/logger';
 import { emitXPAwarded } from '@/utils/xpEvents';
+import { Ionicons } from '@expo/vector-icons';
 import { GameCanvas } from './GameCanvas';
 
 const log = createLogger('HammockJumpGame');
@@ -61,15 +67,32 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
   const audioManagerRef = useRef<HammockJumpAudioManager | null>(null);
   const audioUnloadingRef = useRef(false);
   const audioAvailableRef = useRef(true);
-  const [gameState, setGameState] = useState<any>(null);
+  const cooldownTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [gameState, setGameState] = useState<GameState | null>(null);
   const [xpAwarded, setXpAwarded] = useState(false);
   const sessionIdRef = useRef<string>(generateSessionId()); // Unique session for idempotency
-  const accelerometerSubscription = useRef<any>(null);
+  const accelerometerSubscription = useRef<Subscription | null>(null);
   const [hasAccelerometer, setHasAccelerometer] = useState(true);
   const [highScore, setHighScore] = useState<number>(0);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
   const [audioAvailable, setAudioAvailable] = useState<boolean | null>(null);
   const gameStartTime = useRef<number>(0); // Track game session duration
+  const [showCooldownScreen, setShowCooldownScreen] = useState(false);
+
+  // Game cooldown hook - persists cooldown AND rounds across app restarts
+  const {
+    remainingFormatted: cooldownRemainingFormatted,
+    isOnCooldown,
+    startCooldown,
+    roundsPlayed,
+    maxRounds: MAX_ROUNDS,
+    incrementRounds,
+  } = useGameCooldown({
+    gameId: 'hammockjump',
+    cooldownMs: GAME_COOLDOWN_MS,
+    maxRounds: 3,
+    persist: true,
+  });
 
   // Load high score on mount
   useEffect(() => {
@@ -85,6 +108,27 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
     };
     loadHighScore();
   }, []);
+
+  // Show cooldown screen if on cooldown OR if max rounds reached when modal opens
+  // Skip if DISABLE_GAME_COOLDOWN flag is enabled
+  // Note: We check roundsPlayed >= MAX_ROUNDS to prevent race conditions where
+  // rounds are maxed but cooldown timer hasn't started yet
+  useEffect(() => {
+    if (visible && !isDemoMode && !DISABLE_GAME_COOLDOWN) {
+      if (isOnCooldown || roundsPlayed >= MAX_ROUNDS) {
+        setShowCooldownScreen(true);
+
+        // Edge case: rounds are maxed but cooldown never started (crash/bug recovery)
+        // Start cooldown now to ensure proper state
+        if (roundsPlayed >= MAX_ROUNDS && !isOnCooldown) {
+          log.info(`Detected maxed rounds (${roundsPlayed}/${MAX_ROUNDS}) without active cooldown, starting cooldown now`);
+          startCooldown();
+        }
+      }
+    } else if (!visible) {
+      setShowCooldownScreen(false);
+    }
+  }, [visible, isOnCooldown, roundsPlayed, MAX_ROUNDS, isDemoMode, startCooldown]);
 
   // Initialize game engine and accelerometer
   useEffect(() => {
@@ -277,6 +321,13 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
       // Mark as awarded IMMEDIATELY to prevent double calls (matches No Pogodi pattern)
       setXpAwarded(true);
 
+      // Increment rounds played (persisted to storage via hook)
+      const newRoundsPlayed = await incrementRounds();
+      log.debug(`Round ${newRoundsPlayed}/${MAX_ROUNDS} completed`);
+
+      // Check if user has reached max rounds - start cooldown
+      const shouldStartCooldown = newRoundsPlayed >= MAX_ROUNDS;
+
       const xpToAward = Math.max(1, Math.floor(gameState.score / 50));
       const gameDuration = Date.now() - gameStartTime.current;
 
@@ -349,10 +400,6 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
             // Instantly update personal leaderboard rank (no 5-minute wait!)
             updateFromAwardXP(result.data);
             log.debug('Personal leaderboard rank updated instantly');
-
-            // Record cooldown
-            const { recordGamePlay } = await import('@/utils/gameCooldowns');
-            await recordGamePlay(userProfile.id, HAMMOCK_GAME_ID, isDemoMode);
 
             // Invalidate XP cache (await, but non-fatal)
             try {
@@ -444,6 +491,33 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
           });
         }
       }
+
+      // Start cooldown if max rounds reached
+      if (shouldStartCooldown) {
+        log.info(`Max rounds reached (${MAX_ROUNDS}). Starting cooldown...`);
+
+        try {
+          await startCooldown();
+          log.info('Game cooldown started via hook');
+
+          // Also record cooldown on the server (for cross-device sync)
+          try {
+            const { recordGamePlay } = await import('@/utils/gameCooldowns');
+            await recordGamePlay(userProfile.id, HAMMOCK_GAME_ID, isDemoMode);
+            log.info('Game cooldown recorded on server');
+          } catch (serverError) {
+            log.error('Error recording cooldown on server (non-fatal):', serverError);
+          }
+
+          // Show cooldown screen after a short delay
+          // Store timeout ID in ref so it can be cleared on unmount
+          cooldownTimeoutRef.current = setTimeout(() => {
+            setShowCooldownScreen(true);
+          }, 2000); // 2 second delay to let user see final score
+        } catch (cooldownError) {
+          log.error('Error starting game cooldown:', cooldownError);
+        }
+      }
     };
 
     awardXP();
@@ -456,11 +530,20 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
     updateFromAwardXP,
     isDemoMode,
     highScore,
+    incrementRounds,
+    startCooldown,
+    MAX_ROUNDS,
   ]);
 
   // Cleanup on close
   useEffect(() => {
     if (!visible) {
+      // Clean up cooldown timeout to prevent memory leak
+      if (cooldownTimeoutRef.current) {
+        clearTimeout(cooldownTimeoutRef.current);
+        cooldownTimeoutRef.current = null;
+      }
+
       // Clean up accelerometer
       if (accelerometerSubscription.current) {
         accelerometerSubscription.current.remove();
@@ -502,26 +585,55 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
       onRequestClose={exitGame}
     >
       <SafeAreaView style={styles.container}>
-        <View style={styles.gameContainer}>
-          <GameCanvas
-            gameState={gameState}
-            assets={GAME_ASSETS}
-            onStartGame={startGame}
-            onExitGame={exitGame}
-            onPauseGame={pauseGame}
-            onUpdate={handleGameUpdate}
-            onKAnimationStart={handleKAnimationStart}
-            onKAnimationComplete={handleKAnimationComplete}
-            hasAccelerometer={hasAccelerometer}
-            gameEngine={gameEngineRef.current}
-            highScore={highScore}
-            isNewHighScore={isNewHighScore}
-            xpEarned={gameState?.phase === 'GAME_OVER' ? Math.max(1, Math.floor((gameState?.score || 0) / 50)) : 0}
-          />
-          {audioAvailable === false && (
-            <Text style={styles.audioWarning}>ხმა დროებით მიუწვდომელია</Text>
-          )}
-        </View>
+        {showCooldownScreen ? (
+          // Cooldown Screen
+          <View style={styles.cooldownScreenContainer}>
+            <View style={styles.cooldownContent}>
+              <View style={styles.cooldownIconContainer}>
+                <Ionicons name="time" size={60} color={Colors.dark.tint} />
+              </View>
+
+              <Text style={styles.cooldownTitle}>COOLDOWN ACTIVE</Text>
+
+              <View style={styles.timerDisplay}>
+                <Text style={styles.cooldownTimer}>{cooldownRemainingFormatted}</Text>
+              </View>
+
+              <Text style={styles.cooldownMessage}>
+                შეგიძლია ითამაშო {MAX_ROUNDS} რაუნდი ერთ სესიაზე.{'\n'}
+                დაელოდე <Text style={{ fontFamily: 'SpaceMono', fontWeight: 'bold' }}>COOLDOWN</Text>-ს რომ თავიდან ითამაშო!
+              </Text>
+
+              <TouchableOpacity style={styles.cooldownExitButton} onPress={exitGame} activeOpacity={0.8}>
+                <Text style={styles.cooldownExitText}>გასვლა</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          // Game View
+          <View style={styles.gameContainer}>
+            <GameCanvas
+              gameState={gameState}
+              assets={GAME_ASSETS}
+              onStartGame={startGame}
+              onExitGame={exitGame}
+              onPauseGame={pauseGame}
+              onUpdate={handleGameUpdate}
+              onKAnimationStart={handleKAnimationStart}
+              onKAnimationComplete={handleKAnimationComplete}
+              hasAccelerometer={hasAccelerometer}
+              gameEngine={gameEngineRef.current}
+              highScore={highScore}
+              isNewHighScore={isNewHighScore}
+              xpEarned={gameState?.phase === 'GAME_OVER' ? Math.max(1, Math.floor((gameState?.score || 0) / 50)) : 0}
+              roundsPlayed={roundsPlayed}
+              maxRounds={MAX_ROUNDS}
+            />
+            {audioAvailable === false && (
+              <Text style={styles.audioWarning}>ხმა დროებით მიუწვდომელია</Text>
+            )}
+          </View>
+        )}
       </SafeAreaView>
     </Modal>
   );
@@ -543,5 +655,77 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     fontSize: 12,
     opacity: 0.9,
+  },
+  cooldownScreenContainer: {
+    flex: 1,
+    backgroundColor: Colors.dark.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+  },
+  cooldownContent: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  cooldownIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    borderWidth: 2,
+    borderColor: 'rgba(196, 255, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  cooldownTitle: {
+    fontSize: 24,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+    marginBottom: 16,
+    opacity: 0.9,
+  },
+  timerDisplay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(196, 255, 0, 0.2)',
+    marginBottom: 30,
+  },
+  cooldownTimer: {
+    fontSize: 56,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.tint,
+    fontWeight: 'bold',
+  },
+  cooldownMessage: {
+    fontSize: 16,
+    fontFamily: 'HamakiGeo',
+    color: Colors.dark.text,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 40,
+    opacity: 0.7,
+  },
+  cooldownExitButton: {
+    backgroundColor: Colors.dark.tint,
+    paddingHorizontal: 60,
+    paddingVertical: 18,
+    borderRadius: 30,
+    shadowColor: Colors.dark.tint,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  cooldownExitText: {
+    fontSize: 18,
+    fontFamily: 'HamakiGeo',
+    color: Colors.dark.background,
+    fontWeight: 'bold',
   },
 });

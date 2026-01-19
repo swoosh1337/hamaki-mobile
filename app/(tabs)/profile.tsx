@@ -8,6 +8,7 @@ import { StatsCard } from '@/components/profile/StatsCard';
 import { ProfilePostSkeleton } from '@/components/ui/SkeletonLoader';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSubscription } from '@/hooks';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
 import { postService } from '@/services/supabase/postService';
@@ -16,6 +17,34 @@ import { getAvatarSource } from '@/utils/avatars';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('Profile');
+
+// Demo posts defined outside component to prevent recreation on every render
+const DEMO_POSTS: (UserPost & { isUpvoted?: boolean })[] = [
+  {
+    id: 'demo-post-1',
+    title: 'Mobile App Tutorial Series',
+    content: 'What if we created a step-by-step mobile app development tutorial series covering React Native?',
+    upvotes: 23,
+    user_id: 'demo-user-id',
+    status: 'approved',
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    category: 'tutorial',
+    isUpvoted: false,
+  },
+  {
+    id: 'demo-post-2',
+    title: 'Advanced JavaScript Concepts',
+    content: 'Could you cover advanced JS concepts like closures, prototypes, and async/await in detail?',
+    upvotes: 18,
+    user_id: 'demo-user-id',
+    status: 'approved',
+    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    category: 'content',
+    isUpvoted: true,
+  },
+];
 
 export default function ProfileScreen() {
   const { userProfile, updateUserProfile, isDemoMode, authMethod } = useAuth();
@@ -35,16 +64,6 @@ export default function ProfileScreen() {
   // Get refresh function for YouTube verification data
   const { refreshAll } = useYouTubeVerification();
 
-  // Refresh YouTube verification data when Profile screen is focused (Google users only)
-  // Note: XP stats now use caching in useUserProfile, so we don't need to refetch on every focus
-  useFocusEffect(
-    useCallback(() => {
-      if (authMethod === 'google') {
-        refreshAll();
-      }
-    }, [authMethod, refreshAll])
-  );
-
   // UI state management
   const [selectedAvatar, setSelectedAvatar] = useState<string>('avatar-1');
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
@@ -59,68 +78,11 @@ export default function ProfileScreen() {
 
   const POSTS_PER_PAGE = 10;
 
-  const demoPosts: (UserPost & { isUpvoted?: boolean })[] = [
-    {
-      id: 'demo-post-1',
-      title: 'Mobile App Tutorial Series',
-      content: 'What if we created a step-by-step mobile app development tutorial series covering React Native?',
-      upvotes: 23,
-      user_id: 'demo-user-id',
-      status: 'approved',
-      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      category: 'tutorial',
-      isUpvoted: false,
-    },
-    {
-      id: 'demo-post-2',
-      title: 'Advanced JavaScript Concepts',
-      content: 'Could you cover advanced JS concepts like closures, prototypes, and async/await in detail?',
-      upvotes: 18,
-      user_id: 'demo-user-id',
-      status: 'approved',
-      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      updated_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      category: 'content',
-      isUpvoted: true,
-    },
-  ];
-
-  // Initialize data only when the user identity changes (not on avatar/name updates)
-  useEffect(() => {
-    if (userProfile?.google_id) {
-      initializeProfileData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile?.google_id]);
-
-  // Only load XP stats on initial mount, not on every focus
-  // This allows caching to work properly
-  // User can pull-to-refresh to force update
-
   // Pull-to-refresh handler
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handlePullToRefresh = async () => {
-    log.debug('Pull-to-refresh triggered');
-    setIsRefreshing(true);
-    await forceRefetchProfile(); // Force refresh profile and XP stats (bypass cache)
-    setIsRefreshing(false);
-  };
-
-  const initializeProfileData = async () => {
-    if (!userProfile?.google_id) return;
-
-    // Set initial avatar from user profile
-    if (userProfile.avatar_url) {
-      setSelectedAvatar(userProfile.avatar_url);
-    }
-
-    // Load user posts
-    await loadUserPosts(0, true);
-  };
-
-  const loadUserPosts = async (page: number = 0, reset: boolean = false) => {
+  // Define loadUserPosts with useCallback before useFocusEffect
+  const loadUserPosts = useCallback(async (page: number = 0, reset: boolean = false) => {
     if (!userProfile?.id) return;
 
     try {
@@ -133,7 +95,7 @@ export default function ProfileScreen() {
         // Use demo data for demo mode
         setTimeout(() => {
           if (reset) {
-            setUserPosts(demoPosts);
+            setUserPosts(DEMO_POSTS);
           } else {
             // For demo, don't add more posts on pagination
             setUserPosts(prev => [...prev]);
@@ -166,6 +128,64 @@ export default function ProfileScreen() {
         setIsPostsLoading(false);
       }
     }
+  }, [userProfile?.id, isDemoMode]);
+
+  // Realtime subscription for user's posts - listen for when their posts get approved
+  useRealtimeSubscription<{ id: string; status: string; user_id: string }>({
+    table: 'posts',
+    event: 'UPDATE',
+    filter: userProfile?.id ? `user_id=eq.${userProfile.id}` : undefined,
+    enabled: !!userProfile?.id && !isDemoMode,
+    onPayload: (payload) => {
+      // Refresh when user's post is approved
+      if (payload.new?.status === 'approved') {
+        log.debug('User post approved, refreshing list', { postId: payload.new.id });
+        loadUserPosts(0, true);
+      }
+    },
+  });
+
+  // Realtime subscription for user's posts - listen for DELETE
+  useRealtimeSubscription<{ id: string; user_id: string }>({
+    table: 'posts',
+    event: 'DELETE',
+    filter: userProfile?.id ? `user_id=eq.${userProfile.id}` : undefined,
+    enabled: !!userProfile?.id && !isDemoMode,
+    onPayload: (payload) => {
+      log.debug('User post deleted, refreshing list', { postId: payload.old?.id });
+      loadUserPosts(0, true);
+    },
+  });
+
+  // Refresh YouTube verification data and posts when Profile screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      if (authMethod === 'google') {
+        refreshAll();
+      }
+      // Refresh posts when screen is focused to show newly approved posts
+      if (userProfile?.id) {
+        loadUserPosts(0, true);
+      }
+    }, [authMethod, refreshAll, userProfile?.id, loadUserPosts])
+  );
+
+  // Initialize data only when the user identity changes (not on avatar/name updates)
+  useEffect(() => {
+    if (userProfile?.google_id) {
+      // Set initial avatar from user profile
+      if (userProfile.avatar_url) {
+        setSelectedAvatar(userProfile.avatar_url);
+      }
+    }
+  }, [userProfile?.google_id, userProfile?.avatar_url]);
+
+  const handlePullToRefresh = async () => {
+    log.debug('Pull-to-refresh triggered');
+    setIsRefreshing(true);
+    await forceRefetchProfile();
+    await loadUserPosts(0, true);
+    setIsRefreshing(false);
   };
 
   // Handle avatar selection
@@ -180,16 +200,16 @@ export default function ProfileScreen() {
         setSelectedAvatar(avatarId);
         // reflect immediately in global state so header image updates
         updateUserProfile({ avatar_url: avatarId });
-        Alert.alert('Success', 'Avatar updated successfully!');
+        Alert.alert('წარმატება', 'ავატარი წარმატებით შეიცვალა!');
       } else {
-        Alert.alert('Error', 'Failed to update avatar. Please try again.');
+        Alert.alert('შეცდომა', 'ავატარის ცვლილება ვერ მოხერხდა. გთხოვთ ახლიდან სცადოთ.');
       }
     } catch (error) {
       log.error('Error updating avatar', error);
       if (error instanceof Error) {
-        Alert.alert('Error', error.message);
+        Alert.alert('შეცდომა', error.message);
       } else {
-        Alert.alert('Error', 'Failed to update avatar. Please try again.');
+        Alert.alert('შეცდომა', 'ავატარის ცვლილება ვერ მოხერხდა. გთხოვთ ახლიდან სცადოთ.');
       }
     } finally {
       setIsAvatarLoading(false);
@@ -217,16 +237,16 @@ export default function ProfileScreen() {
       if (success) {
         setIsEditingName(false);
         updateUserProfile({ full_name: editedName.trim() });
-        Alert.alert('Success', 'სახელი წარმატებით შეიცვალა!');
+        Alert.alert('წარმატება', 'სახელი წარმატებით შეიცვალა!');
       } else {
-        Alert.alert('Error', 'სახელის ცვლილება ვერ მოხერხდა');
+        Alert.alert('შეცდომა', 'სახელის ცვლილება ვერ მოხერხდა');
       }
     } catch (error) {
       log.error('Error updating name', error);
       if (error instanceof Error) {
-        Alert.alert('Error', error.message);
+        Alert.alert('შეცდომა', error.message);
       } else {
-        Alert.alert('Error', 'სახელის ცვლილება ვერ მოხერხდა. გთხოვთ ახლიდან სცადოთ.');
+        Alert.alert('შეცდომა', 'სახელის ცვლილება ვერ მოხერხდა. გთხოვთ ახლიდან სცადოთ.');
       }
     } finally {
       setIsUsernameLoading(false);
@@ -277,19 +297,29 @@ export default function ProfileScreen() {
         {/* Profile Header Section */}
         <View style={styles.profileSection}>
           {/* Avatar - Google Profile Photo */}
-          <TouchableOpacity
-            style={styles.avatarContainer}
-            onPress={() => setShowAvatarPicker(!showAvatarPicker)}
-            disabled={isAvatarLoading}
-          >
-            {userProfile.avatar_url ? (
-              <Image source={getAvatarSource(userProfile.avatar_url)} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Ionicons name="person-circle" size={80} color={Colors.dark.tint} />
+          <View style={styles.avatarWrapper}>
+            <View style={styles.avatarGlow} />
+            <TouchableOpacity
+              style={styles.avatarContainer}
+              onPress={() => setShowAvatarPicker(!showAvatarPicker)}
+              disabled={isAvatarLoading}
+            >
+              {!userProfile.avatar_url ? (
+                <View style={[styles.avatar, { backgroundColor: 'rgba(196, 255, 0, 0.15)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }]}>
+                  <Image
+                    source={require('@/assets/images/logo-transparent.webp')}
+                    style={{ width: '70%', height: '70%', tintColor: Colors.dark.tint }}
+                    resizeMode="contain"
+                  />
+                </View>
+              ) : (
+                <Image source={getAvatarSource(userProfile.avatar_url)} style={styles.avatar} />
+              )}
+              <View style={styles.avatarEditBadge}>
+                <Ionicons name="camera" size={12} color={Colors.dark.background} />
               </View>
-            )}
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
 
           {/* Name + Edit */}
           {!isEditingName ? (
@@ -300,7 +330,9 @@ export default function ProfileScreen() {
                 onPress={handleEditName}
                 disabled={isUsernameLoading}
               >
-                <Ionicons name="pencil" size={16} color={Colors.dark.tint} />
+                <View style={styles.editIconCircle}>
+                  <Ionicons name="pencil" size={12} color={Colors.dark.tint} />
+                </View>
               </TouchableOpacity>
             </View>
           ) : (
@@ -333,7 +365,10 @@ export default function ProfileScreen() {
             </View>
           )}
 
-          <Text style={styles.email}>{userProfile.email}</Text>
+          <View style={styles.emailContainer}>
+            <Ionicons name="mail-outline" size={14} color={Colors.dark.text} style={{ opacity: 0.5, marginRight: 6 }} />
+            <Text style={styles.email}>{userProfile.email}</Text>
+          </View>
         </View>
 
         {/* Avatar Picker Modal */}
@@ -344,6 +379,7 @@ export default function ProfileScreen() {
               handleAvatarSelect(avatarId);
               setShowAvatarPicker(false);
             }}
+            onClose={() => setShowAvatarPicker(false)}
             isLoading={isAvatarLoading}
           />
         )}
@@ -355,33 +391,39 @@ export default function ProfileScreen() {
 
         {/* My Posts Section */}
         <View style={styles.postsSection}>
-          <Text style={styles.sectionTitle}>ჩემი პოსტები</Text>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionTitleDot} />
+            <Text style={styles.sectionTitle}>ჩემი პოსტები</Text>
+          </View>
 
           {isPostsLoading ? (
-            <ScrollView style={styles.postsScrollView} nestedScrollEnabled>
+            <View style={styles.postsScrollView}>
               {[...Array(3)].map((_, index) => (
                 <ProfilePostSkeleton key={`profile-post-skeleton-${index}`} />
               ))}
-            </ScrollView>
+            </View>
           ) : userPosts.length === 0 ? (
             <View style={styles.emptyPostsContainer}>
+              <Ionicons name="document-text-outline" size={48} color={Colors.dark.tabIconDefault} style={{ opacity: 0.3, marginBottom: 12 }} />
               <Text style={styles.emptyPostsText}>ჯერ არ გაქვს დადასტურებული პოსტები.</Text>
-              {/* <Text style={styles.emptyPostsSubtext}>
-                Submit ideas in the Community tab. Once approved by admins, they&apos;ll appear here!
-              </Text> */}
             </View>
           ) : (
-            <ScrollView style={styles.postsScrollView} nestedScrollEnabled>
+            <View style={styles.postsColumn}>
               {userPosts.map((post) => (
                 <View key={post.id} style={styles.postItem}>
-                  <Text style={styles.postTitle}>{post.title}</Text>
+                  <View style={styles.postItemHeader}>
+                    <Text style={styles.postTitle} numberOfLines={1}>{post.title}</Text>
+                    <View style={styles.postStatusBadge}>
+                      <View style={styles.statusDot} />
+                      <Text style={styles.statusText}>APPROVED</Text>
+                    </View>
+                  </View>
                   <View style={styles.postMeta}>
-                    {/* Show upvote count but make it non-interactive for own posts */}
                     <View style={styles.upvoteDisplay}>
                       <Ionicons
-                        name="heart-outline"
-                        size={16}
-                        color={Colors.dark.tabIconDefault}
+                        name="heart"
+                        size={14}
+                        color="#FF3B30"
                       />
                       <Text style={styles.upvoteCount}>
                         {post.upvotes}
@@ -397,10 +439,11 @@ export default function ProfileScreen() {
                   onPress={handleLoadMorePosts}
                   disabled={isPostsLoading}
                 >
-                  <Text style={styles.loadMoreText}>Load More</Text>
+                  <Text style={styles.loadMoreText}>იხილეთ მეტი</Text>
+                  <Ionicons name="chevron-down" size={14} color={Colors.dark.tint} style={{ marginLeft: 4 }} />
                 </TouchableOpacity>
               )}
-            </ScrollView>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -457,8 +500,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
   },
-  avatarContainer: {
+  avatarWrapper: {
+    position: 'relative',
     marginBottom: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarGlow: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: Colors.dark.tint,
+    opacity: 0.1,
+  },
+  avatarContainer: {
+    position: 'relative',
   },
   avatar: {
     width: 100,
@@ -467,17 +524,30 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.dark.tint,
   },
-  avatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 2,
-    borderColor: Colors.dark.tint,
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: Colors.dark.tint,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.dark.background,
   },
-
-  // Name + Edit Section
+  emailContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  email: {
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    opacity: 0.5,
+  },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -488,10 +558,17 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
     fontWeight: 'bold',
-    marginRight: 8,
   },
   editButton: {
-    padding: 4,
+    marginLeft: 10,
+  },
+  editIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editNameSection: {
     alignItems: 'center',
@@ -500,7 +577,7 @@ const styles = StyleSheet.create({
   },
   nameInput: {
     backgroundColor: 'rgba(245, 245, 245, 0.1)',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 18,
@@ -538,39 +615,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  email: {
-    fontSize: 16,
-    fontFamily: 'SpaceMono',
-    color: Colors.dark.text,
-    opacity: 0.7,
-    textAlign: 'center',
-  },
-
-  // Section Titles
-  sectionTitle: {
-    fontSize: 28,
-    fontFamily: 'HamakiGeo',
-    color: Colors.dark.tint,
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 20,
-    textAlign: 'center',
+    justifyContent: 'center',
   },
-
-  // Points Section
+  sectionTitleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.dark.tint,
+    marginRight: 10,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontFamily: 'HamakiGeo',
+    color: Colors.dark.text,
+    fontWeight: 'bold',
+  },
   pointsSection: {
     marginBottom: 40,
   },
-  // Posts Section
   postsSection: {
     flex: 1,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  loadingText: {
-    color: Colors.dark.text,
-    fontSize: 16,
-    fontFamily: 'HamakiGeo',
   },
   emptyPostsContainer: {
     alignItems: 'center',
@@ -586,19 +654,49 @@ const styles = StyleSheet.create({
   postsScrollView: {
     maxHeight: 300,
   },
+  postsColumn: {
+    gap: 12,
+  },
   postItem: {
-    backgroundColor: 'rgba(245, 245, 245, 0.05)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(196, 255, 0, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(196, 255, 0, 0.1)',
+  },
+  postItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   postTitle: {
     color: Colors.dark.text,
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
+    fontWeight: 'bold',
+    flex: 1,
+    marginRight: 12,
+  },
+  postStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.dark.tint,
+    marginRight: 6,
+  },
+  statusText: {
+    color: Colors.dark.tint,
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   postMeta: {
     flexDirection: 'row',
@@ -607,24 +705,24 @@ const styles = StyleSheet.create({
   upvoteDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
     gap: 4,
-    opacity: 0.7, // Make it look disabled
   },
   upvoteCount: {
-    color: Colors.dark.tabIconDefault,
+    color: Colors.dark.text,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+    opacity: 0.8,
   },
   loadMoreButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 16,
     marginTop: 8,
   },
   loadMoreText: {
     color: Colors.dark.tint,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: 'bold',
   },
 });

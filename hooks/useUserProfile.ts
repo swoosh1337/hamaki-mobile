@@ -3,8 +3,10 @@
  * 
  * Manages user profile data and operations including XP, avatar, and username updates.
  * Uses caching for XP stats to reduce unnecessary network requests.
+ * Subscribes to realtime leaderboard changes for instant XP updates.
  */
 
+import { supabase } from '@/services/supabase';
 import { userService } from '@/services/supabase/userService';
 import type { UserProfile, XPStats } from '@/types';
 import { createLogger } from '@/utils/logger';
@@ -225,6 +227,52 @@ export function useUserProfile(options: UseUserProfileOptions = {}): UseUserProf
             fetchProfile();
         }
     }, [googleId, userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Subscribe to realtime leaderboard changes for instant XP updates
+    useEffect(() => {
+        if (!profile?.id) return;
+
+        const channelName = `profile-xp:${profile.id}`;
+        log.debug(`Subscribing to realtime XP updates for user ${profile.id}`);
+
+        const channel = supabase
+            .channel(channelName)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'leaderboard_entries',
+                    filter: `user_id=eq.${profile.id}`,
+                },
+                async (payload) => {
+                    log.info('Realtime XP update received', {
+                        periodType: payload.new?.period_type,
+                        totalXp: payload.new?.total_xp
+                    });
+                    // Refetch XP stats when leaderboard entry changes
+                    if (profile.google_id) {
+                        const stats = await userService.getUserXPStats(profile.google_id);
+                        if (stats) {
+                            setXpStats(stats);
+                            // Update cache
+                            await setCachedXPStats(profile.id, stats);
+                            log.debug('XP stats updated from realtime event');
+                        }
+                    }
+                }
+            )
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    log.info(`Subscribed to realtime XP updates for user`);
+                }
+            });
+
+        return () => {
+            log.debug(`Unsubscribing from realtime XP updates`);
+            channel.unsubscribe();
+        };
+    }, [profile?.id, profile?.google_id]);
 
     return {
         profile,

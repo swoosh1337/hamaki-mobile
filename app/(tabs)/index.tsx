@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Image, Linking, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Linking, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { PostCard } from '@/components/home/PostCard';
 import { CarouselCard } from '@/components/ui/CarouselCard';
@@ -79,184 +80,241 @@ export default function HomeScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* Settings Button */}
-      <TouchableOpacity
-        style={styles.settingsButton}
-        onPress={() => setShowSettingsModal(true)}
-      >
-        <Ionicons name="settings-outline" size={24} color={Colors.dark.text} />
-        {pendingXPCount > 0 && (
-          <View style={styles.settingsBadge}>
-            <Text style={styles.settingsBadgeText}>{pendingXPCount}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      
+      {/* Background Decor */}
+      <View style={styles.bgDecorCircle1} />
+      <View style={styles.bgDecorCircle2} />
 
-      <ScrollView ref={scrollViewRef} style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Header with Logo */}
-        <View style={styles.header}>
-          <Image
-            source={require('@/assets/images/logo-transparent.png')}
-            style={[styles.logo, { width: 140, height: 120 }]}
-            resizeMode="contain"
-          />
-        </View>
-
-
-      {/* Featured Carousel Section */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>გამორჩეული</Text>
-      </View>
-
-      {isLoading && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselRow}
-        >
-          {[...Array(4)].map((_, index) => (
-            <CarouselSkeleton key={`carousel-skeleton-${index}`} />
-          ))}
-        </ScrollView>
-      )}
-
-      {error && (
-        <InlineError
-          message={isNetworkError ? 'კავშირის დამყარება ვერ მოხერხდა. შეამოწმეთ ინტერნეტ კავშირი.' : error}
-          onRetry={handleRetry}
-          compact
-        />
-      )}
-
-      {!isLoading && !error && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselRow}
-        >
-          {featuredPosts.map((post) => (
-            <CarouselCard key={post.id} post={post} onPostTap={handleCarouselPostTap} />
-          ))}
-        </ScrollView>
-      )}
-
-      {/* Latest Posts mock */}
-      <View style={styles.postsSection} onLayout={handlePostsLayout}>
-        <Text style={styles.postsSectionTitle}>ბოლო პოსტები</Text>
-        <View style={styles.postsColumn}>
-          {isLoading ? (
-            // Show skeleton loading for posts while videos are loading
-            [...Array(3)].map((_, index) => (
-              <PostSkeleton key={`post-skeleton-${index}`} />
-            ))
-          ) : error ? (
-            <InlineError
-              message={isNetworkError ? 'პოსტების ჩატვირთვა ვერ მოხერხდა. შეამოწმეთ კავშირი.' : 'პოსტების ჩატვირთვა ვერ მოხერხდა'}
-              onRetry={handleRetry}
+      <SafeAreaView style={styles.safeArea}>
+        {/* Top Header Row */}
+        <View style={styles.headerRow}>
+          <View style={styles.headerLogoContainer}>
+            <Image
+              source={require('@/assets/images/logo-transparent.webp')}
+              style={styles.logo}
+              resizeMode="contain"
             />
-          ) : (
-            sortedPosts.map((post) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                isExpanded={expandedPostId === post.id}
-                onToggleExpand={() => handleToggleExpand(post)}
-              />
-            ))
-          )}
+          </View>
+          
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => setShowSettingsModal(true)}
+            activeOpacity={0.7}
+          >
+            <BlurView intensity={20} tint="light" style={styles.settingsBlur}>
+              <Ionicons name="settings-sharp" size={22} color={Colors.dark.text} />
+              {pendingXPCount > 0 && (
+                <View style={styles.settingsBadge}>
+                  <Text style={styles.settingsBadgeText}>{pendingXPCount}</Text>
+                </View>
+              )}
+            </BlurView>
+          </TouchableOpacity>
         </View>
-      </View>
-      </ScrollView>
 
-      {/* Settings Modal */}
-      <SettingsModal
-        visible={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
-      />
-    </SafeAreaView>
+        <ScrollView 
+          ref={scrollViewRef} 
+          style={styles.scrollView} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Featured Carousel Section */}
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleDot} />
+            <Text style={styles.sectionTitle}>გამორჩეული</Text>
+          </View>
+
+          {isLoading && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.carouselRow}
+            >
+              {[...Array(4)].map((_, index) => (
+                <CarouselSkeleton key={`carousel-skeleton-${index}`} />
+              ))}
+            </ScrollView>
+          )}
+
+          {error && (
+            <View style={styles.errorContainer}>
+              <InlineError
+                message={isNetworkError ? 'კავშირის დამყარება ვერ მოხერხდა. შეამოწმეთ ინტერნეტ კავშირი.' : error}
+                onRetry={handleRetry}
+                compact
+              />
+            </View>
+          )}
+
+          {!isLoading && !error && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.carouselRow}
+            >
+              {featuredPosts.map((post) => (
+                <CarouselCard key={post.id} post={post} onPostTap={handleCarouselPostTap} />
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Latest Posts */}
+          <View style={styles.postsSection} onLayout={handlePostsLayout}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleDot} />
+              <Text style={styles.sectionTitle}>ბოლო პოსტები</Text>
+            </View>
+            <View style={styles.postsColumn}>
+              {isLoading ? (
+                // Show skeleton loading for posts while videos are loading
+                [...Array(3)].map((_, index) => (
+                  <PostSkeleton key={`post-skeleton-${index}`} />
+                ))
+              ) : error ? (
+                <InlineError
+                  message={isNetworkError ? 'პოსტების ჩატვირთვა ვერ მოხერხდა. შეამოწმეთ კავშირი.' : 'პოსტების ჩატვირთვა ვერ მოხერხდა'}
+                  onRetry={handleRetry}
+                />
+              ) : (
+                sortedPosts.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    isExpanded={expandedPostId === post.id}
+                    onToggleExpand={() => handleToggleExpand(post)}
+                  />
+                ))
+              )}
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Settings Modal */}
+        <SettingsModal
+          visible={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+        />
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.dark.background,
-  },
   container: {
     flex: 1,
     backgroundColor: Colors.dark.background,
-    paddingTop: 10,
   },
-  settingsButton: {
+  safeArea: {
+    flex: 1,
+  },
+  bgDecorCircle1: {
     position: 'absolute',
-    top: 60,
-    right: 20,
-    zIndex: 10,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(245, 245, 245, 0.1)',
+    top: -100,
+    right: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: Colors.dark.tint + '05',
+  },
+  bgDecorCircle2: {
+    position: 'absolute',
+    bottom: 100,
+    left: -150,
+    width: 400,
+    height: 400,
+    borderRadius: 200,
+    backgroundColor: Colors.dark.tint + '03',
+  },
+  headerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
+    zIndex: 10,
+  },
+  headerLogoContainer: {
+    flex: 1,
+    alignItems: 'center',
+    marginLeft: 44, // Offset for settings button to keep logo centered
+  },
+  logo: {
+    width: 280,
+    height: 120,
+  },
+  settingsButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  settingsBlur: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   settingsBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: 8,
+    right: 8,
     backgroundColor: '#FF3B30',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
+    borderWidth: 1.5,
+    borderColor: Colors.dark.background,
   },
   settingsBadgeText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 9,
+    fontWeight: '900',
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 0,
-    paddingHorizontal: 20,
+  scrollView: {
+    flex: 1,
   },
-  logo: {
-    width: 180,
-    height: 72,
-    marginBottom: 0,
+  scrollContent: {
+    paddingBottom: 40,
   },
   carouselRow: {
-    paddingHorizontal: 12,
-    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  errorContainer: {
+    paddingHorizontal: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    marginLeft: 20,
+    marginTop: 10,
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+  sectionTitleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.dark.tint,
+    marginRight: 10,
   },
   sectionTitle: {
     fontFamily: 'HamakiGeo',
-    fontSize: 16,
+    fontSize: 18,
     color: Colors.dark.text,
     fontWeight: 'bold',
-    marginRight: 10,
+    letterSpacing: 0.5,
   },
   postsSection: {
-    marginTop: 24,
-  },
-  postsSectionTitle: {
-    fontFamily: 'HamakiGeo',
-    fontSize: 16,
-    color: Colors.dark.text,
-    fontWeight: 'bold',
-    marginLeft: 20,
-    marginBottom: 8,
+    marginTop: 32,
   },
   postsColumn: {
-    paddingHorizontal: 12,
-    paddingBottom: 24,
+    paddingHorizontal: 16,
+    gap: 12,
   },
 });

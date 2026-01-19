@@ -516,9 +516,10 @@ export const authService = {
                 { channelId: HAMAKI_CHANNEL_ID, channelKey: 'hamaki' },
             ];
 
+            // Pass YouTube access token in body (NOT in Authorization header)
+            // The Supabase client automatically includes the Supabase JWT in Authorization header
             const { data, error } = await supabase.functions.invoke('verify-subscriptions', {
-                body: { channels, userId },
-                headers: { Authorization: `Bearer ${accessToken}` },
+                body: { channels, accessToken },
             });
 
             if (error) {

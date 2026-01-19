@@ -171,13 +171,35 @@ export async function updateGameLastPlayed(
 /**
  * Record a game play session (wrapper for updateGameLastPlayed)
  */
+// Valid game types for validation
+const VALID_GAME_TYPES: readonly GameType[] = ['nopogod', 'hammockjump'] as const;
+
 export async function recordGamePlay(
   userId: string,
   gameType: string, // Accept string to be more flexible, but internally map to GameType
   isDemoMode: boolean = false
 ): Promise<{ success: boolean; error?: string }> {
-  // Map game names if necessary or validate
-  const validGameType = gameType === 'hammock-jump' ? 'hammockjump' : (gameType as GameType);
+  // Map game names if necessary (different IDs used in different places)
+  // Server-side expects: 'nopogod', 'hammockjump'
+  let validGameType: GameType;
+
+  switch (gameType.toLowerCase()) {
+    case 'nopogod':
+    case 'no-pogodi':
+      validGameType = 'nopogod';
+      break;
+    case 'hammockjump':
+    case 'hammock-jump':
+      validGameType = 'hammockjump';
+      break;
+    default:
+      // Validate unknown game types instead of unsafe cast
+      log.warn(`Unknown game type received: "${gameType}". Valid types: ${VALID_GAME_TYPES.join(', ')}`);
+      return {
+        success: false,
+        error: `Invalid game type: ${gameType}`,
+      };
+  }
 
   return updateGameLastPlayed(userId, validGameType, isDemoMode);
 }
@@ -207,7 +229,7 @@ async function scheduleCooldownNotification(gameType: GameType): Promise<void> {
       }
     }
 
-    // Schedule new notification for 2 hours from now
+    // Schedule new notification based on the current cooldown duration
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: '🎮 Cooldown-ი მორჩა!',
@@ -217,7 +239,7 @@ async function scheduleCooldownNotification(gameType: GameType): Promise<void> {
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: GAME_COOLDOWN_MS / 1000, // 2 hours in seconds
+        seconds: GAME_COOLDOWN_MS / 1000, // 1 hour in seconds
         repeats: false,
       },
     });

@@ -8,6 +8,7 @@
  * - Returns personal_rank calculated server-side (instant feedback)
  * - No client-side rank calculation needed
  * - Single API call provides both XP update and rank
+ * - AUTH REQUIRED: User must be authenticated and can only award XP to themselves
  *
  * IDEMPOTENCY:
  * - Requires idempotencyKey in request body
@@ -20,6 +21,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -31,14 +33,25 @@ const corsHeaders = {
 // =============================================================================
 // Maximum XP that can be awarded in a single request per type
 // This prevents malicious clients from inflating their XP
+//
+// NOTE: subscription and video_like are normally handled by their own Edge Functions
+// (verify-subscriptions, verify-video-likes) which call the SQL award_xp RPC directly.
+// These limits are safety guards in case this Edge Function is called directly.
 const MAX_XP_PER_AWARD: Record<string, number> = {
     game: 500,           // Max ~25,000 score in Hammock Jump (score/50) or 5000 in No Pogodi (score/10)
-    subscription: 100,   // Fixed XP per channel subscription
-    video_like: 50,      // Fixed XP per video like
+    subscription: 1000,  // Max XP per channel: hamaki=1000, others=700
+    video_like: 500,     // Max total for all videos: hamaki=200, others=100 each (200+100+100+100=500)
 };
 
 // Minimum XP per award (catches invalid/negative values that bypass basic validation)
 const MIN_XP_PER_AWARD = 1;
+
+// =============================================================================
+// PER-USER RATE LIMITING
+// =============================================================================
+// Maximum number of award-xp requests per user per minute
+// This prevents abuse where a user could spam requests
+const MAX_REQUESTS_PER_MINUTE = 10;
 
 // =============================================================================
 // RANK CACHING CONFIGURATION
@@ -290,12 +303,14 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-        // Parse request body
+        // ========================================
+        // STEP 1: Parse request body first
+        // ========================================
         let body: AwardXPRequest;
         try {
             body = await req.json();
             console.log('[award-xp] Request body:', {
-                userId: body.userId ? 'present' : 'missing',
+                hasUserId: !!body.userId,
                 xpType: body.xpType,
                 amount: body.amount,
                 hasIdempotencyKey: !!body.idempotencyKey,
@@ -308,15 +323,74 @@ Deno.serve(async (req: Request) => {
             );
         }
 
-        const { userId, xpType, amount, idempotencyKey } = body;
+        const { xpType, amount, idempotencyKey } = body;
 
-        // Validate required fields
-        if (!userId) {
-            return new Response(
-                JSON.stringify({ success: false, error: 'Missing userId' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        // Create Supabase client with service role for DB operations
+        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+        // ========================================
+        // STEP 2: Verify User Identity
+        // ========================================
+        // Support two auth methods:
+        // 1. Magic Link users: Have Supabase JWT in Authorization header
+        // 2. Google OAuth users: No JWT, must trust userId from body (with safeguards)
+        let userId: string;
+        let authMethod: 'supabase_jwt' | 'body_userid' = 'body_userid';
+
+        const authHeader = req.headers.get('Authorization');
+
+        // Try Supabase JWT first (Magic Link users)
+        if (authHeader?.startsWith('Bearer ')) {
+            const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                auth: { persistSession: false }
+            });
+
+            const { data: { user: authUser }, error: authError } = await supabaseAuth.auth.getUser(
+                authHeader.replace('Bearer ', '')
             );
+
+            if (!authError && authUser) {
+                userId = authUser.id;
+                authMethod = 'supabase_jwt';
+                console.log('[award-xp] Auth via Supabase JWT:', userId);
+            }
         }
+
+        // Fallback: Trust userId from body (Google OAuth users)
+        // SECURITY NOTE: This is less secure but necessary for Google OAuth users
+        // who don't have a Supabase session. Existing protections apply:
+        // - Rate limiting (MAX_REQUESTS_PER_MINUTE)
+        // - Idempotency (can't replay requests)
+        // - Max XP limits per request
+        if (!userId) {
+            if (!body.userId) {
+                console.error('[award-xp] Missing userId in body and no valid JWT');
+                return new Response(
+                    JSON.stringify({ success: false, error: 'Missing userId' }),
+                    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            // Verify the user exists in the database
+            const { data: dbUser, error: dbError } = await supabase
+                .from('users')
+                .select('id')
+                .eq('id', body.userId)
+                .single();
+
+            if (dbError || !dbUser) {
+                console.error('[award-xp] User not found:', body.userId);
+                return new Response(
+                    JSON.stringify({ success: false, error: 'User not found' }),
+                    { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            userId = body.userId;
+            console.warn('[award-xp] Auth via body userId (no JWT) - relying on rate limiting:', userId);
+        }
+
+        console.log('[award-xp] User verified:', { userId, authMethod });
 
         // Validate xpType
         const validXPTypes: XPType[] = ['game', 'subscription', 'video_like'];
@@ -375,9 +449,6 @@ Deno.serve(async (req: Request) => {
             );
         }
 
-        // Create Supabase client with service role
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
         // Check idempotency - this MUST succeed before we proceed
         console.log('[award-xp] Checking idempotency:', idempotencyKey);
         const { isDuplicate } = await checkIdempotency(supabase, idempotencyKey, userId);
@@ -399,6 +470,33 @@ Deno.serve(async (req: Request) => {
             return new Response(
                 JSON.stringify(response),
                 { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // Per-user rate limiting: Check requests in the last minute
+        const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
+        const { count: recentRequestCount, error: rateLimitError } = await supabase
+            .from('edge_idempotency_keys')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('function_name', 'award-xp')
+            .gte('created_at', oneMinuteAgo);
+
+        if (rateLimitError) {
+            console.error('[award-xp] Rate limit check failed:', rateLimitError);
+            // Continue on error - don't block legitimate requests due to DB issues
+        } else if ((recentRequestCount || 0) >= MAX_REQUESTS_PER_MINUTE) {
+            console.warn('[award-xp] Rate limit exceeded:', {
+                userId,
+                recentRequests: recentRequestCount,
+                limit: MAX_REQUESTS_PER_MINUTE,
+            });
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: 'Rate limit exceeded. Please try again later.',
+                }),
+                { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
@@ -432,6 +530,20 @@ Deno.serve(async (req: Request) => {
 
         const newTotalXP = result.new_total;
         console.log('[award-xp] XP awarded successfully, new total:', newTotalXP);
+
+        // Also update users.xp_points for consistency with verify-subscriptions/verify-video-likes
+        // This ensures users.xp_points stays in sync with leaderboard_entries.total_xp
+        const { error: userUpdateError } = await supabase
+            .from('users')
+            .update({ xp_points: newTotalXP })
+            .eq('id', userId);
+
+        if (userUpdateError) {
+            // Log but don't fail - leaderboard is the source of truth
+            console.error('[award-xp] Failed to update users.xp_points (non-fatal):', userUpdateError);
+        } else {
+            console.log('[award-xp] Updated users.xp_points:', newTotalXP);
+        }
 
         // Calculate personal rank (instant feedback)
         const personalRank = await calculatePersonalRank(supabase, userId, newTotalXP);

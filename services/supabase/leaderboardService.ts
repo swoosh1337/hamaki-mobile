@@ -1,6 +1,6 @@
 /**
  * Leaderboard Service
- * 
+ *
  * Handles all leaderboard-related database operations.
  * No React dependencies - pure data access layer.
  */
@@ -10,6 +10,16 @@ import { createLogger } from '@/utils/logger';
 import { supabase } from './client';
 
 const log = createLogger('Service:Leaderboard');
+
+/** Partial user data returned from leaderboard join query */
+interface LeaderboardUserData {
+    id: string;
+    google_id: string;
+    email: string;
+    full_name: string;
+    avatar_url: string | null;
+    xp_points: number;
+}
 
 /**
  * Leaderboard service for rankings management
@@ -31,6 +41,7 @@ export const leaderboardService = {
                     game_xp,
                     subscription_xp,
                     video_like_xp,
+                    created_at,
                     users!leaderboard_entries_user_id_fkey(
                         id,
                         google_id,
@@ -41,7 +52,10 @@ export const leaderboardService = {
                     )
                 `)
                 .eq('period_type', 'monthly')
+                // Deterministic ordering: higher XP first, then earlier entries, then by ID
                 .order('total_xp', { ascending: false })
+                .order('created_at', { ascending: true })
+                .order('user_id', { ascending: true })
                 .limit(limit);
 
             if (error) {
@@ -53,16 +67,17 @@ export const leaderboardService = {
 
             // Map to UserProfile format for backwards compatibility
             return (data || []).map(entry => {
-                const user = Array.isArray(entry.users) ? entry.users[0] : entry.users;
+                const user = (Array.isArray(entry.users) ? entry.users[0] : entry.users) as LeaderboardUserData | null;
+                if (!user) return null;
                 return {
                     ...user,
                     xp_points: entry.total_xp,  // Use total_xp from leaderboard
-                    // Provide defaults for required fields if not selected
-                    youtube_subscribed: (user as any)?.youtube_subscribed ?? false,
-                    created_at: (user as any)?.created_at ?? new Date().toISOString(),
-                    updated_at: (user as any)?.updated_at ?? new Date().toISOString(),
+                    // Provide defaults for required fields not selected in join query
+                    youtube_subscribed: false,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
                 } as UserProfile;
-            });
+            }).filter((u): u is UserProfile => u !== null);
         } catch (error) {
             log.error('Error fetching leaderboard:', error);
             return [];
@@ -88,10 +103,14 @@ export const leaderboardService = {
                 .select(`
                     user_id,
                     total_xp,
+                    created_at,
                     users!leaderboard_entries_user_id_fkey(full_name, avatar_url)
                 `)
                 .eq('period_type', 'weekly')
+                // Deterministic ordering: higher XP first, then earlier entries, then by ID
                 .order('total_xp', { ascending: false })
+                .order('created_at', { ascending: true })
+                .order('user_id', { ascending: true })
                 .limit(limit);
 
             if (error) {
@@ -150,13 +169,17 @@ export const leaderboardService = {
                     game_xp,
                     subscription_xp,
                     video_like_xp,
+                    created_at,
                     users!leaderboard_entries_user_id_fkey(
                         full_name,
                         avatar_url
                     )
                 `)
                 .eq('period_type', periodType)
+                // Deterministic ordering: higher XP first, then earlier entries, then by ID
                 .order('total_xp', { ascending: false })
+                .order('created_at', { ascending: true })
+                .order('user_id', { ascending: true })
                 .limit(limit);
 
             if (error) {

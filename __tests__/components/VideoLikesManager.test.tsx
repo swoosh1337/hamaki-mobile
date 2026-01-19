@@ -55,6 +55,7 @@ describe('VideoLikesManager', () => {
             pendingVideoLikeCount: 0,
             lastSubscriptionCheck: null,
             refreshAll: jest.fn(),
+            reloadFromCache: jest.fn(),
             // Quota state properties
             isQuotaExhausted: false,
             quotaResetTimeRemaining: null,

@@ -5,8 +5,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Miro walking animation frames
 const MIRO_FRAMES = [
-    require('@/features/games/noPogod/assets/miro/ნაბიჯი 1.png'),
-    require('@/features/games/noPogod/assets/miro/ნაბიჯი 2.png'),
+    require('@/features/games/noPogod/assets/miro/ნაბიჯი 1.webp'),
+    require('@/features/games/noPogod/assets/miro/ნაბიჯი 2.webp'),
 ];
 
 const MIRO_SIZE = 120;
@@ -59,16 +59,6 @@ export const AnimatedMiroLoader: React.FC<AnimatedMiroLoaderProps> = ({
 
         return () => clearInterval(frameInterval);
     }, []);
-
-    // Update facing direction based on position animation
-    useEffect(() => {
-        const listener = positionAnim.addListener(({ value }) => {
-            // Facing right when moving from 0 to 1, left when moving from 1 to 0
-            // We can detect direction by tracking value changes
-        });
-
-        return () => positionAnim.removeListener(listener);
-    }, [positionAnim]);
 
     // Listen for direction changes
     useEffect(() => {

@@ -22,6 +22,7 @@ const getRequiredEnv = (key: string): string => {
 const SUPABASE_URL = getRequiredEnv('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY');
 const YOUTUBE_API_KEY = getRequiredEnv('YOUTUBE_API_KEY');
+const YOUTUBE_FETCH_TIMEOUT_MS = 10_000;
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -129,7 +130,21 @@ async function fetchLatestVideo(channelId: string) {
     url.searchParams.set('maxResults', '1');
     url.searchParams.set('type', 'video');
 
-    const res = await fetch(url.toString());
+    let res: Response;
+    try {
+        res = await fetch(url.toString(), {
+            signal: AbortSignal.timeout(YOUTUBE_FETCH_TIMEOUT_MS),
+        });
+    } catch (error) {
+        const isAbortError = error instanceof DOMException
+            ? error.name === 'AbortError'
+            : error instanceof Error && error.name === 'AbortError';
+        if (isAbortError) {
+            console.error('[sync-youtube-videos] YouTube API request timed out', { channelId });
+            throw new Error('YOUTUBE_FETCH_TIMEOUT');
+        }
+        throw error;
+    }
     if (!res.ok) {
         const error = await res.json().catch(() => ({}));
         console.error('[sync-youtube-videos] YouTube API error:', error);
@@ -185,6 +200,17 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // Start cron job logging
+    let logId: string | null = null;
+    try {
+        const { data: startData } = await supabase.rpc('start_cron_job', {
+            p_job_name: 'sync-youtube-videos'
+        });
+        logId = startData;
+    } catch (logError) {
+        console.error('[sync-youtube-videos] Failed to start cron job log:', logError);
+    }
+
     const results = {
         updated: [] as string[],
         unchanged: [] as string[],
@@ -198,11 +224,15 @@ Deno.serve(async (req: Request) => {
             const latest = await fetchLatestVideo(channel.id);
 
             // Log quota usage (100 units for search.list call)
-            await supabase.rpc('log_youtube_quota_usage', {
+            const { error: quotaError } = await supabase.rpc('log_youtube_quota_usage', {
                 p_operation: 'search.list',
                 p_units: 100,
             });
-            console.log(`[${channel.name}] Logged 100 quota units for search.list`);
+            if (quotaError) {
+                console.error(`[${channel.name}] Failed to log quota usage:`, quotaError);
+            } else {
+                console.log(`[${channel.name}] Logged 100 quota units for search.list`);
+            }
 
             if (!latest) {
                 console.log(`[${channel.name}] No videos found`);
@@ -402,13 +432,37 @@ Deno.serve(async (req: Request) => {
         } catch (err) {
             console.error(`[${channel.name}] Error:`, err);
             results.errors.push(channel.name);
+            // Continue syncing other channels - don't short-circuit on timeout
+            // The error is tracked in results.errors and will be reported at the end
         }
     }
 
     console.log('[sync-youtube-videos] Completed', results);
 
+    // Complete cron job logging
+    if (logId) {
+        try {
+            const hasErrors = results.errors.length > 0;
+            if (hasErrors) {
+                await supabase.rpc('fail_cron_job', {
+                    p_log_id: logId,
+                    p_error_message: `Errors in channels: ${results.errors.join(', ')}`,
+                    p_result: results
+                });
+            } else {
+                await supabase.rpc('complete_cron_job', {
+                    p_log_id: logId,
+                    p_result: results
+                });
+            }
+        } catch (logError) {
+            console.error('[sync-youtube-videos] Failed to complete cron job log:', logError);
+        }
+    }
+
     return new Response(
         JSON.stringify({
+            success: true,
             message: 'YouTube sync completed',
             results,
         }),

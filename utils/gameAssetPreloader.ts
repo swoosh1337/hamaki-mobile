@@ -63,30 +63,30 @@ export async function preloadNoPogodAssets(
 
   const assets = [
     // Background
-    { name: 'background', source: require('@/assets/images/game/bg.png') },
+    { name: 'background', source: require('@/features/games/noPogod/assets/bg.webp') },
 
     // Miro sprites
-    { name: 'miro-idle', source: require('@/assets/images/game/miro/პროფილი დგომა.png') },
-    { name: 'miro-step1', source: require('@/assets/images/game/miro/ნაბიჯი 1.png') },
-    { name: 'miro-step2', source: require('@/assets/images/game/miro/ნაბიჯი 2.png') },
-    { name: 'miro-angle45', source: require('@/assets/images/game/miro/დგომა 45 გრადუსი.png') },
-    { name: 'miro-angle90', source: require('@/assets/images/game/miro/დგომა 90 გრადუსი.png') },
+    { name: 'miro-idle', source: require('@/features/games/noPogod/assets/miro/პროფილი დგომა.webp') },
+    { name: 'miro-step1', source: require('@/features/games/noPogod/assets/miro/ნაბიჯი 1.webp') },
+    { name: 'miro-step2', source: require('@/features/games/noPogod/assets/miro/ნაბიჯი 2.webp') },
+    { name: 'miro-angle45', source: require('@/features/games/noPogod/assets/miro/დგომა 45 გრადუსი.webp') },
+    { name: 'miro-angle90', source: require('@/features/games/noPogod/assets/miro/დგომა 90 გრადუსი.webp') },
 
     // Shonzika sprites
-    { name: 'shonzika-idle', source: require('@/assets/images/game/shonzika/დგომა პროფილი.png') },
-    { name: 'shonzika-idle90', source: require('@/assets/images/game/shonzika/დგომა 90 გრადუსი.png') },
-    { name: 'shonzika-walk1', source: require('@/assets/images/game/shonzika/სიარული 1.png') },
-    { name: 'shonzika-walk2', source: require('@/assets/images/game/shonzika/სიარული 2~.png') },
-    { name: 'shonzika-hand-profile', source: require('@/assets/images/game/shonzika/ხელი პროფილი.png') },
-    { name: 'shonzika-hand45', source: require('@/assets/images/game/shonzika/ხელი 45 აგრადუსი.png') },
-    { name: 'shonzika-hand90', source: require('@/assets/images/game/shonzika/ხელი 90 გრადუსი.png') },
+    { name: 'shonzika-idle', source: require('@/features/games/noPogod/assets/shonzika/დგომა პროფილი.webp') },
+    { name: 'shonzika-idle90', source: require('@/features/games/noPogod/assets/shonzika/დგომა 90 გრადუსი.webp') },
+    { name: 'shonzika-walk1', source: require('@/features/games/noPogod/assets/shonzika/სიარული 1.webp') },
+    { name: 'shonzika-walk2', source: require('@/features/games/noPogod/assets/shonzika/სიარული 2~.webp') },
+    { name: 'shonzika-hand-profile', source: require('@/features/games/noPogod/assets/shonzika/ხელი პროფილი.webp') },
+    { name: 'shonzika-hand45', source: require('@/features/games/noPogod/assets/shonzika/ხელი 45 აგრადუსი.webp') },
+    { name: 'shonzika-hand90', source: require('@/features/games/noPogod/assets/shonzika/ხელი 90 გრადუსი.webp') },
 
     // Item sprites
-    { name: 'item-egg', source: require('@/assets/images/game/items/კვერცხი.png') },
-    { name: 'item-tomato', source: require('@/assets/images/game/items/პომიდორი.png') },
-    { name: 'item-pepper', source: require('@/assets/images/game/items/წიწაკა.png') },
-    { name: 'item-electric', source: require('@/assets/images/game/items/ელექტროშოკი.png') },
-    { name: 'item-bomb', source: require('@/assets/images/game/items/ბომბი.png') },
+    { name: 'item-egg', source: require('@/features/games/noPogod/assets/items/კვერცხი.webp') },
+    { name: 'item-tomato', source: require('@/features/games/noPogod/assets/items/პომიდორი.webp') },
+    { name: 'item-pepper', source: require('@/features/games/noPogod/assets/items/წიწაკა.webp') },
+    { name: 'item-electric', source: require('@/features/games/noPogod/assets/items/ელექტროშოკი.webp') },
+    { name: 'item-bomb', source: require('@/features/games/noPogod/assets/items/ბომბი.webp') },
   ];
 
   const failedAssets: string[] = [];

@@ -98,7 +98,7 @@ export const MagicLinkModal: React.FC<MagicLinkModalProps> = ({
                                             <Text style={styles.emailHighlight}>{email}</Text>
                                         </Text>
                                         <Text style={styles.successSubtext}>
-                                            დააჭირე ბმულს შესასვლელად
+                                            მეილი გახსენი მობილურიდან
                                         </Text>
                                         <TouchableOpacity
                                             style={styles.doneButton}
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         fontSize: 16,
         color: Colors.dark.text,
-        fontFamily: 'HamakiEng', // English font for email input
+        // Use system default font for better email readability
     },
     errorContainer: {
         flexDirection: 'row',

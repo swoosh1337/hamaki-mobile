@@ -3,14 +3,14 @@ import { Image, ImageProps, ImageStyle, StyleProp } from 'react-native';
 
 type Props = {
   size?: number;
-  color?: string; // kept for API parity; not used when using PNG
+  color?: string; // kept for API parity; not used when using WebP
   style?: StyleProp<ImageStyle>;
   resizeMode?: ImageProps['resizeMode'];
   accessibilityLabel?: string;
 };
 
 /**
- * Shared Games icon for tabs and lists. Centralize the PNG usage so future
+ * Shared Games icon for tabs and lists. Centralize the WebP usage so future
  * changes (e.g., switching to a vector icon) only happen in one place.
  */
 export const GamesIcon: React.FC<Props> = ({
@@ -21,7 +21,7 @@ export const GamesIcon: React.FC<Props> = ({
 }) => {
   return (
     <Image
-      source={require('@/assets/images/mini_games.png')}
+      source={require('@/assets/images/mini_games.webp')}
       style={[{ width: size, height: size }, style]}
       resizeMode={resizeMode}
       accessibilityLabel={accessibilityLabel}
@@ -31,4 +31,3 @@ export const GamesIcon: React.FC<Props> = ({
 };
 
 export default GamesIcon;
-

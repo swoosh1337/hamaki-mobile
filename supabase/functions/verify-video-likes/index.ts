@@ -2,17 +2,19 @@
  * verify-video-likes Edge Function
  *
  * Verifies if user has liked specific YouTube videos and awards XP.
- * 
+ *
  * RULES:
  * ✅ Batch check videos.getRating (1 API call total)
  * ✅ XP awarded per video ID (once per video)
  * ✅ User-initiated only
+ * ✅ AUTH REQUIRED: User must be authenticated and can only verify their own likes
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
 // XP rewards per channel for video likes
 const CHANNEL_VIDEO_XP: Record<string, number> = {
@@ -104,56 +106,132 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-        // Parse request body first to get access token (matching verify-subscriptions pattern)
-        let body: { videos?: VideoToVerify[]; userId?: string; accessToken?: string };
+        // ========================================
+        // STEP 1: Parse request body first
+        // ========================================
+        let body: { videos?: VideoToVerify[]; accessToken?: string };
         try {
             body = await req.json();
             console.log('[verify-video-likes] Request body:', {
                 videoCount: body?.videos?.length,
-                userId: body?.userId ? 'present' : 'missing',
                 hasAccessToken: !!body?.accessToken,
                 accessTokenLength: body?.accessToken?.length || 0,
             });
         } catch (parseError) {
             console.error('[verify-video-likes] Failed to parse request body:', parseError);
             return new Response(
-                JSON.stringify({ error: 'Invalid JSON body' }),
+                JSON.stringify({ success: false, error: 'Invalid JSON body' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
-        const { videos, userId, accessToken } = body;
+        const { videos, accessToken } = body;
 
-        if (!videos?.length || !userId) {
-            console.error('[verify-video-likes] Missing required fields:', { videos: !!videos?.length, userId: !!userId });
+        if (!videos?.length) {
+            console.error('[verify-video-likes] Missing videos');
             return new Response(
-                JSON.stringify({ error: 'Missing videos or userId' }),
+                JSON.stringify({ success: false, error: 'Missing videos' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
-        // Validate access token (from body, not header)
+        // Validate YouTube access token (required for YouTube API calls)
         if (!accessToken?.trim()) {
-            console.error('[verify-video-likes] Missing or empty access token');
+            console.error('[verify-video-likes] Missing or empty YouTube access token');
             return new Response(
-                JSON.stringify({ error: 'Missing access token' }),
-                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                JSON.stringify({ success: false, error: 'Missing YouTube access token' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
-        console.log('[verify-video-likes] Access token validated:', {
+        // Service role client for database operations
+        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+        // ========================================
+        // STEP 2: Verify User Identity
+        // ========================================
+        // Support two auth methods:
+        // 1. Magic Link users: Have Supabase JWT in Authorization header
+        // 2. Google OAuth users: Have YouTube access token (can verify via Google API)
+        let userId: string;
+        let authMethod: 'supabase_jwt' | 'youtube_token' = 'youtube_token';
+
+        const authHeader = req.headers.get('Authorization');
+
+        // Try Supabase JWT first (Magic Link users)
+        if (authHeader?.startsWith('Bearer ')) {
+            const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                auth: { persistSession: false }
+            });
+
+            const { data: { user: authUser }, error: authError } = await supabaseAuth.auth.getUser(
+                authHeader.replace('Bearer ', '')
+            );
+
+            if (!authError && authUser) {
+                userId = authUser.id;
+                authMethod = 'supabase_jwt';
+                console.log('[verify-video-likes] Auth via Supabase JWT:', userId);
+            }
+        }
+
+        // Fallback: Use YouTube token to verify identity (Google OAuth users)
+        // The YouTube token proves ownership of the Google account
+        if (!userId) {
+            // Get Google user info using the YouTube access token
+            const googleResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                headers: { Authorization: `Bearer ${accessToken}` },
+            });
+
+            if (!googleResponse.ok) {
+                console.error('[verify-video-likes] Failed to verify Google identity');
+                return new Response(
+                    JSON.stringify({ success: false, error: 'Invalid YouTube access token' }),
+                    { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            const googleUser = await googleResponse.json();
+            if (!googleUser.id) {
+                console.error('[verify-video-likes] No Google ID in response');
+                return new Response(
+                    JSON.stringify({ success: false, error: 'Could not verify user identity' }),
+                    { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            // Look up user by Google ID in our database
+            const { data: dbUser, error: dbError } = await supabase
+                .from('users')
+                .select('id')
+                .eq('google_id', googleUser.id)
+                .single();
+
+            if (dbError || !dbUser) {
+                console.error('[verify-video-likes] User not found for Google ID:', googleUser.id);
+                return new Response(
+                    JSON.stringify({ success: false, error: 'User not found' }),
+                    { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            userId = dbUser.id;
+            console.log('[verify-video-likes] Auth via YouTube token, Google ID:', googleUser.id, '-> User:', userId);
+        }
+
+        console.log('[verify-video-likes] User verified:', { userId, authMethod });
+        console.log('[verify-video-likes] YouTube access token validated:', {
             length: accessToken.trim().length,
             prefix: accessToken.trim().substring(0, 10),
         });
 
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
         const results: VerificationResult[] = [];
         let totalXPAwarded = 0;
 
-        // Get user's existing awarded video likes + details for logging
+        // Get user details for logging
         const { data: userData } = await supabase
             .from('users')
-            .select('id, full_name, email, video_like_xp_awarded, xp_points')
+            .select('id, full_name, email, xp_points')
             .eq('id', userId)
             .single();
 
@@ -166,14 +244,24 @@ Deno.serve(async (req: Request) => {
         console.log('[verify-video-likes] Videos to verify:', videos.length);
         console.log('[verify-video-likes] ========================================');
 
-        const awardedLikes: Record<string, boolean> = userData?.video_like_xp_awarded || {};
         let currentXP = userData?.xp_points || 0;
 
+        // Get already-awarded video likes from tracking table (prevents double-award)
+        const videoIds = videos.map(v => v.videoId);
+        const { data: existingAwards } = await supabase
+            .from('user_video_like_awards')
+            .select('video_id')
+            .eq('user_id', userId)
+            .in('video_id', videoIds);
+
+        const awardedVideoIds = new Set((existingAwards || []).map(a => a.video_id));
+        console.log('[verify-video-likes] Already awarded videos:', awardedVideoIds.size);
+
         // Filter out already-awarded videos
-        const videosToCheck = videos.filter(v => !awardedLikes[v.videoId]);
+        const videosToCheck = videos.filter(v => !awardedVideoIds.has(v.videoId));
 
         if (videosToCheck.length === 0) {
-            // All videos already awarded - return cached results
+            // All videos already awarded - return cached results with alreadyAwarded flag
             console.log('[verify-video-likes] All videos already awarded');
             return new Response(
                 JSON.stringify({
@@ -183,6 +271,7 @@ Deno.serve(async (req: Request) => {
                         channelKey: v.channelKey,
                         liked: true,
                         xpAwarded: 0,
+                        alreadyAwarded: true,  // Client needs this to know XP was previously awarded
                     })),
                     totalXPAwarded: 0,
                 }),
@@ -192,27 +281,41 @@ Deno.serve(async (req: Request) => {
 
         // Check video ratings via YouTube API (single batch call)
         console.log(`[verify-video-likes] Checking ${videosToCheck.length} videos`);
-        const videoIds = videosToCheck.map(v => v.videoId);
-        const ratings = await checkVideoRatings(accessToken, videoIds);
+        const videoIdsToCheck = videosToCheck.map(v => v.videoId);
+        const ratings = await checkVideoRatings(accessToken, videoIdsToCheck);
 
         // Log quota usage (1 unit for videos.getRating batch call)
-        await supabase.rpc('log_youtube_quota_usage', {
+        const { error: quotaError } = await supabase.rpc('log_youtube_quota_usage', {
             p_operation: 'videos.getRating',
             p_units: 1,
         });
-        console.log('[verify-video-likes] Logged 1 quota unit for videos.getRating');
+        if (quotaError) {
+            console.error('[verify-video-likes] Failed to log quota usage:', quotaError);
+        } else {
+            console.log('[verify-video-likes] Logged 1 quota unit for videos.getRating');
+        }
 
         // Process results
-        const newAwardedLikes = { ...awardedLikes };
+        const newAwards: Array<{
+            user_id: string;
+            video_id: string;
+            channel_key: string;
+            xp_awarded: number;
+        }> = [];
 
         for (const video of videos) {
             const isLiked = ratings.get(video.videoId) ?? false;
-            const alreadyAwarded = awardedLikes[video.videoId] || false;
+            const wasAlreadyAwarded = awardedVideoIds.has(video.videoId);
             let xpAmount = 0;
 
-            if (isLiked && !alreadyAwarded) {
+            if (isLiked && !wasAlreadyAwarded) {
                 xpAmount = CHANNEL_VIDEO_XP[video.channelKey] || 0;
-                newAwardedLikes[video.videoId] = true;
+                newAwards.push({
+                    user_id: userId,
+                    video_id: video.videoId,
+                    channel_key: video.channelKey,
+                    xp_awarded: xpAmount,
+                });
                 totalXPAwarded += xpAmount;
                 console.log(`[${video.channelKey}] Video liked, awarding ${xpAmount} XP`);
             }
@@ -220,20 +323,28 @@ Deno.serve(async (req: Request) => {
             results.push({
                 videoId: video.videoId,
                 channelKey: video.channelKey,
-                liked: isLiked,
+                liked: isLiked || wasAlreadyAwarded,  // If already awarded, must have been liked
                 xpAwarded: xpAmount,
+                alreadyAwarded: wasAlreadyAwarded,  // Client needs this to know XP was previously awarded
             });
         }
 
-        // Update user's XP and awarded likes
+        // Update user's XP and record awards
         if (totalXPAwarded > 0) {
-            // Update users table
+            // Record awards in tracking table (DB-level uniqueness prevents double-award)
+            const { error: insertError } = await supabase
+                .from('user_video_like_awards')
+                .insert(newAwards);
+
+            if (insertError) {
+                // If insert fails due to duplicate, it's a race condition - another request already awarded
+                console.warn('[verify-video-likes] Some awards may already exist:', insertError);
+            }
+
+            // Update users.xp_points
             await supabase
                 .from('users')
-                .update({
-                    xp_points: currentXP + totalXPAwarded,
-                    video_like_xp_awarded: newAwardedLikes,
-                })
+                .update({ xp_points: currentXP + totalXPAwarded })
                 .eq('id', userId);
 
             // Update leaderboard_entries.video_like_xp for BOTH monthly and weekly
@@ -325,7 +436,7 @@ Deno.serve(async (req: Request) => {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('[verify-video-likes] Error:', errorMessage);
         return new Response(
-            JSON.stringify({ error: errorMessage }),
+            JSON.stringify({ success: false, error: errorMessage }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }

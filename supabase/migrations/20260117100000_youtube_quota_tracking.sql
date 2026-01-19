@@ -29,46 +29,59 @@ CREATE TABLE IF NOT EXISTS youtube_quota_daily (
 CREATE INDEX IF NOT EXISTS idx_youtube_quota_date ON youtube_quota_daily(usage_date DESC);
 
 -- Function to log quota usage (called by Edge Functions)
+-- Uses single atomic upsert to prevent double-counting under concurrency
 CREATE OR REPLACE FUNCTION log_youtube_quota_usage(
     p_operation TEXT,
     p_units INTEGER
 )
 RETURNS void AS $$
 BEGIN
-    -- Upsert today's record
-    INSERT INTO youtube_quota_daily (usage_date)
-    VALUES (CURRENT_DATE)
-    ON CONFLICT (usage_date) DO NOTHING;
-
-    -- Update the appropriate column based on operation
-    IF p_operation = 'subscriptions.list' THEN
-        UPDATE youtube_quota_daily
-        SET subscriptions_list_units = subscriptions_list_units + p_units,
-            subscriptions_list_calls = subscriptions_list_calls + 1,
-            total_units = total_units + p_units,
-            updated_at = NOW()
-        WHERE usage_date = CURRENT_DATE;
-    ELSIF p_operation = 'videos.getRating' THEN
-        UPDATE youtube_quota_daily
-        SET videos_get_rating_units = videos_get_rating_units + p_units,
-            videos_get_rating_calls = videos_get_rating_calls + 1,
-            total_units = total_units + p_units,
-            updated_at = NOW()
-        WHERE usage_date = CURRENT_DATE;
-    ELSIF p_operation = 'search.list' THEN
-        UPDATE youtube_quota_daily
-        SET search_list_units = search_list_units + p_units,
-            search_list_calls = search_list_calls + 1,
-            total_units = total_units + p_units,
-            updated_at = NOW()
-        WHERE usage_date = CURRENT_DATE;
-    ELSE
-        -- Generic fallback - just add to total
-        UPDATE youtube_quota_daily
-        SET total_units = total_units + p_units,
-            updated_at = NOW()
-        WHERE usage_date = CURRENT_DATE;
-    END IF;
+    INSERT INTO youtube_quota_daily (
+        usage_date,
+        subscriptions_list_units,
+        subscriptions_list_calls,
+        videos_get_rating_units,
+        videos_get_rating_calls,
+        search_list_units,
+        search_list_calls,
+        total_units,
+        updated_at
+    )
+    VALUES (
+        CURRENT_DATE,
+        CASE WHEN p_units >= 0 AND p_operation = 'subscriptions.list' THEN p_units ELSE 0 END,
+        CASE WHEN p_units >= 0 AND p_operation = 'subscriptions.list' THEN 1 ELSE 0 END,
+        CASE WHEN p_units >= 0 AND p_operation = 'videos.getRating' THEN p_units ELSE 0 END,
+        CASE WHEN p_units >= 0 AND p_operation = 'videos.getRating' THEN 1 ELSE 0 END,
+        CASE WHEN p_units >= 0 AND p_operation = 'search.list' THEN p_units ELSE 0 END,
+        CASE WHEN p_units >= 0 AND p_operation = 'search.list' THEN 1 ELSE 0 END,
+        CASE
+            WHEN p_units >= 0 AND p_operation IN ('subscriptions.list', 'videos.getRating', 'search.list')
+                THEN p_units
+            ELSE 0
+        END,
+        NOW()
+    )
+    ON CONFLICT (usage_date) DO UPDATE SET
+        subscriptions_list_units = youtube_quota_daily.subscriptions_list_units +
+            CASE WHEN p_units >= 0 AND p_operation = 'subscriptions.list' THEN p_units ELSE 0 END,
+        subscriptions_list_calls = youtube_quota_daily.subscriptions_list_calls +
+            CASE WHEN p_units >= 0 AND p_operation = 'subscriptions.list' THEN 1 ELSE 0 END,
+        videos_get_rating_units = youtube_quota_daily.videos_get_rating_units +
+            CASE WHEN p_units >= 0 AND p_operation = 'videos.getRating' THEN p_units ELSE 0 END,
+        videos_get_rating_calls = youtube_quota_daily.videos_get_rating_calls +
+            CASE WHEN p_units >= 0 AND p_operation = 'videos.getRating' THEN 1 ELSE 0 END,
+        search_list_units = youtube_quota_daily.search_list_units +
+            CASE WHEN p_units >= 0 AND p_operation = 'search.list' THEN p_units ELSE 0 END,
+        search_list_calls = youtube_quota_daily.search_list_calls +
+            CASE WHEN p_units >= 0 AND p_operation = 'search.list' THEN 1 ELSE 0 END,
+        total_units = youtube_quota_daily.total_units +
+            CASE
+                WHEN p_units >= 0 AND p_operation IN ('subscriptions.list', 'videos.getRating', 'search.list')
+                    THEN p_units
+                ELSE 0
+            END,
+        updated_at = NOW();
 END;
 $$ LANGUAGE plpgsql;
 
@@ -143,6 +156,9 @@ GRANT EXECUTE ON FUNCTION get_youtube_quota_history(INTEGER) TO service_role;
 
 -- RLS policies - only service role can access
 ALTER TABLE youtube_quota_daily ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policy if it exists, then recreate
+DROP POLICY IF EXISTS "Service role full access to quota tracking" ON youtube_quota_daily;
 
 CREATE POLICY "Service role full access to quota tracking"
     ON youtube_quota_daily

@@ -73,6 +73,8 @@ interface GameCanvasProps {
   highScore?: number;
   isNewHighScore?: boolean;
   xpEarned?: number;
+  roundsPlayed?: number;
+  maxRounds?: number;
 }
 
 export const GameCanvas = React.memo(({
@@ -90,6 +92,8 @@ export const GameCanvas = React.memo(({
   highScore = 0,
   isNewHighScore = false,
   xpEarned = 0,
+  roundsPlayed = 0,
+  maxRounds = 3,
 }: GameCanvasProps) => {
   // Load Skia images
   const backgroundImage = useImage(assets.background || null);
@@ -248,6 +252,10 @@ export const GameCanvas = React.memo(({
 
         {xpEarned > 0 && (
           <Text style={styles.xpEarned}>+{xpEarned} XP მიღებულია! ⭐</Text>
+        )}
+
+        {maxRounds > 0 && (
+          <Text style={styles.roundInfo}>Round {roundsPlayed}/{maxRounds}</Text>
         )}
 
         <View style={styles.gameOverButtons}>
@@ -715,9 +723,18 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
-    marginBottom: 30,
+    marginBottom: 20,
     textAlign: 'center',
     fontWeight: 'bold',
+  },
+  roundInfo: {
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
+    color: '#FFA500',
+    marginTop: 12,
+    marginBottom: 20,
+    textAlign: 'center',
+    fontWeight: '600',
   },
   gameOverButtons: {
     gap: 30, // Increased gap for better spacing

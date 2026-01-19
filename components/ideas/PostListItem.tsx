@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import React, { useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
 import type { Post as UserPost } from '@/types/post';
+import { getAvatarSource } from '@/utils/avatars';
 
 interface PostListItemProps {
   post: UserPost & {
@@ -46,18 +48,25 @@ export const PostListItem: React.FC<PostListItemProps> = React.memo(({
     ? post.content
     : post.content.substring(0, MAX_CONTENT_LENGTH) + '...';
 
+  // Platform-specific background: BlurView on iOS, translucent View on Android/web
+  const renderBackground = () => {
+    if (Platform.OS === 'ios') {
+      return <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />;
+    }
+    // Android and web: Use translucent fallback to avoid graphical/performance issues
+    return <View style={styles.translucentBackground} />;
+  };
+
   return (
     <View style={styles.container}>
+      {renderBackground()}
       {/* Header with user info */}
       <View style={styles.header}>
         <View style={styles.userInfo}>
-          {post.user?.avatar_url ? (
-            <Image source={{ uri: post.user.avatar_url }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Ionicons name="person" size={16} color={Colors.dark.tint} />
-            </View>
-          )}
+          <Image
+            source={getAvatarSource(post.user?.avatar_url)}
+            style={styles.avatar}
+          />
           <View style={styles.userTextInfo}>
             <Text style={styles.userName}>{post.user?.full_name || 'Anonymous'}</Text>
             <Text style={styles.postDate}>{formattedDate}</Text>
@@ -108,18 +117,24 @@ PostListItem.displayName = 'PostListItem';
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(245, 245, 245, 0.05)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(196, 255, 0, 0.1)',
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'transparent',
+  },
+  translucentBackground: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(30, 30, 30, 0.85)',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    padding: 16,
+    paddingBottom: 8,
+    zIndex: 1,
   },
   userInfo: {
     flexDirection: 'row',
@@ -127,19 +142,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 8,
-  },
-  avatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(196, 255, 0, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 10,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   userTextInfo: {
     flex: 1,
@@ -155,7 +163,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   content: {
-    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    zIndex: 1,
   },
   title: {
     color: Colors.dark.text,
@@ -163,6 +173,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 8,
     lineHeight: 24,
+    flexWrap: 'wrap', // Ensure long titles wrap
   },
   description: {
     color: Colors.dark.text,
@@ -174,6 +185,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    zIndex: 1,
   },
   upvoteButton: {
     flexDirection: 'row',

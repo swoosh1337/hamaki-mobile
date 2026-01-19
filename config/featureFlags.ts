@@ -19,7 +19,7 @@ export const FEATURE_FLAGS = {
      * When true, game cooldowns are DISABLED (unlimited plays)
      * When false, game cooldowns are ENABLED (production behavior)
      */
-    DISABLE_GAME_COOLDOWN: DEV_MODE,
+    DISABLE_GAME_COOLDOWN: false, // Set to DEV_MODE to disable cooldowns in dev
 
     /**
      * When true, show debug overlays in games

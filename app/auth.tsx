@@ -216,7 +216,7 @@ function AuthScreen() {
         {/* Logo */}
         <View style={styles.logoContainer}>
           <Image
-            source={require('../assets/images/logo-transparent.png')}
+            source={require('../assets/images/logo-transparent.webp')}
             style={styles.logo}
             resizeMode="contain"
           />

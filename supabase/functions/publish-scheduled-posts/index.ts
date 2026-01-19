@@ -11,6 +11,9 @@ Deno.serve(async (req) => {
         return new Response(null, { headers: corsHeaders })
     }
 
+    let logId: string | null = null
+    let supabase: ReturnType<typeof createClient> | null = null
+
     try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
@@ -21,12 +24,26 @@ Deno.serve(async (req) => {
             throw new Error(`Missing environment variables: ${missingVars.join(', ')}`)
         }
 
-        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+        supabase = createClient(supabaseUrl, supabaseServiceKey, {
             auth: {
                 autoRefreshToken: false,
                 persistSession: false
             }
         })
+
+        // Start cron job logging (non-critical - don't fail if logging fails)
+        try {
+            const { data: startData, error: startError } = await supabase.rpc('start_cron_job', {
+                p_job_name: 'publish-scheduled-posts'
+            })
+            if (startError) {
+                console.error('Failed to start cron job logging (non-fatal):', startError)
+            } else {
+                logId = startData
+            }
+        } catch (logStartError) {
+            console.error('Exception starting cron job logging (non-fatal):', logStartError)
+        }
 
         console.log('Checking for scheduled posts to publish...')
 
@@ -144,26 +161,15 @@ Deno.serve(async (req) => {
                 } else if (oldestPosts && oldestPosts.length > 0) {
                     const idsToDelete = oldestPosts.map(p => p.id)
 
-                    // First delete related upvotes
-                    const { error: upvotesError } = await supabase
-                        .from('post_upvotes')
-                        .delete()
-                        .in('post_id', idsToDelete)
-
-                    if (upvotesError) {
-                        console.error('Error deleting related upvotes:', upvotesError)
-                    }
-
-                    // Then delete the posts
-                    const { error: deleteError } = await supabase
-                        .from('posts')
-                        .delete()
-                        .in('id', idsToDelete)
+                    // Atomically delete posts and their upvotes in a single transaction
+                    // This prevents orphaned upvotes if one delete fails
+                    const { data: deletedCount, error: deleteError } = await supabase
+                        .rpc('delete_posts_with_upvotes', { p_post_ids: idsToDelete })
 
                     if (deleteError) {
                         console.error('Error deleting old posts:', deleteError)
                     } else {
-                        console.log(`Successfully deleted ${oldestPosts.length} oldest user posts:`)
+                        console.log(`Successfully deleted ${deletedCount || oldestPosts.length} oldest user posts:`)
                         oldestPosts.forEach(post => {
                             console.log(`  Deleted: "${post.title}" (Created: ${post.created_at})`)
                         })
@@ -172,6 +178,17 @@ Deno.serve(async (req) => {
             } else {
                 console.log('User posts count is within limit (≤30)')
             }
+        }
+
+        // Complete cron job logging with success
+        if (logId) {
+            await supabase.rpc('complete_cron_job', {
+                p_log_id: logId,
+                p_result: {
+                    publishedCount: publishedCount,
+                    postsProcessed: scheduledPosts?.length || 0,
+                }
+            })
         }
 
         return new Response(
@@ -191,6 +208,19 @@ Deno.serve(async (req) => {
     } catch (error) {
         console.error('Error in publish-scheduled-posts function:', error)
         const errorMessage = error instanceof Error ? error.message : String(error)
+
+        // Log cron job failure (reuse existing client if available)
+        if (logId && supabase) {
+            try {
+                await supabase.rpc('fail_cron_job', {
+                    p_log_id: logId,
+                    p_error_message: errorMessage
+                })
+            } catch (logError) {
+                console.error('Failed to log cron job error:', logError)
+            }
+        }
+
         return new Response(
             JSON.stringify({
                 error: errorMessage,

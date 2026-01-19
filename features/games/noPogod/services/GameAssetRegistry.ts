@@ -18,16 +18,16 @@ import type { AtlasDefinition, GameAtlases } from '../types/atlas';
 const log = createLogger('GameAssetRegistry');
 
 // Atlas JSON imports (parsed once at module level)
-import itemsAtlasJson from '@/assets/images/game/atlases/items.json';
-import miroAtlasJson from '@/assets/images/game/atlases/miro.json';
-import shonzikaAtlasJson from '@/assets/images/game/atlases/shonzika.json';
+import itemsAtlasJson from '../assets/atlases/items.json';
+import miroAtlasJson from '../assets/atlases/miro.json';
+import shonzikaAtlasJson from '../assets/atlases/shonzika.json';
 
 // Atlas image requires (for Expo Asset loading)
 const ATLAS_SOURCES = {
-    background: require('@/assets/images/game/atlases/bg.webp'),
-    items: require('@/assets/images/game/atlases/items.webp'),
-    miro: require('@/assets/images/game/atlases/miro.webp'),
-    shonzika: require('@/assets/images/game/atlases/shonzika.webp'),
+    background: require('../assets/atlases/bg.webp'),
+    items: require('../assets/atlases/items.webp'),
+    miro: require('../assets/atlases/miro.webp'),
+    shonzika: require('../assets/atlases/shonzika.webp'),
 };
 
 /**
