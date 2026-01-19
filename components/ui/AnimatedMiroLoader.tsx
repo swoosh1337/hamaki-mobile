@@ -60,16 +60,6 @@ export const AnimatedMiroLoader: React.FC<AnimatedMiroLoaderProps> = ({
         return () => clearInterval(frameInterval);
     }, []);
 
-    // Update facing direction based on position animation
-    useEffect(() => {
-        const listener = positionAnim.addListener(({ value }) => {
-            // Facing right when moving from 0 to 1, left when moving from 1 to 0
-            // We can detect direction by tracking value changes
-        });
-
-        return () => positionAnim.removeListener(listener);
-    }, [positionAnim]);
-
     // Listen for direction changes
     useEffect(() => {
         let lastValue = 0;

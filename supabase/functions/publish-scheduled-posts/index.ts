@@ -12,6 +12,7 @@ Deno.serve(async (req) => {
     }
 
     let logId: string | null = null
+    let supabase: ReturnType<typeof createClient> | null = null
 
     try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')
@@ -23,7 +24,7 @@ Deno.serve(async (req) => {
             throw new Error(`Missing environment variables: ${missingVars.join(', ')}`)
         }
 
-        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+        supabase = createClient(supabaseUrl, supabaseServiceKey, {
             auth: {
                 autoRefreshToken: false,
                 persistSession: false
@@ -208,12 +209,9 @@ Deno.serve(async (req) => {
         console.error('Error in publish-scheduled-posts function:', error)
         const errorMessage = error instanceof Error ? error.message : String(error)
 
-        // Log cron job failure
-        if (logId) {
+        // Log cron job failure (reuse existing client if available)
+        if (logId && supabase) {
             try {
-                const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-                const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-                const supabase = createClient(supabaseUrl, supabaseServiceKey)
                 await supabase.rpc('fail_cron_job', {
                     p_log_id: logId,
                     p_error_message: errorMessage

@@ -73,7 +73,7 @@ export const AvatarPicker: React.FC<AvatarPickerProps> = ({
           {isLoading ? (
             <View style={styles.loadingContainer} testID="avatar-picker-loading">
               <ActivityIndicator size="large" color={Colors.dark.tint} />
-              <Text style={styles.loadingText}>Updating avatar...</Text>
+              <Text style={styles.loadingText}>ავატარი იცვლება...</Text>
             </View>
           ) : (
             <ScrollView

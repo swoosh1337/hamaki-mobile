@@ -140,7 +140,7 @@ export function CreatePostModal({ visible, onClose, onSubmit, isSubmitting }: Cr
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={Colors.dark.text} style={{ opacity: 0.6 }} />
+            <Ionicons name="close" size={24} color={Colors.dark.text} style={styles.closeIcon} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>ახალი იდეა</Text>
           <View style={styles.headerPlaceholder} />
@@ -265,6 +265,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  closeIcon: {
+    opacity: 0.6,
+  },
   headerPlaceholder: {
     width: 32,
   },
@@ -341,7 +344,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 59, 48, 0.02)',
   },
   errorText: {
-    color: '#FF3B30',
+    color: Colors.dark.error,
     fontSize: 12,
     fontFamily: 'SpaceMono',
   },
@@ -387,7 +390,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 59, 48, 0.3)',
   },
   cancelButtonText: {
-    color: '#FF3B30',
+    color: Colors.dark.error,
     fontSize: 16,
     fontFamily: 'SpaceMono',
     fontWeight: 'bold',

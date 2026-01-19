@@ -105,16 +105,18 @@ export const PostCard: React.FC<PostCardProps> = ({
         style={StyleSheet.absoluteFill}
       />
       <View style={styles.innerContent}>
-        <View style={styles.thumbnailContainer}>
-          <Image source={{ uri: post.thumbnail }} style={styles.thumbnail} resizeMode="cover" />
-          {post.type === 'video' && (
-            <View style={styles.playIconOverlay}>
-              <View style={styles.playIconCircle}>
-                <Ionicons name="play" size={24} color="#FFFFFF" />
+        {post.thumbnail && (
+          <View style={styles.thumbnailContainer}>
+            <Image source={{ uri: post.thumbnail }} style={styles.thumbnail} resizeMode="cover" />
+            {post.type === 'video' && (
+              <View style={styles.playIconOverlay}>
+                <View style={styles.playIconCircle}>
+                  <Ionicons name="play" size={24} color="#FFFFFF" />
+                </View>
               </View>
-            </View>
-          )}
-        </View>
+            )}
+          </View>
+        )}
       
       <View style={styles.content}>
         <View style={styles.header}>
@@ -129,7 +131,7 @@ export const PostCard: React.FC<PostCardProps> = ({
         {/* Company name for hiring posts */}
         {post.type === 'hiring' && post.metadata.company && (
           <View style={styles.metaRow}>
-            <Ionicons name="briefcase-outline" size={14} color={Colors.dark.tint} style={{ marginRight: 4 }} />
+            <Ionicons name="briefcase-outline" size={14} color={Colors.dark.tint} style={styles.iconMargin} />
             <Text style={styles.company}>{post.metadata.company}</Text>
           </View>
         )}
@@ -146,7 +148,7 @@ export const PostCard: React.FC<PostCardProps> = ({
               onPress={handleWatchVideo}
               activeOpacity={0.7}
             >
-              <Ionicons name="logo-youtube" size={20} color={Colors.dark.background} style={{ marginRight: 6 }} />
+              <Ionicons name="logo-youtube" size={20} color={Colors.dark.background} style={styles.iconMarginLarge} />
               <Text style={styles.watchText}>ყურება</Text>
             </TouchableOpacity>
             {isNewPost(post.publishedAt) && (
@@ -164,7 +166,7 @@ export const PostCard: React.FC<PostCardProps> = ({
             onPress={handleApply}
             activeOpacity={0.7}
           >
-            <Ionicons name="paper-plane" size={20} color={Colors.dark.background} style={{ marginRight: 6 }} />
+            <Ionicons name="paper-plane" size={20} color={Colors.dark.background} style={styles.iconMarginLarge} />
             <Text style={styles.applyText}>გაგზავნა</Text>
           </TouchableOpacity>
         )}
@@ -173,7 +175,7 @@ export const PostCard: React.FC<PostCardProps> = ({
 
         <View style={styles.footerRow}>
           <View style={styles.metaInfo}>
-            <Ionicons name="time-outline" size={14} color={Colors.dark.tabIconDefault} style={{ marginRight: 4 }} />
+            <Ionicons name="time-outline" size={14} color={Colors.dark.tabIconDefault} style={styles.iconMargin} />
             <Text style={styles.metaText}>{formatRelativeDate(post.createdAt)}</Text>
             {post.metadata.readTimeMinutes && (
               <Text style={styles.metaText}>
@@ -380,6 +382,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'SpaceMono',
     opacity: 0.6,
+  },
+  iconMargin: {
+    marginRight: 4,
+  },
+  iconMarginLarge: {
+    marginRight: 6,
   },
 });
 

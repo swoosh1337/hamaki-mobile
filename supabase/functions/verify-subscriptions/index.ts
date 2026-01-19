@@ -209,7 +209,7 @@ Deno.serve(async (req: Request) => {
         // Support two auth methods:
         // 1. Magic Link users: Have Supabase JWT in Authorization header
         // 2. Google OAuth users: Have YouTube access token (can verify via Google API)
-        let userId: string;
+        let userId: string | undefined;
         let authMethod: 'supabase_jwt' | 'youtube_token' = 'youtube_token';
 
         const authHeader = req.headers.get('Authorization');

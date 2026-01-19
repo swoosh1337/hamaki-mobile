@@ -6,5 +6,16 @@ ALTER TABLE public.posts REPLICA IDENTITY FULL;
 
 -- Enable realtime for post_upvotes table
 -- This allows the mobile app to re-sort posts when upvotes change
-ALTER PUBLICATION supabase_realtime ADD TABLE public.post_upvotes;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime'
+          AND schemaname = 'public'
+          AND tablename = 'post_upvotes'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.post_upvotes;
+    END IF;
+END $$;
 ALTER TABLE public.post_upvotes REPLICA IDENTITY FULL;

@@ -12,14 +12,15 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-    v_upvotes_deleted INTEGER;
     v_posts_deleted INTEGER;
 BEGIN
+    IF p_post_ids IS NULL OR array_length(p_post_ids, 1) IS NULL THEN
+        RETURN 0;
+    END IF;
+
     -- Delete upvotes first (child records)
     DELETE FROM post_upvotes
     WHERE post_id = ANY(p_post_ids);
-
-    GET DIAGNOSTICS v_upvotes_deleted = ROW_COUNT;
 
     -- Delete posts (parent records)
     DELETE FROM posts

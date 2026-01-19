@@ -59,6 +59,7 @@ const GAMES: GameItem[] = [
 const GlowingCardBorder = ({ width, height, color }: { width: number; height: number; color: string }) => {
   const rotation = useSharedValue(0);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- run animation only on mount
   useEffect(() => {
     rotation.value = withRepeat(
       withTiming(2 * Math.PI, { duration: 2500, easing: Easing.linear }),
@@ -300,7 +301,7 @@ export default function GamesScreen() {
     };
 
     syncCooldowns();
-  }, [userProfile?.id, serverCooldownsSynced, isDemoMode]);
+  }, [userProfile?.id, serverCooldownsSynced, isDemoMode, noPogodCooldown.syncFromServer, hammockJumpCooldown.syncFromServer]);
 
   const handleGamePress = async (gameId: string) => {
     if (!userProfile?.id) {

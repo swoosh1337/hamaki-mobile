@@ -49,8 +49,9 @@ export default function IdeasScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [upvotingPosts, setUpvotingPosts] = useState<Set<string>>(new Set());
 
-  // Ref to track if we're currently upvoting (used to skip realtime refetch)
-  const isUpvotingRef = useRef(false);
+  // Ref to track which posts are currently being upvoted (used to skip realtime refetch)
+  // Using a Set instead of boolean to handle multiple concurrent upvotes correctly
+  const upvotingPostsRef = useRef(new Set<string>());
 
   // Use the posts hook for data management
   const {
@@ -121,9 +122,12 @@ export default function IdeasScreen() {
     event: '*',
     enabled: !!userProfile?.id,
     onPayload: (payload) => {
-      // Skip refetch if we're currently upvoting (to preserve optimistic updates)
-      if (isUpvotingRef.current) {
-        log.debug('Upvotes subscription triggered but skipping refetch (user is upvoting)', { eventType: payload.eventType });
+      // Skip refetch if we're currently upvoting any post (to preserve optimistic updates)
+      if (upvotingPostsRef.current.size > 0) {
+        log.debug('Upvotes subscription triggered but skipping refetch (user is upvoting)', {
+          eventType: payload.eventType,
+          upvotingCount: upvotingPostsRef.current.size,
+        });
         return;
       }
       log.debug('Upvotes subscription triggered, refreshing', { eventType: payload.eventType });
@@ -151,7 +155,7 @@ export default function IdeasScreen() {
 
     try {
       setUpvotingPosts(prev => new Set([...prev, postId]));
-      isUpvotingRef.current = true; // Block realtime refetch during upvote
+      upvotingPostsRef.current.add(postId); // Block realtime refetch during upvote
 
       const isCurrentlyUpvoted = checkIsUpvoted(postId);
 
@@ -174,10 +178,7 @@ export default function IdeasScreen() {
         newSet.delete(postId);
         return newSet;
       });
-      // Clear the ref after a short delay to ensure realtime events have passed
-      setTimeout(() => {
-        isUpvotingRef.current = false;
-      }, 500);
+      upvotingPostsRef.current.delete(postId);
     }
   }, [userProfile?.id, checkIsUpvoted, upvote, removeUpvote, upvotingPosts]);
 

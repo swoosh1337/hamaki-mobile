@@ -31,6 +31,17 @@ ALTER TABLE public.user_video_like_awards
     ADD COLUMN IF NOT EXISTS xp_awarded INTEGER DEFAULT 0,
     ADD COLUMN IF NOT EXISTS awarded_at TIMESTAMPTZ DEFAULT NOW();
 
+ALTER TABLE public.user_video_like_awards
+    ALTER COLUMN xp_awarded SET DEFAULT 0,
+    ALTER COLUMN awarded_at SET DEFAULT NOW();
+
+ALTER TABLE public.user_video_like_awards
+    ALTER COLUMN user_id SET NOT NULL,
+    ALTER COLUMN video_id SET NOT NULL,
+    ALTER COLUMN channel_key SET NOT NULL,
+    ALTER COLUMN xp_awarded SET NOT NULL,
+    ALTER COLUMN awarded_at SET NOT NULL;
+
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -90,35 +101,18 @@ CREATE INDEX IF NOT EXISTS idx_video_like_awards_awarded_at
 
 -- Step 8: Migrate existing data from users.video_like_xp_awarded JSON column
 -- This preserves existing awards so users don't get double XP
-DO $$
-DECLARE
-    user_record RECORD;
-    video_key TEXT;
-    video_awarded BOOLEAN;
-BEGIN
-    -- Loop through users with video_like_xp_awarded data
-    FOR user_record IN
-        SELECT id, video_like_xp_awarded
-        FROM public.users
-        WHERE video_like_xp_awarded IS NOT NULL
-        AND video_like_xp_awarded != '{}'::jsonb
-    LOOP
-        -- Loop through each video in the JSON object
-        FOR video_key, video_awarded IN
-            SELECT key, value::boolean
-            FROM jsonb_each_text(user_record.video_like_xp_awarded)
-        LOOP
-            IF video_awarded THEN
-                -- Insert into new tracking table (ignore conflicts)
-                INSERT INTO public.user_video_like_awards (user_id, video_id, channel_key, xp_awarded)
-                VALUES (user_record.id, video_key, 'unknown', 0)
-                ON CONFLICT (user_id, video_id) DO NOTHING;
-            END IF;
-        END LOOP;
-    END LOOP;
-
-    RAISE NOTICE 'Migrated existing video like awards to new tracking table';
-END $$;
+INSERT INTO public.user_video_like_awards (user_id, video_id, channel_key, xp_awarded)
+SELECT
+    u.id AS user_id,
+    kv.key AS video_id,
+    'unknown' AS channel_key,
+    0 AS xp_awarded
+FROM public.users u
+CROSS JOIN LATERAL jsonb_each_text(u.video_like_xp_awarded) AS kv(key, value)
+WHERE u.video_like_xp_awarded IS NOT NULL
+  AND u.video_like_xp_awarded != '{}'::jsonb
+  AND (kv.value)::boolean = true
+ON CONFLICT (user_id, video_id) DO NOTHING;
 
 -- ============================================================================
 -- NOTE: After migration is complete and verify-video-likes Edge Function is

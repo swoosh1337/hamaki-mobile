@@ -229,7 +229,7 @@ async function scheduleCooldownNotification(gameType: GameType): Promise<void> {
       }
     }
 
-    // Schedule new notification for 2 hours from now
+    // Schedule new notification based on the current cooldown duration
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: '🎮 Cooldown-ი მორჩა!',
@@ -239,7 +239,7 @@ async function scheduleCooldownNotification(gameType: GameType): Promise<void> {
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: GAME_COOLDOWN_MS / 1000, // 2 hours in seconds
+        seconds: GAME_COOLDOWN_MS / 1000, // 1 hour in seconds
         repeats: false,
       },
     });

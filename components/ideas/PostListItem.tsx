@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import React, { useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
 import type { Post as UserPost } from '@/types/post';
@@ -48,9 +48,18 @@ export const PostListItem: React.FC<PostListItemProps> = React.memo(({
     ? post.content
     : post.content.substring(0, MAX_CONTENT_LENGTH) + '...';
 
+  // Platform-specific background: BlurView on iOS, translucent View on Android/web
+  const renderBackground = () => {
+    if (Platform.OS === 'ios') {
+      return <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />;
+    }
+    // Android and web: Use translucent fallback to avoid graphical/performance issues
+    return <View style={styles.translucentBackground} />;
+  };
+
   return (
     <View style={styles.container}>
-      <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+      {renderBackground()}
       {/* Header with user info */}
       <View style={styles.header}>
         <View style={styles.userInfo}>
@@ -115,6 +124,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.08)',
     backgroundColor: 'transparent',
   },
+  translucentBackground: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(30, 30, 30, 0.85)',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -135,17 +148,6 @@ const styles = StyleSheet.create({
     marginRight: 10,
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  avatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(196, 255, 0, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    borderWidth: 1.5,
-    borderColor: 'rgba(196, 255, 0, 0.3)',
   },
   userTextInfo: {
     flex: 1,

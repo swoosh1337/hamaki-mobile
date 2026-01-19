@@ -22,7 +22,8 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// PostgreSQL adds 'out_' prefix to RETURNS TABLE columns
+// The 'out_' prefix comes from explicit RETURNS TABLE column names in
+// get_youtube_quota_status; QuotaStatus maps to those names in the signature.
 interface QuotaStatus {
     out_usage_date: string;
     out_total_units_used: number;
@@ -62,7 +63,8 @@ Deno.serve(async (req: Request) => {
 
         // Parse query params for history days (default 7)
         const url = new URL(req.url);
-        const historyDays = parseInt(url.searchParams.get('days') || '7', 10);
+        const requestedDays = parseInt(url.searchParams.get('days') || '7', 10);
+        const historyDays = Number.isFinite(requestedDays) && requestedDays > 0 ? requestedDays : 7;
 
         // Get current day status
         const { data: currentStatus, error: statusError } = await supabase

@@ -82,9 +82,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           text: buttonText,
           style: 'destructive',
           onPress: async () => {
-            onClose();
-            await signOut();
-            router.replace('/auth');
+            try {
+              await signOut();
+              onClose();
+              router.replace('/auth');
+            } catch (error) {
+              log.error('Failed to sign out', error);
+              Alert.alert('შეცდომა', 'გამოსვლა ვერ მოხერხდა. გთხოვთ სცადოთ ახლიდან.');
+            }
           },
         },
       ]
@@ -160,7 +165,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <View style={styles.accountInfo}>
               <View style={styles.accountRow}>
                 <View style={styles.labelGroup}>
-                  <Ionicons name="mail-outline" size={16} color={Colors.dark.text} style={{ opacity: 0.5 }} />
+                  <Ionicons name="mail-outline" size={16} color={Colors.dark.text} style={styles.iconMuted} />
                   <Text style={styles.label}>ელფოსტა</Text>
                 </View>
                 <Text style={styles.value}>{userProfile?.email}</Text>
@@ -168,7 +173,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <View style={styles.accountRowSeparator} />
               <View style={styles.accountRow}>
                 <View style={styles.labelGroup}>
-                  <Ionicons name="person-outline" size={16} color={Colors.dark.text} style={{ opacity: 0.5 }} />
+                  <Ionicons name="person-outline" size={16} color={Colors.dark.text} style={styles.iconMuted} />
                   <Text style={styles.label}>სახელი</Text>
                 </View>
                 <Text style={styles.value} numberOfLines={1}>{userProfile?.full_name}</Text>
@@ -178,7 +183,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <View style={styles.accountRowSeparator} />
                   <View style={styles.accountRow}>
                     <View style={styles.labelGroup}>
-                      <Ionicons name="shield-checkmark-outline" size={16} color={Colors.dark.text} style={{ opacity: 0.5 }} />
+                      <Ionicons name="shield-checkmark-outline" size={16} color={Colors.dark.text} style={styles.iconMuted} />
                       <Text style={styles.label}>Account Type</Text>
                     </View>
                     <View style={styles.demoTag}>
@@ -233,7 +238,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           მიიღე 3,100 XP-მდე ყველა არხის გამოწერით
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={20} color={Colors.dark.tint} style={{ opacity: 0.8 }} />
+                      <Ionicons name="chevron-forward" size={20} color={Colors.dark.tint} style={styles.chevronMuted} />
                     </View>
                   </TouchableOpacity>
 
@@ -261,7 +266,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           დააგროვე 500 XP-მდე ბოლო ვიდეობის დალაიქებით
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={20} color={Colors.dark.tint} style={{ opacity: 0.8 }} />
+                      <Ionicons name="chevron-forward" size={20} color={Colors.dark.tint} style={styles.chevronMuted} />
                     </View>
                   </TouchableOpacity>
                 </View>
@@ -430,6 +435,12 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
     opacity: 0.5,
+  },
+  iconMuted: {
+    opacity: 0.5,
+  },
+  chevronMuted: {
+    opacity: 0.8,
   },
   value: {
     fontSize: 14,

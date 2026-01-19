@@ -44,6 +44,15 @@ interface UsePostsReturn {
     isUpvoted: (postId: string) => boolean;
 }
 
+const sortByUpvotes = (items: PostWithAuthor[]): PostWithAuthor[] => {
+    return [...items].sort((a, b) => {
+        if (b.upvotes !== a.upvotes) {
+            return b.upvotes - a.upvotes;
+        }
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+};
+
 export function usePosts(options: UsePostsOptions = {}): UsePostsReturn {
     const {
         userId,
@@ -144,12 +153,7 @@ export function usePosts(options: UsePostsOptions = {}): UsePostsReturn {
             );
             // Re-sort if sorting by upvotes
             if (sortBy === 'upvotes') {
-                return [...updated].sort((a, b) => {
-                    if (b.upvotes !== a.upvotes) {
-                        return b.upvotes - a.upvotes;
-                    }
-                    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-                });
+                return sortByUpvotes(updated);
             }
             return updated;
         });
@@ -165,33 +169,40 @@ export function usePosts(options: UsePostsOptions = {}): UsePostsReturn {
                             : post
                     );
                     if (sortBy === 'upvotes') {
-                        return [...updated].sort((a, b) => {
-                            if (b.upvotes !== a.upvotes) {
-                                return b.upvotes - a.upvotes;
-                            }
-                            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-                        });
+                        return sortByUpvotes(updated);
                     }
                     return updated;
                 });
                 log.debug('Upvoted post confirmed', { postId, newUpvotes: updatedPost.upvotes });
                 return true;
             }
-            // Rollback on failure
-            setPosts(prev => prev.map(post =>
-                post.id === postId
-                    ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
-                    : post
-            ));
+            // Rollback on failure - restore fields and re-sort
+            setPosts(prev => {
+                const updated = prev.map(post =>
+                    post.id === postId
+                        ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
+                        : post
+                );
+                if (sortBy === 'upvotes') {
+                    return sortByUpvotes(updated);
+                }
+                return updated;
+            });
             return false;
         } catch (err) {
             log.error('Failed to upvote post', err, { postId });
-            // Rollback on error
-            setPosts(prev => prev.map(post =>
-                post.id === postId
-                    ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
-                    : post
-            ));
+            // Rollback on error - restore fields and re-sort
+            setPosts(prev => {
+                const updated = prev.map(post =>
+                    post.id === postId
+                        ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
+                        : post
+                );
+                if (sortBy === 'upvotes') {
+                    return sortByUpvotes(updated);
+                }
+                return updated;
+            });
             return false;
         }
     }, [userId, sortBy, posts]);
@@ -222,12 +233,7 @@ export function usePosts(options: UsePostsOptions = {}): UsePostsReturn {
             );
             // Re-sort if sorting by upvotes
             if (sortBy === 'upvotes') {
-                return [...updated].sort((a, b) => {
-                    if (b.upvotes !== a.upvotes) {
-                        return b.upvotes - a.upvotes;
-                    }
-                    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-                });
+                return sortByUpvotes(updated);
             }
             return updated;
         });
@@ -243,33 +249,40 @@ export function usePosts(options: UsePostsOptions = {}): UsePostsReturn {
                             : post
                     );
                     if (sortBy === 'upvotes') {
-                        return [...updated].sort((a, b) => {
-                            if (b.upvotes !== a.upvotes) {
-                                return b.upvotes - a.upvotes;
-                            }
-                            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-                        });
+                        return sortByUpvotes(updated);
                     }
                     return updated;
                 });
                 log.debug('Removed upvote confirmed', { postId, newUpvotes: updatedPost.upvotes });
                 return true;
             }
-            // Rollback on failure
-            setPosts(prev => prev.map(post =>
-                post.id === postId
-                    ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
-                    : post
-            ));
+            // Rollback on failure - restore fields and re-sort
+            setPosts(prev => {
+                const updated = prev.map(post =>
+                    post.id === postId
+                        ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
+                        : post
+                );
+                if (sortBy === 'upvotes') {
+                    return sortByUpvotes(updated);
+                }
+                return updated;
+            });
             return false;
         } catch (err) {
             log.error('Failed to remove upvote from post', err, { postId });
-            // Rollback on error
-            setPosts(prev => prev.map(post =>
-                post.id === postId
-                    ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
-                    : post
-            ));
+            // Rollback on error - restore fields and re-sort
+            setPosts(prev => {
+                const updated = prev.map(post =>
+                    post.id === postId
+                        ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
+                        : post
+                );
+                if (sortBy === 'upvotes') {
+                    return sortByUpvotes(updated);
+                }
+                return updated;
+            });
             return false;
         }
     }, [userId, sortBy, posts]);

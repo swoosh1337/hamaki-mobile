@@ -13,13 +13,14 @@ import {
 
 import { Colors } from '@/constants/Colors';
 import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
+import type { VideoLikeStatus } from '@/types/youtube';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('VideoLikesManager');
 
 interface VideoLikesManagerProps {
   // Optional initial data from parent to avoid loading on mount
-  initialStatuses?: import('@/types/youtube').VideoLikeStatus[];
+  initialStatuses?: VideoLikeStatus[];
 }
 
 export const VideoLikesManager: React.FC<VideoLikesManagerProps> = ({ initialStatuses }) => {
@@ -44,7 +45,10 @@ export const VideoLikesManager: React.FC<VideoLikesManagerProps> = ({ initialSta
   };
 
   const openVideo = (videoId: string) => {
-    Linking.openURL(`https://www.youtube.com/watch?v=${videoId}`);
+    Linking.openURL(`https://www.youtube.com/watch?v=${videoId}`).catch((error) => {
+      log.error('Failed to open video URL', error, { videoId });
+      Alert.alert('შეცდომა', 'ვიდეოს გახსნა ვერ მოხერხდა. გთხოვთ დააინსტალიროთ YouTube აპლიკაცია.');
+    });
   };
 
   const earnedXP = videoLikeStatuses

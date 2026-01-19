@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Dimensions, Image, Linking, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Linking, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { PostCard } from '@/components/home/PostCard';
 import { CarouselCard } from '@/components/ui/CarouselCard';
@@ -14,8 +14,6 @@ import { useYouTubeVerification } from '@/hooks/useYouTubeVerification';
 import type { ContentPost } from '@/types';
 import { trackPostClose, trackPostOpen } from '@/utils/analytics';
 import { sortPostsHybrid } from '@/utils/contentSorting';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { posts, featuredPosts, isLoading, error, refreshContent, isNetworkError } = useContent();
@@ -141,7 +139,7 @@ export default function HomeScreen() {
           )}
 
           {error && (
-            <View style={{ paddingHorizontal: 20 }}>
+            <View style={styles.errorContainer}>
               <InlineError
                 message={isNetworkError ? 'კავშირის დამყარება ვერ მოხერხდა. შეამოწმეთ ინტერნეტ კავშირი.' : error}
                 onRetry={handleRetry}
@@ -287,6 +285,9 @@ const styles = StyleSheet.create({
   carouselRow: {
     paddingHorizontal: 16,
     paddingBottom: 12,
+  },
+  errorContainer: {
+    paddingHorizontal: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
