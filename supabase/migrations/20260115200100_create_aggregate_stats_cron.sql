@@ -12,11 +12,12 @@ SECURITY DEFINER
 AS $$
 DECLARE
     v_start_time TIMESTAMPTZ := NOW();
-    v_records_processed INTEGER := 0;
 BEGIN
     RAISE NOTICE '[aggregate_content_stats] Starting aggregation at %', v_start_time;
 
     -- Aggregate video_watch events (all-time stats)
+    DECLARE
+        v_records_processed INTEGER := 0;
     BEGIN
         INSERT INTO content_stats (content_type, content_id, content_name, view_count, unique_users, last_interaction_at, period_start, updated_at)
         SELECT
@@ -46,6 +47,8 @@ BEGIN
     END;
 
     -- Aggregate game_play and game_start events (all-time stats)
+    DECLARE
+        v_records_processed INTEGER := 0;
     BEGIN
         INSERT INTO content_stats (content_type, content_id, content_name, view_count, unique_users, last_interaction_at, period_start, updated_at)
         SELECT
@@ -75,6 +78,8 @@ BEGIN
     END;
 
     -- Aggregate sponsor_view and sponsor_click events (all-time stats)
+    DECLARE
+        v_records_processed INTEGER := 0;
     BEGIN
         INSERT INTO content_stats (content_type, content_id, content_name, view_count, unique_users, last_interaction_at, period_start, updated_at)
         SELECT
@@ -104,6 +109,8 @@ BEGIN
     END;
 
     -- Also aggregate daily stats for trend charts (last 30 days)
+    DECLARE
+        v_records_processed INTEGER := 0;
     BEGIN
         INSERT INTO content_stats (content_type, content_id, content_name, view_count, unique_users, last_interaction_at, period_start, updated_at)
         SELECT

@@ -7,25 +7,21 @@
 
 import { createLogger } from '@/utils/logger';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const log = createLogger('Hook:GameCooldown');
 
-// Storage keys
-const COOLDOWN_STORAGE_KEY = 'hamaki_game_cooldowns';
-const ROUNDS_STORAGE_KEY = 'hamaki_game_rounds';
+// Storage key prefixes - each game gets its own key to avoid race conditions
+const COOLDOWN_KEY_PREFIX = 'hamaki_cooldown_';
+const ROUNDS_KEY_PREFIX = 'hamaki_rounds_';
+
+// Helper to get per-game storage keys
+const getCooldownKey = (gameId: string) => `${COOLDOWN_KEY_PREFIX}${gameId}`;
+const getRoundsKey = (gameId: string) => `${ROUNDS_KEY_PREFIX}${gameId}`;
 
 // Default cooldown period (15 minutes)
 const DEFAULT_COOLDOWN_MS = 15 * 60 * 1000;
 const DEFAULT_MAX_ROUNDS = 3;
-
-interface GameCooldownState {
-    [gameId: string]: number; // Timestamp when cooldown ends
-}
-
-interface GameRoundsState {
-    [gameId: string]: number; // Rounds played for each game
-}
 
 interface UseGameCooldownOptions {
     /** Game identifier */
@@ -38,7 +34,7 @@ interface UseGameCooldownOptions {
     persist?: boolean;
 }
 
-interface UseGameCooldownReturn {
+export interface UseGameCooldownReturn {
     /** Whether the game can be played now */
     canPlay: boolean;
     /** Time remaining in cooldown (ms) */
@@ -61,6 +57,8 @@ interface UseGameCooldownReturn {
     incrementRounds: () => Promise<number>;
     /** Reset rounds to 0 (call when cooldown expires or for testing) */
     resetRounds: () => Promise<void>;
+    /** Refresh cooldown state from storage (call when returning to screen) */
+    refresh: () => Promise<void>;
 }
 
 export function useGameCooldown(options: UseGameCooldownOptions): UseGameCooldownReturn {
@@ -74,21 +72,31 @@ export function useGameCooldown(options: UseGameCooldownOptions): UseGameCooldow
     const [cooldownEndTime, setCooldownEndTime] = useState<number | null>(null);
     const [remainingMs, setRemainingMs] = useState(0);
     const [roundsPlayed, setRoundsPlayed] = useState(0);
+    // Ref to avoid stale closure in incrementRounds when called rapidly
+    const roundsPlayedRef = useRef(0);
+
+    // Keep ref in sync with state
+    useEffect(() => {
+        roundsPlayedRef.current = roundsPlayed;
+    }, [roundsPlayed]);
 
     /**
      * Load cooldown and rounds state from storage
+     * Uses per-game keys to avoid race conditions between different game instances
      */
     const loadCooldownState = useCallback(async () => {
         if (!persist) return;
 
         try {
-            // Load cooldown state
-            const storedCooldowns = await AsyncStorage.getItem(COOLDOWN_STORAGE_KEY);
+            const cooldownKey = getCooldownKey(gameId);
+            const roundsKey = getRoundsKey(gameId);
             let cooldownExpired = false;
 
-            if (storedCooldowns) {
-                const cooldowns: GameCooldownState = JSON.parse(storedCooldowns);
-                const endTime = cooldowns[gameId];
+            // Load cooldown state (stored as number string)
+            const storedEndTime = await AsyncStorage.getItem(cooldownKey);
+
+            if (storedEndTime) {
+                const endTime = parseInt(storedEndTime, 10);
 
                 if (endTime && endTime > Date.now()) {
                     setCooldownEndTime(endTime);
@@ -96,28 +104,25 @@ export function useGameCooldown(options: UseGameCooldownOptions): UseGameCooldow
                 } else if (endTime) {
                     // Cooldown expired, clean it up
                     cooldownExpired = true;
-                    delete cooldowns[gameId];
-                    await AsyncStorage.setItem(COOLDOWN_STORAGE_KEY, JSON.stringify(cooldowns));
+                    await AsyncStorage.removeItem(cooldownKey);
                     log.debug(`Cleared expired cooldown for ${gameId}`);
                 }
             }
 
-            // Load rounds state
-            const storedRounds = await AsyncStorage.getItem(ROUNDS_STORAGE_KEY);
-            if (storedRounds) {
-                const rounds: GameRoundsState = JSON.parse(storedRounds);
-                const savedRounds = rounds[gameId] || 0;
+            // Load rounds state (stored as number string)
+            const storedRounds = await AsyncStorage.getItem(roundsKey);
+            const savedRounds = storedRounds ? parseInt(storedRounds, 10) : 0;
 
-                // If cooldown expired, reset rounds
-                if (cooldownExpired) {
-                    rounds[gameId] = 0;
-                    await AsyncStorage.setItem(ROUNDS_STORAGE_KEY, JSON.stringify(rounds));
-                    setRoundsPlayed(0);
-                    log.debug(`Reset rounds for ${gameId} (cooldown expired)`);
-                } else {
-                    setRoundsPlayed(savedRounds);
-                    log.debug(`Loaded rounds for ${gameId}: ${savedRounds}/${maxRounds}`);
-                }
+            // If cooldown expired, reset rounds
+            if (cooldownExpired) {
+                await AsyncStorage.setItem(roundsKey, '0');
+                roundsPlayedRef.current = 0;
+                setRoundsPlayed(0);
+                log.debug(`Reset rounds for ${gameId} (cooldown expired)`);
+            } else {
+                roundsPlayedRef.current = savedRounds;
+                setRoundsPlayed(savedRounds);
+                log.debug(`Loaded rounds for ${gameId}: ${savedRounds}/${maxRounds}`);
             }
         } catch (err) {
             log.error('Failed to load cooldown state', err);
@@ -126,6 +131,7 @@ export function useGameCooldown(options: UseGameCooldownOptions): UseGameCooldow
 
     /**
      * Start a new cooldown period
+     * Uses per-game key for atomic write (no read-modify-write race)
      */
     const startCooldown = useCallback(async () => {
         const endTime = Date.now() + cooldownMs;
@@ -134,10 +140,8 @@ export function useGameCooldown(options: UseGameCooldownOptions): UseGameCooldow
 
         if (persist) {
             try {
-                const storedData = await AsyncStorage.getItem(COOLDOWN_STORAGE_KEY);
-                const cooldowns: GameCooldownState = storedData ? JSON.parse(storedData) : {};
-                cooldowns[gameId] = endTime;
-                await AsyncStorage.setItem(COOLDOWN_STORAGE_KEY, JSON.stringify(cooldowns));
+                // Direct write to per-game key - no read-modify-write needed
+                await AsyncStorage.setItem(getCooldownKey(gameId), endTime.toString());
             } catch (err) {
                 log.error('Failed to persist cooldown', err);
             }
@@ -151,26 +155,15 @@ export function useGameCooldown(options: UseGameCooldownOptions): UseGameCooldow
     const resetCooldown = useCallback(async () => {
         setCooldownEndTime(null);
         setRemainingMs(0);
+        roundsPlayedRef.current = 0;
         setRoundsPlayed(0);
         log.debug(`Reset cooldown and rounds for ${gameId}`);
 
         if (persist) {
             try {
-                // Clear cooldown
-                const storedCooldowns = await AsyncStorage.getItem(COOLDOWN_STORAGE_KEY);
-                if (storedCooldowns) {
-                    const cooldowns: GameCooldownState = JSON.parse(storedCooldowns);
-                    delete cooldowns[gameId];
-                    await AsyncStorage.setItem(COOLDOWN_STORAGE_KEY, JSON.stringify(cooldowns));
-                }
-
-                // Clear rounds
-                const storedRounds = await AsyncStorage.getItem(ROUNDS_STORAGE_KEY);
-                if (storedRounds) {
-                    const rounds: GameRoundsState = JSON.parse(storedRounds);
-                    delete rounds[gameId];
-                    await AsyncStorage.setItem(ROUNDS_STORAGE_KEY, JSON.stringify(rounds));
-                }
+                // Direct removal of per-game keys - no read-modify-write needed
+                await AsyncStorage.removeItem(getCooldownKey(gameId));
+                await AsyncStorage.removeItem(getRoundsKey(gameId));
             } catch (err) {
                 log.error('Failed to reset cooldown', err);
             }
@@ -180,41 +173,39 @@ export function useGameCooldown(options: UseGameCooldownOptions): UseGameCooldow
     /**
      * Increment rounds played and persist
      * Returns the new rounds count
+     * Uses ref to avoid stale closure when called rapidly
      */
     const incrementRounds = useCallback(async (): Promise<number> => {
-        const newRounds = roundsPlayed + 1;
+        // Use ref to get current value, avoiding stale closure issues
+        const newRounds = roundsPlayedRef.current + 1;
+        roundsPlayedRef.current = newRounds;
         setRoundsPlayed(newRounds);
         log.debug(`Incremented rounds for ${gameId}: ${newRounds}/${maxRounds}`);
 
         if (persist) {
             try {
-                const storedRounds = await AsyncStorage.getItem(ROUNDS_STORAGE_KEY);
-                const rounds: GameRoundsState = storedRounds ? JSON.parse(storedRounds) : {};
-                rounds[gameId] = newRounds;
-                await AsyncStorage.setItem(ROUNDS_STORAGE_KEY, JSON.stringify(rounds));
+                // Direct write to per-game key - no read-modify-write needed
+                await AsyncStorage.setItem(getRoundsKey(gameId), newRounds.toString());
             } catch (err) {
                 log.error('Failed to persist rounds', err);
             }
         }
 
         return newRounds;
-    }, [gameId, maxRounds, persist, roundsPlayed]);
+    }, [gameId, maxRounds, persist]);
 
     /**
      * Reset rounds to 0 (called when cooldown expires)
      */
     const resetRounds = useCallback(async () => {
+        roundsPlayedRef.current = 0;
         setRoundsPlayed(0);
         log.debug(`Reset rounds for ${gameId}`);
 
         if (persist) {
             try {
-                const storedRounds = await AsyncStorage.getItem(ROUNDS_STORAGE_KEY);
-                if (storedRounds) {
-                    const rounds: GameRoundsState = JSON.parse(storedRounds);
-                    rounds[gameId] = 0;
-                    await AsyncStorage.setItem(ROUNDS_STORAGE_KEY, JSON.stringify(rounds));
-                }
+                // Direct write to per-game key - no read-modify-write needed
+                await AsyncStorage.setItem(getRoundsKey(gameId), '0');
             } catch (err) {
                 log.error('Failed to reset rounds', err);
             }
@@ -245,10 +236,8 @@ export function useGameCooldown(options: UseGameCooldownOptions): UseGameCooldow
 
         if (persist) {
             try {
-                const storedData = await AsyncStorage.getItem(COOLDOWN_STORAGE_KEY);
-                const cooldowns: GameCooldownState = storedData ? JSON.parse(storedData) : {};
-                cooldowns[gameId] = serverEndTime;
-                await AsyncStorage.setItem(COOLDOWN_STORAGE_KEY, JSON.stringify(cooldowns));
+                // Direct write to per-game key - no read-modify-write needed
+                await AsyncStorage.setItem(getCooldownKey(gameId), serverEndTime.toString());
             } catch (err) {
                 log.error('Failed to persist server cooldown sync', err);
             }
@@ -293,18 +282,14 @@ export function useGameCooldown(options: UseGameCooldownOptions): UseGameCooldow
             // Clear cooldown and reset rounds when it expires
             if (remaining === 0 && cooldownEndTime) {
                 setCooldownEndTime(null);
+                roundsPlayedRef.current = 0;
                 setRoundsPlayed(0);
                 log.debug(`Cooldown expired for ${gameId}, resetting rounds`);
 
-                // Also clear from storage
+                // Also clear from storage using per-game key
                 if (persist) {
                     try {
-                        const storedRounds = await AsyncStorage.getItem(ROUNDS_STORAGE_KEY);
-                        if (storedRounds) {
-                            const rounds: GameRoundsState = JSON.parse(storedRounds);
-                            rounds[gameId] = 0;
-                            await AsyncStorage.setItem(ROUNDS_STORAGE_KEY, JSON.stringify(rounds));
-                        }
+                        await AsyncStorage.setItem(getRoundsKey(gameId), '0');
                     } catch (err) {
                         log.error('Failed to reset rounds on cooldown expire', err);
                     }
@@ -336,5 +321,6 @@ export function useGameCooldown(options: UseGameCooldownOptions): UseGameCooldow
         maxRounds,
         incrementRounds,
         resetRounds,
+        refresh: loadCooldownState,
     };
 }

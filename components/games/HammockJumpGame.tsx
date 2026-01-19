@@ -1,10 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BlurView } from 'expo-blur';
-import { Accelerometer } from 'expo-sensors';
+import { Accelerometer, type Subscription } from 'expo-sensors';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
-  ImageBackground,
   Modal,
   SafeAreaView,
   StyleSheet,
@@ -13,10 +11,11 @@ import {
   View,
 } from 'react-native';
 
+import { DISABLE_GAME_COOLDOWN } from '@/config/featureFlags';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { HammockJumpAudioManager } from '@/features/games/hammockJump/audio';
-import { GameAssets, HammockGameEngine } from '@/features/games/hammockJump/engine/HammockJumpEngine';
+import { GameAssets, GameState, HammockGameEngine } from '@/features/games/hammockJump/engine/HammockJumpEngine';
 import { HAMMOCK_JUMP_ASSETS } from '@/features/games/hammockJump/utils/assets';
 import { useGameCooldown } from '@/hooks/useGameCooldown';
 import type { AwardXPResult } from '@/hooks/useMyLeaderboardStatus';
@@ -68,10 +67,11 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
   const audioManagerRef = useRef<HammockJumpAudioManager | null>(null);
   const audioUnloadingRef = useRef(false);
   const audioAvailableRef = useRef(true);
-  const [gameState, setGameState] = useState<any>(null);
+  const cooldownTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [gameState, setGameState] = useState<GameState | null>(null);
   const [xpAwarded, setXpAwarded] = useState(false);
   const sessionIdRef = useRef<string>(generateSessionId()); // Unique session for idempotency
-  const accelerometerSubscription = useRef<any>(null);
+  const accelerometerSubscription = useRef<Subscription | null>(null);
   const [hasAccelerometer, setHasAccelerometer] = useState(true);
   const [highScore, setHighScore] = useState<number>(0);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
@@ -109,14 +109,26 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
     loadHighScore();
   }, []);
 
-  // Show cooldown screen if on cooldown when modal opens
+  // Show cooldown screen if on cooldown OR if max rounds reached when modal opens
+  // Skip if DISABLE_GAME_COOLDOWN flag is enabled
+  // Note: We check roundsPlayed >= MAX_ROUNDS to prevent race conditions where
+  // rounds are maxed but cooldown timer hasn't started yet
   useEffect(() => {
-    if (visible && isOnCooldown) {
-      setShowCooldownScreen(true);
+    if (visible && !isDemoMode && !DISABLE_GAME_COOLDOWN) {
+      if (isOnCooldown || roundsPlayed >= MAX_ROUNDS) {
+        setShowCooldownScreen(true);
+
+        // Edge case: rounds are maxed but cooldown never started (crash/bug recovery)
+        // Start cooldown now to ensure proper state
+        if (roundsPlayed >= MAX_ROUNDS && !isOnCooldown) {
+          log.info(`Detected maxed rounds (${roundsPlayed}/${MAX_ROUNDS}) without active cooldown, starting cooldown now`);
+          startCooldown();
+        }
+      }
     } else if (!visible) {
       setShowCooldownScreen(false);
     }
-  }, [visible, isOnCooldown]);
+  }, [visible, isOnCooldown, roundsPlayed, MAX_ROUNDS, isDemoMode, startCooldown]);
 
   // Initialize game engine and accelerometer
   useEffect(() => {
@@ -498,7 +510,8 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
           }
 
           // Show cooldown screen after a short delay
-          setTimeout(() => {
+          // Store timeout ID in ref so it can be cleared on unmount
+          cooldownTimeoutRef.current = setTimeout(() => {
             setShowCooldownScreen(true);
           }, 2000); // 2 second delay to let user see final score
         } catch (cooldownError) {
@@ -525,6 +538,12 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
   // Cleanup on close
   useEffect(() => {
     if (!visible) {
+      // Clean up cooldown timeout to prevent memory leak
+      if (cooldownTimeoutRef.current) {
+        clearTimeout(cooldownTimeoutRef.current);
+        cooldownTimeoutRef.current = null;
+      }
+
       // Clean up accelerometer
       if (accelerometerSubscription.current) {
         accelerometerSubscription.current.remove();
@@ -569,34 +588,26 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
         {showCooldownScreen ? (
           // Cooldown Screen
           <View style={styles.cooldownScreenContainer}>
-            <ImageBackground 
-              source={HAMMOCK_JUMP_ASSETS.background} 
-              style={styles.cooldownBackground}
-              blurRadius={10}
-            >
-              <BlurView intensity={80} tint="dark" style={styles.cooldownBlur}>
-                <View style={styles.cooldownContent}>
-                  <View style={styles.cooldownIconContainer}>
-                    <Ionicons name="time" size={60} color={Colors.dark.tint} />
-                  </View>
-                  
-                  <Text style={styles.cooldownTitle}>COOLDOWN ACTIVE</Text>
-                  
-                  <View style={styles.timerDisplay}>
-                    <Text style={styles.cooldownTimer}>{cooldownRemainingFormatted}</Text>
-                  </View>
+            <View style={styles.cooldownContent}>
+              <View style={styles.cooldownIconContainer}>
+                <Ionicons name="time" size={60} color={Colors.dark.tint} />
+              </View>
 
-                  <Text style={styles.cooldownMessage}>
-                    შეგიძლია ითამაშო {MAX_ROUNDS} რაუნდი ერთ სესიაზე.{'\n'}
-                    დაელოდე cooldown-ს რომ თავიდან ითამაშო!
-                  </Text>
+              <Text style={styles.cooldownTitle}>COOLDOWN ACTIVE</Text>
 
-                  <TouchableOpacity style={styles.cooldownExitButton} onPress={exitGame} activeOpacity={0.8}>
-                    <Text style={styles.cooldownExitText}>გასვლა</Text>
-                  </TouchableOpacity>
-                </View>
-              </BlurView>
-            </ImageBackground>
+              <View style={styles.timerDisplay}>
+                <Text style={styles.cooldownTimer}>{cooldownRemainingFormatted}</Text>
+              </View>
+
+              <Text style={styles.cooldownMessage}>
+                შეგიძლია ითამაშო {MAX_ROUNDS} რაუნდი ერთ სესიაზე.{'\n'}
+                დაელოდე <Text style={{ fontFamily: 'SpaceMono', fontWeight: 'bold' }}>COOLDOWN</Text>-ს რომ თავიდან ითამაშო!
+              </Text>
+
+              <TouchableOpacity style={styles.cooldownExitButton} onPress={exitGame} activeOpacity={0.8}>
+                <Text style={styles.cooldownExitText}>გასვლა</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : (
           // Game View
@@ -616,14 +627,6 @@ export const HammockJumpGame: React.FC<HammockJumpGameProps> = ({
               isNewHighScore={isNewHighScore}
               xpEarned={gameState?.phase === 'GAME_OVER' ? Math.max(1, Math.floor((gameState?.score || 0) / 50)) : 0}
             />
-            {/* Round counter */}
-            {!isDemoMode && gameState?.phase !== 'MENU' && (
-              <View style={styles.roundCounter}>
-                <Text style={styles.roundCounterText}>
-                  Round {xpAwarded ? roundsPlayed : roundsPlayed + 1}/{MAX_ROUNDS}
-                </Text>
-              </View>
-            )}
             {audioAvailable === false && (
               <Text style={styles.audioWarning}>ხმა დროებით მიუწვდომელია</Text>
             )}
@@ -651,32 +654,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.9,
   },
-  roundCounter: {
-    position: 'absolute',
-    top: 60,
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  roundCounterText: {
-    color: '#4ECDC4',
-    fontSize: 14,
-    fontFamily: 'SpaceMono',
-    fontWeight: 'bold',
-  },
   cooldownScreenContainer: {
     flex: 1,
-    backgroundColor: '#000',
-  },
-  cooldownBackground: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  cooldownBlur: {
-    flex: 1,
+    backgroundColor: Colors.dark.background,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 30,

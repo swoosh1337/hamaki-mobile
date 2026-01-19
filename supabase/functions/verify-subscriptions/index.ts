@@ -233,7 +233,7 @@ Deno.serve(async (req: Request) => {
 
         // Fallback: Use YouTube token to verify identity (Google OAuth users)
         // The YouTube token proves ownership of the Google account
-        if (!userId!) {
+        if (!userId) {
             // Get Google user info using the YouTube access token
             const googleResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
                 headers: { Authorization: `Bearer ${accessToken}` },
@@ -344,11 +344,15 @@ Deno.serve(async (req: Request) => {
 
             // Log quota usage (1 unit per page of subscriptions.list)
             if (pagesChecked > 0) {
-                await supabase.rpc('log_youtube_quota_usage', {
+                const { error: quotaError } = await supabase.rpc('log_youtube_quota_usage', {
                     p_operation: 'subscriptions.list',
                     p_units: pagesChecked,
                 });
-                console.log(`[verify-subscriptions] Logged ${pagesChecked} quota units for subscriptions.list`);
+                if (quotaError) {
+                    console.error('[verify-subscriptions] Failed to log quota usage:', quotaError);
+                } else {
+                    console.log(`[verify-subscriptions] Logged ${pagesChecked} quota units for subscriptions.list`);
+                }
             }
 
             // Step 3: Process results - build batched operations

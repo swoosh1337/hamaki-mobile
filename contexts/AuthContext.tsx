@@ -432,9 +432,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       'https://xzuvhsybjmdkhyfreybo.supabase.co', // Supabase auth callback
     ];
 
-    const isValidScheme = ALLOWED_SCHEMES.some(scheme =>
-      url.toLowerCase().startsWith(scheme.toLowerCase())
-    );
+    const isValidScheme = ALLOWED_SCHEMES.some(scheme => {
+      const lowerUrl = url.toLowerCase();
+      const lowerScheme = scheme.toLowerCase();
+
+      if (!lowerUrl.startsWith(lowerScheme)) return false;
+
+      // For HTTPS origins, prevent domain-suffix attacks
+      // e.g., reject "https://xzuvhsybjmdkhyfreybo.supabase.co.evil.com"
+      // Only allow if next char is /, ?, #, or end of string
+      if (scheme.startsWith('https://')) {
+        const nextChar = lowerUrl[lowerScheme.length];
+        if (nextChar && nextChar !== '/' && nextChar !== '?' && nextChar !== '#') {
+          return false;
+        }
+      }
+
+      return true;
+    });
 
     if (!isValidScheme) {
       log.warn('SECURITY: Rejecting deep link with unknown scheme:', { url: url.substring(0, 50) });

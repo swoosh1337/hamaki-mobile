@@ -19,7 +19,7 @@ export function successResponse<T>(data?: T, status = 200): Response {
     return new Response(
         JSON.stringify({
             success: true,
-            ...data,
+            data: data ?? null,
         }),
         {
             status,

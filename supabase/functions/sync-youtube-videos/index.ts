@@ -209,11 +209,15 @@ Deno.serve(async (req: Request) => {
             const latest = await fetchLatestVideo(channel.id);
 
             // Log quota usage (100 units for search.list call)
-            await supabase.rpc('log_youtube_quota_usage', {
+            const { error: quotaError } = await supabase.rpc('log_youtube_quota_usage', {
                 p_operation: 'search.list',
                 p_units: 100,
             });
-            console.log(`[${channel.name}] Logged 100 quota units for search.list`);
+            if (quotaError) {
+                console.error(`[${channel.name}] Failed to log quota usage:`, quotaError);
+            } else {
+                console.log(`[${channel.name}] Logged 100 quota units for search.list`);
+            }
 
             if (!latest) {
                 console.log(`[${channel.name}] No videos found`);

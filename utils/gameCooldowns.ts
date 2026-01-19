@@ -171,6 +171,9 @@ export async function updateGameLastPlayed(
 /**
  * Record a game play session (wrapper for updateGameLastPlayed)
  */
+// Valid game types for validation
+const VALID_GAME_TYPES: readonly GameType[] = ['nopogod', 'hammockjump'] as const;
+
 export async function recordGamePlay(
   userId: string,
   gameType: string, // Accept string to be more flexible, but internally map to GameType
@@ -190,7 +193,12 @@ export async function recordGamePlay(
       validGameType = 'hammockjump';
       break;
     default:
-      validGameType = gameType as GameType;
+      // Validate unknown game types instead of unsafe cast
+      log.warn(`Unknown game type received: "${gameType}". Valid types: ${VALID_GAME_TYPES.join(', ')}`);
+      return {
+        success: false,
+        error: `Invalid game type: ${gameType}`,
+      };
   }
 
   return updateGameLastPlayed(userId, validGameType, isDemoMode);

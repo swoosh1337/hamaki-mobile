@@ -30,11 +30,19 @@ Deno.serve(async (req) => {
             }
         })
 
-        // Start cron job logging
-        const { data: startData } = await supabase.rpc('start_cron_job', {
-            p_job_name: 'publish-scheduled-posts'
-        })
-        logId = startData
+        // Start cron job logging (non-critical - don't fail if logging fails)
+        try {
+            const { data: startData, error: startError } = await supabase.rpc('start_cron_job', {
+                p_job_name: 'publish-scheduled-posts'
+            })
+            if (startError) {
+                console.error('Failed to start cron job logging (non-fatal):', startError)
+            } else {
+                logId = startData
+            }
+        } catch (logStartError) {
+            console.error('Exception starting cron job logging (non-fatal):', logStartError)
+        }
 
         console.log('Checking for scheduled posts to publish...')
 

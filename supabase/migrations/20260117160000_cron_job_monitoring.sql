@@ -89,6 +89,8 @@ RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+DECLARE
+    v_affected_row_count INTEGER := 0;
 BEGIN
     UPDATE public.cron_job_logs
     SET
@@ -96,6 +98,11 @@ BEGIN
         status = 'success',
         result = p_result
     WHERE id = p_log_id;
+
+    GET DIAGNOSTICS v_affected_row_count = ROW_COUNT;
+    IF v_affected_row_count = 0 THEN
+        RAISE EXCEPTION 'complete_cron_job: no cron_job_logs row found for id %', p_log_id;
+    END IF;
 END;
 $$;
 
@@ -201,3 +208,4 @@ COMMENT ON FUNCTION public.start_cron_job(TEXT) IS 'Start tracking a cron job ex
 COMMENT ON FUNCTION public.complete_cron_job(UUID, JSONB) IS 'Mark a cron job as successfully completed';
 COMMENT ON FUNCTION public.fail_cron_job(UUID, TEXT, JSONB) IS 'Mark a cron job as failed with error';
 COMMENT ON FUNCTION public.get_cron_job_stats(INTEGER) IS 'Get cron job statistics for the last N hours';
+COMMENT ON FUNCTION public.cleanup_old_cron_logs() IS 'Remove old cron job logs older than given number of days (or hours)';

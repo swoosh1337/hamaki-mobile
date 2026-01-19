@@ -22,18 +22,19 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// PostgreSQL adds 'out_' prefix to RETURNS TABLE columns
 interface QuotaStatus {
-    usage_date: string;
-    total_units_used: number;
-    remaining_units: number;
-    usage_percentage: number;
-    subscriptions_list_units: number;
-    subscriptions_list_calls: number;
-    videos_get_rating_units: number;
-    videos_get_rating_calls: number;
-    search_list_units: number;
-    search_list_calls: number;
-    updated_at: string;
+    out_usage_date: string;
+    out_total_units_used: number;
+    out_remaining_units: number;
+    out_usage_percentage: number;
+    out_subscriptions_list_units: number;
+    out_subscriptions_list_calls: number;
+    out_videos_get_rating_units: number;
+    out_videos_get_rating_calls: number;
+    out_search_list_units: number;
+    out_search_list_calls: number;
+    out_updated_at: string;
 }
 
 interface QuotaHistory {
@@ -81,47 +82,47 @@ Deno.serve(async (req: Request) => {
             // Non-fatal - continue without history
         }
 
-        // Format response
+        // Format response - use out_ prefix from PostgreSQL RETURNS TABLE
         const status = (currentStatus as QuotaStatus[])?.[0] || {
-            usage_date: new Date().toISOString().split('T')[0],
-            total_units_used: 0,
-            remaining_units: DAILY_QUOTA_LIMIT,
-            usage_percentage: 0,
-            subscriptions_list_units: 0,
-            subscriptions_list_calls: 0,
-            videos_get_rating_units: 0,
-            videos_get_rating_calls: 0,
-            search_list_units: 0,
-            search_list_calls: 0,
-            updated_at: new Date().toISOString(),
+            out_usage_date: new Date().toISOString().split('T')[0],
+            out_total_units_used: 0,
+            out_remaining_units: DAILY_QUOTA_LIMIT,
+            out_usage_percentage: 0,
+            out_subscriptions_list_units: 0,
+            out_subscriptions_list_calls: 0,
+            out_videos_get_rating_units: 0,
+            out_videos_get_rating_calls: 0,
+            out_search_list_units: 0,
+            out_search_list_calls: 0,
+            out_updated_at: new Date().toISOString(),
         };
 
         const response = {
             success: true,
             daily_limit: DAILY_QUOTA_LIMIT,
             current: {
-                date: status.usage_date,
-                total_used: status.total_units_used,
-                remaining: status.remaining_units,
-                percentage: status.usage_percentage,
+                date: status.out_usage_date,
+                total_used: status.out_total_units_used,
+                remaining: status.out_remaining_units,
+                percentage: status.out_usage_percentage,
                 breakdown: {
                     subscriptions_list: {
-                        units: status.subscriptions_list_units,
-                        calls: status.subscriptions_list_calls,
+                        units: status.out_subscriptions_list_units,
+                        calls: status.out_subscriptions_list_calls,
                         unit_cost: 1,
                     },
                     videos_get_rating: {
-                        units: status.videos_get_rating_units,
-                        calls: status.videos_get_rating_calls,
+                        units: status.out_videos_get_rating_units,
+                        calls: status.out_videos_get_rating_calls,
                         unit_cost: 1,
                     },
                     search_list: {
-                        units: status.search_list_units,
-                        calls: status.search_list_calls,
+                        units: status.out_search_list_units,
+                        calls: status.out_search_list_calls,
                         unit_cost: 100,
                     },
                 },
-                last_updated: status.updated_at,
+                last_updated: status.out_updated_at,
             },
             history: (history as QuotaHistory[] || []).map(h => ({
                 date: h.usage_date,
@@ -144,9 +145,9 @@ Deno.serve(async (req: Request) => {
         };
 
         console.log('[get-youtube-quota-stats] Returning stats:', {
-            total_used: status.total_units_used,
-            remaining: status.remaining_units,
-            percentage: status.usage_percentage,
+            total_used: status.out_total_units_used,
+            remaining: status.out_remaining_units,
+            percentage: status.out_usage_percentage,
         });
 
         return new Response(

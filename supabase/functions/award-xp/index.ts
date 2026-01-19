@@ -362,7 +362,7 @@ Deno.serve(async (req: Request) => {
         // - Rate limiting (MAX_REQUESTS_PER_MINUTE)
         // - Idempotency (can't replay requests)
         // - Max XP limits per request
-        if (!userId!) {
+        if (!userId) {
             if (!body.userId) {
                 console.error('[award-xp] Missing userId in body and no valid JWT');
                 return new Response(
@@ -449,6 +449,30 @@ Deno.serve(async (req: Request) => {
             );
         }
 
+        // Check idempotency - this MUST succeed before we proceed
+        console.log('[award-xp] Checking idempotency:', idempotencyKey);
+        const { isDuplicate } = await checkIdempotency(supabase, idempotencyKey, userId);
+
+        if (isDuplicate) {
+            // This is a duplicate request - return current state without awarding XP
+            console.log('[award-xp] Duplicate request, returning current state');
+            const currentState = await getCurrentUserState(supabase, userId);
+
+            const response: AwardXPResponse = {
+                success: true,
+                duplicate: true,
+                new_total_xp: currentState.totalXP,
+                personal_rank: currentState.rank,
+                xp_breakdown: currentState.breakdown,
+            };
+
+            console.log('[award-xp] Duplicate response:', response);
+            return new Response(
+                JSON.stringify(response),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
         // Per-user rate limiting: Check requests in the last minute
         const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
         const { count: recentRequestCount, error: rateLimitError } = await supabase
@@ -473,30 +497,6 @@ Deno.serve(async (req: Request) => {
                     error: 'Rate limit exceeded. Please try again later.',
                 }),
                 { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
-
-        // Check idempotency - this MUST succeed before we proceed
-        console.log('[award-xp] Checking idempotency:', idempotencyKey);
-        const { isDuplicate } = await checkIdempotency(supabase, idempotencyKey, userId);
-
-        if (isDuplicate) {
-            // This is a duplicate request - return current state without awarding XP
-            console.log('[award-xp] Duplicate request, returning current state');
-            const currentState = await getCurrentUserState(supabase, userId);
-
-            const response: AwardXPResponse = {
-                success: true,
-                duplicate: true,
-                new_total_xp: currentState.totalXP,
-                personal_rank: currentState.rank,
-                xp_breakdown: currentState.breakdown,
-            };
-
-            console.log('[award-xp] Duplicate response:', response);
-            return new Response(
-                JSON.stringify(response),
-                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
@@ -530,6 +530,20 @@ Deno.serve(async (req: Request) => {
 
         const newTotalXP = result.new_total;
         console.log('[award-xp] XP awarded successfully, new total:', newTotalXP);
+
+        // Also update users.xp_points for consistency with verify-subscriptions/verify-video-likes
+        // This ensures users.xp_points stays in sync with leaderboard_entries.total_xp
+        const { error: userUpdateError } = await supabase
+            .from('users')
+            .update({ xp_points: newTotalXP })
+            .eq('id', userId);
+
+        if (userUpdateError) {
+            // Log but don't fail - leaderboard is the source of truth
+            console.error('[award-xp] Failed to update users.xp_points (non-fatal):', userUpdateError);
+        } else {
+            console.log('[award-xp] Updated users.xp_points:', newTotalXP);
+        }
 
         // Calculate personal rank (instant feedback)
         const personalRank = await calculatePersonalRank(supabase, userId, newTotalXP);

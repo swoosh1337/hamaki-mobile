@@ -105,13 +105,26 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   // Session ID for idempotency - generated once per game session
   const sessionIdRef = useRef<string | null>(null);
 
-  // Show cooldown screen if on cooldown when modal opens
+  // Show cooldown screen if on cooldown OR if max rounds reached when modal opens
   // Skip if DISABLE_GAME_COOLDOWN flag is enabled
+  // Note: We check roundsPlayed >= MAX_ROUNDS to prevent race conditions where
+  // rounds are maxed but cooldown timer hasn't started yet
   useEffect(() => {
-    if (visible && isOnCooldown && !isDemoMode && !DISABLE_GAME_COOLDOWN) {
-      setShowCooldownScreen(true);
+    if (visible && !isDemoMode && !DISABLE_GAME_COOLDOWN) {
+      if (isOnCooldown || roundsPlayed >= MAX_ROUNDS) {
+        setShowCooldownScreen(true);
+
+        // Edge case: rounds are maxed but cooldown never started (crash/bug recovery)
+        // Start cooldown now to ensure proper state
+        if (roundsPlayed >= MAX_ROUNDS && !isOnCooldown) {
+          log.info(`Detected maxed rounds (${roundsPlayed}/${MAX_ROUNDS}) without active cooldown, starting cooldown now`);
+          startCooldown();
+        }
+      }
+    } else if (!visible) {
+      setShowCooldownScreen(false);
     }
-  }, [visible, isOnCooldown, isDemoMode]);
+  }, [visible, isOnCooldown, roundsPlayed, MAX_ROUNDS, isDemoMode, startCooldown]);
 
 
 
@@ -617,7 +630,7 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const renderMenuState = () => (
     <View style={styles.menuContainer}>
       <Image
-        source={require('@/features/games/noPogod/assets/launch_Screen.png')}
+        source={require('@/features/games/noPogod/assets/launch_Screen.webp')}
         style={styles.menuBackgroundImage}
         resizeMode="contain"
       />
@@ -766,47 +779,33 @@ export const NoPogodGame: React.FC<NoPogodGameProps> = ({
   const renderCooldownScreen = () => {
     return (
       <View style={styles.cooldownScreenContainer}>
-        <ImageBackground 
-          source={require('@/features/games/noPogod/assets/launch_Screen.png')} 
-          style={styles.cooldownBackground}
-          blurRadius={10}
-        >
-          <BlurView intensity={80} tint="dark" style={styles.cooldownBlur}>
-            <View style={styles.cooldownContent}>
-              <View style={styles.cooldownIconContainer}>
-                <Ionicons name="time" size={60} color={Colors.dark.tint} />
-              </View>
-              
-              <Text style={styles.cooldownTitle}>COOLDOWN ACTIVE</Text>
-              
-              <View style={styles.timerDisplay}>
-                <Text style={styles.cooldownTimer}>{cooldownRemainingFormatted}</Text>
-              </View>
+        <View style={styles.cooldownContent}>
+          <View style={styles.cooldownIconContainer}>
+            <Ionicons name="time" size={60} color={Colors.dark.tint} />
+          </View>
 
-              <Text style={styles.cooldownMessage}>
-                შენ ითამაშე {MAX_ROUNDS} ხელი!{'\n'}
-                დაელოდე cooldown-ს რომ თავიდან ითამაშო!
-              </Text>
+          <Text style={styles.cooldownTitle}>COOLDOWN ACTIVE</Text>
 
-              <View style={styles.cooldownStats}>
-                <Text style={styles.cooldownStatsText}>
-                  ხელი ნათამაშები: {MAX_ROUNDS}/{MAX_ROUNDS}
-                </Text>
-              </View>
+          <View style={styles.timerDisplay}>
+            <Text style={styles.cooldownTimer}>{cooldownRemainingFormatted}</Text>
+          </View>
 
-              <TouchableOpacity
-                style={styles.cooldownButton}
-                onPress={() => {
-                  setShowCooldownScreen(false);
-                  onClose();
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.cooldownButtonText}>დაბრუნება</Text>
-              </TouchableOpacity>
-            </View>
-          </BlurView>
-        </ImageBackground>
+          <Text style={styles.cooldownMessage}>
+            შეგიძლია ითამაშო {MAX_ROUNDS} რაუნდი ერთ სესიაზე.{'\n'}
+            დაელოდე <Text style={{ fontFamily: 'SpaceMono', fontWeight: 'bold' }}>COOLDOWN</Text>-ს რომ თავიდან ითამაშო!
+          </Text>
+
+          <TouchableOpacity
+            style={styles.cooldownButton}
+            onPress={() => {
+              setShowCooldownScreen(false);
+              onClose();
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.cooldownButtonText}>გასვლა</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -1230,15 +1229,7 @@ const styles = StyleSheet.create({
   // Cooldown Screen Styles
   cooldownScreenContainer: {
     flex: 1,
-    backgroundColor: '#000',
-  },
-  cooldownBackground: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  cooldownBlur: {
-    flex: 1,
+    backgroundColor: Colors.dark.background,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 30,

@@ -69,35 +69,35 @@ export interface GameAnimations {
 export const loadNoPogodGameAssets = (): NoPogodGameAssets => {
   try {
     const assets: NoPogodGameAssets = {
-      background: require('../assets/bg.png'),
+      background: require('../assets/bg.webp'),
 
       miro: {
-        idle: require('../assets/miro/პროფილი დგომა.png'),
-        step1: require('../assets/miro/ნაბიჯი 1.png'),
-        step2: require('../assets/miro/ნაბიჯი 2.png'),
-        profile: require('../assets/miro/პროფილი დგომა.png'),
-        angle45: require('../assets/miro/დგომა 45 გრადუსი.png'),
-        angle90: require('../assets/miro/დგომა 90 გრადუსი.png'),
+        idle: require('../assets/miro/პროფილი დგომა.webp'),
+        step1: require('../assets/miro/ნაბიჯი 1.webp'),
+        step2: require('../assets/miro/ნაბიჯი 2.webp'),
+        profile: require('../assets/miro/პროფილი დგომა.webp'),
+        angle45: require('../assets/miro/დგომა 45 გრადუსი.webp'),
+        angle90: require('../assets/miro/დგომა 90 გრადუსი.webp'),
       },
 
       shonzika: {
-        idle: require('../assets/shonzika/დგომა პროფილი.png'),
-        walking1: require('../assets/shonzika/სიარული 1.png'),
-        walking2: require('../assets/shonzika/სიარული 2~.png'),
-        profile: require('../assets/shonzika/დგომა პროფილი.png'),
-        angle45: require('../assets/shonzika/დგომა 45გრადუსი.png'),
-        angle90: require('../assets/shonzika/დგომა 90 გრადუსი.png'),
-        handProfile: require('../assets/shonzika/ხელი პროფილი.png'),
-        hand45: require('../assets/shonzika/ხელი 45 აგრადუსი.png'),
-        hand90: require('../assets/shonzika/ხელი 90 გრადუსი.png'),
+        idle: require('../assets/shonzika/დგომა პროფილი.webp'),
+        walking1: require('../assets/shonzika/სიარული 1.webp'),
+        walking2: require('../assets/shonzika/სიარული 2~.webp'),
+        profile: require('../assets/shonzika/დგომა პროფილი.webp'),
+        angle45: require('../assets/shonzika/დგომა 45გრადუსი.webp'),
+        angle90: require('../assets/shonzika/დგომა 90 გრადუსი.webp'),
+        handProfile: require('../assets/shonzika/ხელი პროფილი.webp'),
+        hand45: require('../assets/shonzika/ხელი 45 აგრადუსი.webp'),
+        hand90: require('../assets/shonzika/ხელი 90 გრადუსი.webp'),
       },
 
       items: {
-        egg: require('../assets/items/კვერცხი.png'),
-        tomato: require('../assets/items/პომიდორი.png'),
-        pepper: require('../assets/items/წიწაკა.png'),
-        electricShock: require('../assets/items/ელექტროშოკი.png'),
-        bomb: require('../assets/items/ბომბი.png'),
+        egg: require('../assets/items/კვერცხი.webp'),
+        tomato: require('../assets/items/პომიდორი.webp'),
+        pepper: require('../assets/items/წიწაკა.webp'),
+        electricShock: require('../assets/items/ელექტროშოკი.webp'),
+        bomb: require('../assets/items/ბომბი.webp'),
       },
     };
 
@@ -111,8 +111,8 @@ export const loadNoPogodGameAssets = (): NoPogodGameAssets => {
 // Fallback assets in case of loading failures
 const getFallbackAssets = (): NoPogodGameAssets => {
   // Use existing app assets as fallbacks
-  const fallbackSprite = require('@/assets/images/person-1-idle.png');
-  const fallbackBackground = require('@/assets/images/background.png');
+  const fallbackSprite = require('@/assets/images/person-1-idle.webp');
+  const fallbackBackground = require('@/assets/images/background.webp');
 
   return {
     background: fallbackBackground,

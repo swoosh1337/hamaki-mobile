@@ -49,29 +49,38 @@ BEGIN
     )
     VALUES (
         CURRENT_DATE,
-        CASE WHEN p_operation = 'subscriptions.list' THEN p_units ELSE 0 END,
-        CASE WHEN p_operation = 'subscriptions.list' THEN 1 ELSE 0 END,
-        CASE WHEN p_operation = 'videos.getRating' THEN p_units ELSE 0 END,
-        CASE WHEN p_operation = 'videos.getRating' THEN 1 ELSE 0 END,
-        CASE WHEN p_operation = 'search.list' THEN p_units ELSE 0 END,
-        CASE WHEN p_operation = 'search.list' THEN 1 ELSE 0 END,
-        p_units,
+        CASE WHEN p_units >= 0 AND p_operation = 'subscriptions.list' THEN p_units ELSE 0 END,
+        CASE WHEN p_units >= 0 AND p_operation = 'subscriptions.list' THEN 1 ELSE 0 END,
+        CASE WHEN p_units >= 0 AND p_operation = 'videos.getRating' THEN p_units ELSE 0 END,
+        CASE WHEN p_units >= 0 AND p_operation = 'videos.getRating' THEN 1 ELSE 0 END,
+        CASE WHEN p_units >= 0 AND p_operation = 'search.list' THEN p_units ELSE 0 END,
+        CASE WHEN p_units >= 0 AND p_operation = 'search.list' THEN 1 ELSE 0 END,
+        CASE
+            WHEN p_units >= 0 AND p_operation IN ('subscriptions.list', 'videos.getRating', 'search.list')
+                THEN p_units
+            ELSE 0
+        END,
         NOW()
     )
     ON CONFLICT (usage_date) DO UPDATE SET
         subscriptions_list_units = youtube_quota_daily.subscriptions_list_units +
-            CASE WHEN p_operation = 'subscriptions.list' THEN p_units ELSE 0 END,
+            CASE WHEN p_units >= 0 AND p_operation = 'subscriptions.list' THEN p_units ELSE 0 END,
         subscriptions_list_calls = youtube_quota_daily.subscriptions_list_calls +
-            CASE WHEN p_operation = 'subscriptions.list' THEN 1 ELSE 0 END,
+            CASE WHEN p_units >= 0 AND p_operation = 'subscriptions.list' THEN 1 ELSE 0 END,
         videos_get_rating_units = youtube_quota_daily.videos_get_rating_units +
-            CASE WHEN p_operation = 'videos.getRating' THEN p_units ELSE 0 END,
+            CASE WHEN p_units >= 0 AND p_operation = 'videos.getRating' THEN p_units ELSE 0 END,
         videos_get_rating_calls = youtube_quota_daily.videos_get_rating_calls +
-            CASE WHEN p_operation = 'videos.getRating' THEN 1 ELSE 0 END,
+            CASE WHEN p_units >= 0 AND p_operation = 'videos.getRating' THEN 1 ELSE 0 END,
         search_list_units = youtube_quota_daily.search_list_units +
-            CASE WHEN p_operation = 'search.list' THEN p_units ELSE 0 END,
+            CASE WHEN p_units >= 0 AND p_operation = 'search.list' THEN p_units ELSE 0 END,
         search_list_calls = youtube_quota_daily.search_list_calls +
-            CASE WHEN p_operation = 'search.list' THEN 1 ELSE 0 END,
-        total_units = youtube_quota_daily.total_units + p_units,
+            CASE WHEN p_units >= 0 AND p_operation = 'search.list' THEN 1 ELSE 0 END,
+        total_units = youtube_quota_daily.total_units +
+            CASE
+                WHEN p_units >= 0 AND p_operation IN ('subscriptions.list', 'videos.getRating', 'search.list')
+                    THEN p_units
+                ELSE 0
+            END,
         updated_at = NOW();
 END;
 $$ LANGUAGE plpgsql;

@@ -5,8 +5,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Miro walking animation frames
 const MIRO_FRAMES = [
-    require('@/features/games/noPogod/assets/miro/ნაბიჯი 1.png'),
-    require('@/features/games/noPogod/assets/miro/ნაბიჯი 2.png'),
+    require('@/features/games/noPogod/assets/miro/ნაბიჯი 1.webp'),
+    require('@/features/games/noPogod/assets/miro/ნაბიჯი 2.webp'),
 ];
 
 const MIRO_SIZE = 120;

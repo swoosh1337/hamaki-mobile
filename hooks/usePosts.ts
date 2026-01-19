@@ -127,24 +127,74 @@ export function usePosts(options: UsePostsOptions = {}): UsePostsReturn {
             return false;
         }
 
+        // Get current post state for rollback
+        const currentPost = posts.find(p => p.id === postId);
+        if (!currentPost) {
+            log.warn('Post not found for upvote', { postId });
+            return false;
+        }
+
+        // Optimistic update - immediately show the upvote
+        const optimisticUpvotes = currentPost.upvotes + 1;
+        setPosts(prev => {
+            const updated = prev.map(post =>
+                post.id === postId
+                    ? { ...post, upvotes: optimisticUpvotes, isUpvoted: true }
+                    : post
+            );
+            // Re-sort if sorting by upvotes
+            if (sortBy === 'upvotes') {
+                return [...updated].sort((a, b) => {
+                    if (b.upvotes !== a.upvotes) {
+                        return b.upvotes - a.upvotes;
+                    }
+                    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                });
+            }
+            return updated;
+        });
+
         try {
             const updatedPost = await postService.upvotePost(postId, userId);
             if (updatedPost) {
-                // Update local state optimistically
-                setPosts(prev => prev.map(post =>
-                    post.id === postId
-                        ? { ...post, upvotes: updatedPost.upvotes, isUpvoted: true }
-                        : post
-                ));
-                log.debug(`Upvoted post ${postId}`);
+                // Confirm with server value (in case of discrepancy)
+                setPosts(prev => {
+                    const updated = prev.map(post =>
+                        post.id === postId
+                            ? { ...post, upvotes: updatedPost.upvotes, isUpvoted: true }
+                            : post
+                    );
+                    if (sortBy === 'upvotes') {
+                        return [...updated].sort((a, b) => {
+                            if (b.upvotes !== a.upvotes) {
+                                return b.upvotes - a.upvotes;
+                            }
+                            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                        });
+                    }
+                    return updated;
+                });
+                log.debug('Upvoted post confirmed', { postId, newUpvotes: updatedPost.upvotes });
                 return true;
             }
+            // Rollback on failure
+            setPosts(prev => prev.map(post =>
+                post.id === postId
+                    ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
+                    : post
+            ));
             return false;
         } catch (err) {
-            log.error(`Failed to upvote post ${postId}`, err);
+            log.error('Failed to upvote post', err, { postId });
+            // Rollback on error
+            setPosts(prev => prev.map(post =>
+                post.id === postId
+                    ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
+                    : post
+            ));
             return false;
         }
-    }, [userId]);
+    }, [userId, sortBy, posts]);
 
     /**
      * Remove upvote from a post
@@ -155,24 +205,74 @@ export function usePosts(options: UsePostsOptions = {}): UsePostsReturn {
             return false;
         }
 
+        // Get current post state for rollback
+        const currentPost = posts.find(p => p.id === postId);
+        if (!currentPost) {
+            log.warn('Post not found for removeUpvote', { postId });
+            return false;
+        }
+
+        // Optimistic update - immediately show the removal
+        const optimisticUpvotes = Math.max(0, currentPost.upvotes - 1);
+        setPosts(prev => {
+            const updated = prev.map(post =>
+                post.id === postId
+                    ? { ...post, upvotes: optimisticUpvotes, isUpvoted: false }
+                    : post
+            );
+            // Re-sort if sorting by upvotes
+            if (sortBy === 'upvotes') {
+                return [...updated].sort((a, b) => {
+                    if (b.upvotes !== a.upvotes) {
+                        return b.upvotes - a.upvotes;
+                    }
+                    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                });
+            }
+            return updated;
+        });
+
         try {
             const updatedPost = await postService.removeUpvote(postId, userId);
             if (updatedPost) {
-                // Update local state
-                setPosts(prev => prev.map(post =>
-                    post.id === postId
-                        ? { ...post, upvotes: updatedPost.upvotes, isUpvoted: false }
-                        : post
-                ));
-                log.debug(`Removed upvote from post ${postId}`);
+                // Confirm with server value (in case of discrepancy)
+                setPosts(prev => {
+                    const updated = prev.map(post =>
+                        post.id === postId
+                            ? { ...post, upvotes: updatedPost.upvotes, isUpvoted: false }
+                            : post
+                    );
+                    if (sortBy === 'upvotes') {
+                        return [...updated].sort((a, b) => {
+                            if (b.upvotes !== a.upvotes) {
+                                return b.upvotes - a.upvotes;
+                            }
+                            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                        });
+                    }
+                    return updated;
+                });
+                log.debug('Removed upvote confirmed', { postId, newUpvotes: updatedPost.upvotes });
                 return true;
             }
+            // Rollback on failure
+            setPosts(prev => prev.map(post =>
+                post.id === postId
+                    ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
+                    : post
+            ));
             return false;
         } catch (err) {
-            log.error(`Failed to remove upvote from post ${postId}`, err);
+            log.error('Failed to remove upvote from post', err, { postId });
+            // Rollback on error
+            setPosts(prev => prev.map(post =>
+                post.id === postId
+                    ? { ...post, upvotes: currentPost.upvotes, isUpvoted: currentPost.isUpvoted }
+                    : post
+            ));
             return false;
         }
-    }, [userId]);
+    }, [userId, sortBy, posts]);
 
     /**
      * Check if a post is upvoted by the current user

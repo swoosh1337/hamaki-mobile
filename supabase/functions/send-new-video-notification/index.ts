@@ -7,6 +7,7 @@
 
 // @ts-nocheck - Deno runtime types
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { errorResponse } from '../_shared/response.ts';
 
 const BATCH_SIZE = 500;
 const BATCH_DELAY_MS = 2 * 60 * 1000; // 2 minutes
@@ -242,13 +243,6 @@ Deno.serve(async (req: Request) => {
         );
     } catch (error) {
         console.error('Error sending notifications:', error);
-        return new Response(
-            JSON.stringify({
-                success: false,
-                error: 'Failed to send notifications',
-                details: error instanceof Error ? error.message : String(error)
-            }),
-            { status: 500, headers: { 'Content-Type': 'application/json' } }
-        );
+        return errorResponse('Failed to send notifications', 500, 'INTERNAL_ERROR');
     }
 });

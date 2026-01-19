@@ -11,15 +11,17 @@
  * All data comes through hooks which use services.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-  Alert,
-  Image,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
+    Alert,
+    Image,
+    RefreshControl,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    View
 } from 'react-native';
 
 import { CreatePostFAB } from '@/components/community/CreatePostFAB';
@@ -47,6 +49,9 @@ export default function IdeasScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [upvotingPosts, setUpvotingPosts] = useState<Set<string>>(new Set());
 
+  // Ref to track if we're currently upvoting (used to skip realtime refetch)
+  const isUpvotingRef = useRef(false);
+
   // Use the posts hook for data management
   const {
     posts,
@@ -70,25 +75,58 @@ export default function IdeasScreen() {
   // Convert hook error to string for compatibility with existing error UI
   const error = postsError ? getUserFriendlyErrorMessage(postsError) : null;
 
-  // Realtime subscription for approved posts changes (uses unified hook)
+  // Realtime subscription for posts changes - listen for UPDATE to catch approval
+  // Note: We don't filter by status because we need to catch when status changes TO approved
   useRealtimeSubscription<{ id: string; status: string }>({
     table: 'posts',
-    filter: 'status=eq.approved',
-    event: '*',
+    event: 'UPDATE',
     enabled: !!userProfile?.id,
     onPayload: (payload) => {
-      log.debug('Posts subscription triggered', { eventType: payload.eventType });
+      // Only refetch if the post was just approved
+      if (payload.new?.status === 'approved') {
+        log.debug('Post approved, refreshing list', { postId: payload.new.id });
+        refetch();
+      }
+    },
+  });
+
+  // Also listen for INSERT in case posts are created directly as approved (admin)
+  useRealtimeSubscription<{ id: string; status: string }>({
+    table: 'posts',
+    event: 'INSERT',
+    filter: 'status=eq.approved',
+    enabled: !!userProfile?.id,
+    onPayload: (payload) => {
+      log.debug('New approved post inserted', { postId: payload.new?.id });
+      refetch();
+    },
+  });
+
+  // Listen for DELETE to remove posts from the list
+  useRealtimeSubscription<{ id: string }>({
+    table: 'posts',
+    event: 'DELETE',
+    enabled: !!userProfile?.id,
+    onPayload: (payload) => {
+      log.debug('Post deleted, refreshing list', { postId: payload.old?.id });
       refetch();
     },
   });
 
   // Realtime subscription for upvotes changes
+  // Note: We skip refetch when the current user is upvoting to avoid
+  // overwriting optimistic updates with potentially stale data
   useRealtimeSubscription<{ post_id: string; user_id: string }>({
     table: 'post_upvotes',
     event: '*',
     enabled: !!userProfile?.id,
     onPayload: (payload) => {
-      log.debug('Upvotes subscription triggered', { eventType: payload.eventType });
+      // Skip refetch if we're currently upvoting (to preserve optimistic updates)
+      if (isUpvotingRef.current) {
+        log.debug('Upvotes subscription triggered but skipping refetch (user is upvoting)', { eventType: payload.eventType });
+        return;
+      }
+      log.debug('Upvotes subscription triggered, refreshing', { eventType: payload.eventType });
       refetch();
     },
   });
@@ -113,6 +151,7 @@ export default function IdeasScreen() {
 
     try {
       setUpvotingPosts(prev => new Set([...prev, postId]));
+      isUpvotingRef.current = true; // Block realtime refetch during upvote
 
       const isCurrentlyUpvoted = checkIsUpvoted(postId);
 
@@ -122,12 +161,12 @@ export default function IdeasScreen() {
         : await upvote(postId);
 
       if (!success) {
-        Alert.alert('Error', 'Failed to update upvote. Please try again.');
+        Alert.alert('შეცდომა', 'ლაიქის განახლება ვერ მოხერხდა. გთხოვთ ახლიდან სცადოთ.');
       }
     } catch (error) {
       log.error('Error in handlePostUpvote', error);
       if (error instanceof Error) {
-        Alert.alert('Error', error.message);
+        Alert.alert('შეცდომა', error.message);
       }
     } finally {
       setUpvotingPosts(prev => {
@@ -135,6 +174,10 @@ export default function IdeasScreen() {
         newSet.delete(postId);
         return newSet;
       });
+      // Clear the ref after a short delay to ensure realtime events have passed
+      setTimeout(() => {
+        isUpvotingRef.current = false;
+      }, 500);
     }
   }, [userProfile?.id, checkIsUpvoted, upvote, removeUpvote, upvotingPosts]);
 
@@ -202,7 +245,7 @@ export default function IdeasScreen() {
       <View style={{ flex: 1 }}>
         <View style={styles.topTitleContainer}>
           <Image
-            source={require('@/assets/images/community.png')}
+            source={require('@/assets/images/community.webp')}
             style={styles.topTitleIcon}
             resizeMode="contain"
           />
@@ -265,7 +308,15 @@ export default function IdeasScreen() {
 
   return (
     <View style={styles.container}>
-      {renderContent()}
+      <StatusBar barStyle="light-content" />
+      
+      {/* Background Decor */}
+      <View style={styles.bgDecorCircle1} />
+      <View style={styles.bgDecorCircle2} />
+
+      <SafeAreaView style={styles.safeArea}>
+        {renderContent()}
+      </SafeAreaView>
 
       {/* Floating Action Button */}
       <CreatePostFAB onPress={() => setIsCreateModalVisible(true)} />
@@ -277,7 +328,6 @@ export default function IdeasScreen() {
         onSubmit={handleCreatePost}
         isSubmitting={isSubmittingPost}
       />
-
     </View>
   );
 }
@@ -286,7 +336,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.background,
-    paddingTop: 60,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  bgDecorCircle1: {
+    position: 'absolute',
+    top: -100,
+    right: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: Colors.dark.tint + '05',
+  },
+  bgDecorCircle2: {
+    position: 'absolute',
+    bottom: 100,
+    left: -150,
+    width: 400,
+    height: 400,
+    borderRadius: 200,
+    backgroundColor: Colors.dark.tint + '03',
   },
   scrollView: {
     flex: 1,
@@ -297,9 +367,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 0,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(196, 255, 0, 0.2)',
+    paddingBottom: 20,
   },
   demoNotice: {
     marginTop: 12,
@@ -309,6 +377,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 165, 0, 0.3)',
+    marginBottom: 10,
   },
   demoNoticeText: {
     fontSize: 13,
@@ -316,31 +385,14 @@ const styles = StyleSheet.create({
     color: '#FFA500',
     textAlign: 'center',
   },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  titleIcon: {
-    width: 32,
-    height: 32,
-    tintColor: Colors.dark.tint,
-    marginRight: 12,
-  },
-  title: {
-    fontSize: 32,
-    fontFamily: 'HamakiEng',
-    color: Colors.dark.tint,
-    paddingHorizontal: 8, // Prevent italic font cropping
-  },
   topTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 0,
+    paddingTop: 10,
     marginBottom: 12,
     gap: 12,
-    marginLeft: -22, // Offset left by (icon width 32 + gap 12) / 2 to center text over subtitle
+    zIndex: 10,
   },
   topTitleIcon: {
     width: 32,
@@ -364,6 +416,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   postsContainer: {
-    padding: 20,
+    paddingHorizontal: 20,
   },
 });

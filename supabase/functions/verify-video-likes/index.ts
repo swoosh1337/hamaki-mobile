@@ -177,7 +177,7 @@ Deno.serve(async (req: Request) => {
 
         // Fallback: Use YouTube token to verify identity (Google OAuth users)
         // The YouTube token proves ownership of the Google account
-        if (!userId!) {
+        if (!userId) {
             // Get Google user info using the YouTube access token
             const googleResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
                 headers: { Authorization: `Bearer ${accessToken}` },
@@ -285,11 +285,15 @@ Deno.serve(async (req: Request) => {
         const ratings = await checkVideoRatings(accessToken, videoIdsToCheck);
 
         // Log quota usage (1 unit for videos.getRating batch call)
-        await supabase.rpc('log_youtube_quota_usage', {
+        const { error: quotaError } = await supabase.rpc('log_youtube_quota_usage', {
             p_operation: 'videos.getRating',
             p_units: 1,
         });
-        console.log('[verify-video-likes] Logged 1 quota unit for videos.getRating');
+        if (quotaError) {
+            console.error('[verify-video-likes] Failed to log quota usage:', quotaError);
+        } else {
+            console.log('[verify-video-likes] Logged 1 quota unit for videos.getRating');
+        }
 
         // Process results
         const newAwards: Array<{

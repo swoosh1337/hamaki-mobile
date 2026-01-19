@@ -6,14 +6,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
@@ -37,18 +37,22 @@ export const ChannelSubscriptionManager: React.FC<ChannelSubscriptionManagerProp
     verifySubscriptions,
     lastSubscriptionCheck,
     totalSubscriptionXP,
-    earnedSubscriptionXP,
   } = useYouTubeVerification();
 
   // Use initial statuses if provided and hook hasn't loaded yet
   const subscriptionStatuses = hookStatuses.length > 0 ? hookStatuses : (initialStatuses || []);
 
+  // Calculate earned XP locally from statuses (so it works with initialStatuses immediately)
+  const earnedSubscriptionXP = subscriptionStatuses
+    .filter(s => s.xpAwarded)
+    .reduce((sum, status) => sum + status.xpReward, 0);
+
   // Debug: Log subscription statuses to see xpAwarded values
-  console.log('[ChannelSubscriptionManager] statuses:',
-    subscriptionStatuses.map(s => ({ key: s.channelKey, xpAwarded: s.xpAwarded, isSubscribed: s.isSubscribed })));
-  console.log('[ChannelSubscriptionManager] all xpAwarded:',
-    subscriptionStatuses.every(s => s.xpAwarded),
-    'length:', subscriptionStatuses.length);
+  log.debug('Subscription statuses', {
+    statuses: subscriptionStatuses.map(s => ({ key: s.channelKey, xpAwarded: s.xpAwarded, isSubscribed: s.isSubscribed })),
+    allXpAwarded: subscriptionStatuses.every(s => s.xpAwarded),
+    count: subscriptionStatuses.length,
+  });
 
   const handleSubscribe = async (channelId: string, channelName: string) => {
     try {
@@ -58,11 +62,11 @@ export const ChannelSubscriptionManager: React.FC<ChannelSubscriptionManagerProp
       if (supported) {
         await Linking.openURL(url);
       } else {
-        Alert.alert('Error', 'Cannot open YouTube. Please install the YouTube app.');
+        Alert.alert('შეცდომა', 'YouTube-ის გახსნა ვერ მოხერხდა. გთხოვთ დააინსტალიროთ YouTube აპლიკაცია.');
       }
     } catch (error) {
       log.error('Error opening YouTube channel', error);
-      Alert.alert('Error', 'Failed to open YouTube channel');
+      Alert.alert('შეცდომა', 'YouTube არხის გახსნა ვერ მოხერხდა');
     }
   };
 
@@ -100,16 +104,18 @@ export const ChannelSubscriptionManager: React.FC<ChannelSubscriptionManagerProp
       <View key={status.channelKey} style={styles.channelCard}>
         <View style={styles.channelHeader}>
           <View style={styles.channelInfo}>
-            <Ionicons
-              name={status.isSubscribed ? 'checkmark-circle' : 'radio-button-off-outline'}
-              size={24}
-              color={status.isSubscribed ? Colors.dark.tint : Colors.dark.tabIconDefault}
-            />
+            <View style={styles.channelIconContainer}>
+              <Ionicons
+                name="logo-youtube"
+                size={20}
+                color="#FF0000"
+              />
+            </View>
             <View style={styles.channelTextInfo}>
               <Text style={styles.channelName}>{status.channelName}</Text>
               {status.xpAwarded && (
                 <View style={styles.awardedBadge}>
-                  <Ionicons name="star" size={12} color={Colors.dark.background} />
+                  <View style={styles.statusDot} />
                   <Text style={styles.awardedText}>XP მიღებულია</Text>
                 </View>
               )}
@@ -124,7 +130,7 @@ export const ChannelSubscriptionManager: React.FC<ChannelSubscriptionManagerProp
         <View style={styles.channelActions}>
           {status.isSubscribed ? (
             <View style={styles.subscribedIndicator}>
-              <Ionicons name="checkmark" size={16} color={Colors.dark.tint} />
+              <Ionicons name="checkmark-circle" size={18} color={Colors.dark.tint} />
               <Text style={styles.subscribedText}>გამოწერილია</Text>
             </View>
           ) : (
@@ -177,23 +183,28 @@ export const ChannelSubscriptionManager: React.FC<ChannelSubscriptionManagerProp
 
       {/* Channel List */}
       <ScrollView style={styles.channelList} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>YouTube არხები</Text>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleDot} />
+          <Text style={styles.sectionTitle}>YouTube არხები</Text>
+        </View>
         <Text style={styles.sectionDescription}>
           გამოიწერე ჩვენი არხები და დააგროვე დამატებით XP
         </Text>
 
-        {subscriptionStatuses.map(renderChannelCard)}
+        <View style={styles.channelGrid}>
+          {subscriptionStatuses.map(renderChannelCard)}
+        </View>
 
         {/* Last Verified Timestamp */}
         {lastSubscriptionCheck && (
           <Text style={styles.lastVerified}>
-            Last verified: {lastSubscriptionCheck.toLocaleDateString()} at {lastSubscriptionCheck.toLocaleTimeString()}
+            ბოლო შემოწმება: {lastSubscriptionCheck.toLocaleDateString()} {lastSubscriptionCheck.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         )}
 
         {/* Info Banner */}
         <View style={styles.infoBanner}>
-          <Ionicons name="information-circle-outline" size={20} color={Colors.dark.tint} />
+          <Ionicons name="information-circle" size={20} color={Colors.dark.tint} />
           <Text style={styles.infoBannerText}>
             თუ არხი გამოწერილი გაქვს და ვერიფიკაცია ვერ მოხერხდა, მაშინ თავიდან გამოიწერე არხი და სცადე ვერიფიკაცია ხელახლა
           </Text>
@@ -261,41 +272,58 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 32,
-    fontFamily: 'HamakiENG',
+    fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
+    fontWeight: 'bold',
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 10,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
-    opacity: 0.7,
+    opacity: 0.5,
+    fontWeight: 'bold',
   },
   statDivider: {
     width: 1,
-    backgroundColor: 'rgba(196, 255, 0, 0.2)',
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
     marginHorizontal: 12,
   },
   channelList: {
     flex: 1,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontFamily: 'HamakiENG',
-    color: Colors.dark.tint,
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  sectionDescription: {
-    fontSize: 14,
+  sectionTitleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.dark.tint,
+    marginRight: 10,
+  },
+  sectionTitle: {
+    fontSize: 20,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
-    opacity: 0.7,
+    fontWeight: 'bold',
+  },
+  sectionDescription: {
+    fontSize: 13,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    opacity: 0.6,
     marginBottom: 20,
-    lineHeight: 20,
+    lineHeight: 18,
+  },
+  channelGrid: {
+    gap: 12,
   },
   channelCard: {
-    backgroundColor: 'rgba(245, 245, 245, 0.05)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -313,6 +341,16 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 12,
   },
+  channelIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
   channelTextInfo: {
     flex: 1,
   },
@@ -320,75 +358,89 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
-    fontWeight: '600',
+    fontWeight: 'bold',
     marginBottom: 4,
   },
   xpBadge: {
     backgroundColor: Colors.dark.tint,
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 6,
     alignItems: 'center',
+    minWidth: 60,
   },
   xpAmount: {
-    fontSize: 18,
-    fontFamily: 'HamakiENG',
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
     color: Colors.dark.background,
     fontWeight: 'bold',
   },
   xpLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: 'SpaceMono',
     color: Colors.dark.background,
+    fontWeight: 'bold',
     opacity: 0.8,
   },
   channelActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    paddingTop: 12,
   },
   subscribeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FF0000',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
   },
   subscribeButtonText: {
     fontSize: 14,
     fontFamily: 'SpaceMono',
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   subscribedIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(196, 255, 0, 0.05)',
+    borderRadius: 10,
   },
   subscribedText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
-    fontWeight: '500',
+    fontWeight: 'bold',
   },
   awardedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.dark.tint,
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    gap: 4,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 6,
     alignSelf: 'flex-start',
+  },
+  statusDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.dark.tint,
   },
   awardedText: {
     fontSize: 10,
     fontFamily: 'SpaceMono',
-    color: Colors.dark.background,
-    fontWeight: '600',
+    color: Colors.dark.tint,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   infoBanner: {
     flexDirection: 'row',

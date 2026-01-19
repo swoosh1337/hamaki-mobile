@@ -1,14 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 import { Colors } from '@/constants/Colors';
@@ -78,7 +78,10 @@ export const VideoLikesManager: React.FC<VideoLikesManagerProps> = ({ initialSta
 
       {/* Video List */}
       <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>დაალაიქე ახალი ვიდეობი</Text>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleDot} />
+          <Text style={styles.sectionTitle}>დაალაიქე ახალი ვიდეობი</Text>
+        </View>
         <Text style={styles.sectionDescription}>
           დააგროვე XP ჩვენი ახალი ვიდეოების დალაიქებით
         </Text>
@@ -88,11 +91,13 @@ export const VideoLikesManager: React.FC<VideoLikesManagerProps> = ({ initialSta
             <View key={status.channelKey} style={styles.videoCard}>
               <View style={styles.videoHeader}>
                 <View style={styles.channelInfo}>
-                  <Ionicons
-                    name="logo-youtube"
-                    size={24}
-                    color="#FF0000"
-                  />
+                  <View style={styles.channelIconContainer}>
+                    <Ionicons
+                      name="logo-youtube"
+                      size={20}
+                      color="#FF0000"
+                    />
+                  </View>
                   <Text style={styles.channelName}>{status.channelName}</Text>
                 </View>
                 <View style={styles.xpBadge}>
@@ -103,16 +108,16 @@ export const VideoLikesManager: React.FC<VideoLikesManagerProps> = ({ initialSta
               {status.latestVideoId ? (
                 <>
                   <Text style={styles.videoTitle} numberOfLines={2}>
-                    {status.videoTitle || 'Loading video details...'}
+                    {status.videoTitle || 'ვიდეოს დეტალები იტვირთება...'}
                   </Text>
 
                   {/* Like Status and Actions */}
                   <View style={styles.videoActions}>
                     <View style={styles.likeStatus}>
                       <Ionicons
-                        name={status.isLiked ? 'thumbs-up' : 'thumbs-up-outline'}
-                        size={20}
-                        color={status.isLiked ? Colors.dark.tint : Colors.dark.tabIconDefault}
+                        name={status.isLiked ? 'heart' : 'heart-outline'}
+                        size={18}
+                        color={status.isLiked ? '#FF3B30' : Colors.dark.tabIconDefault}
                       />
                       <Text style={[
                         styles.likeStatusText,
@@ -125,12 +130,12 @@ export const VideoLikesManager: React.FC<VideoLikesManagerProps> = ({ initialSta
                     {/* XP Status */}
                     {status.xpAwarded ? (
                       <View style={styles.xpAwarded}>
-                        <Ionicons name="checkmark-circle" size={20} color={Colors.dark.tint} />
+                        <View style={styles.statusDot} />
                         <Text style={styles.xpAwardedText}>XP მიღებულია</Text>
                       </View>
                     ) : status.isLiked ? (
                       <View style={styles.xpPending}>
-                        <Ionicons name="time-outline" size={20} color="#FFA500" />
+                        <Ionicons name="time" size={16} color="#FFA500" />
                         <Text style={styles.xpPendingText}>მუშავდება...</Text>
                       </View>
                     ) : null}
@@ -138,19 +143,25 @@ export const VideoLikesManager: React.FC<VideoLikesManagerProps> = ({ initialSta
 
                   {/* Watch/Like Button or Verified State */}
                   {status.xpAwarded ? (
-                    <View style={styles.likedButton}>
-                      <Ionicons name="thumbs-up" size={16} color={Colors.dark.tabIconDefault} />
-                      <Text style={styles.likedButtonText}>დალაიქებულია</Text>
+                    <View style={styles.verifiedState}>
+                      <Ionicons name="checkmark-circle" size={18} color={Colors.dark.tint} />
+                      <Text style={styles.verifiedText}>გადამოწმებულია</Text>
                     </View>
                   ) : !status.isLiked ? (
                     <TouchableOpacity
                       style={styles.watchButton}
                       onPress={() => openVideo(status.latestVideoId!)}
+                      activeOpacity={0.8}
                     >
-                      <Ionicons name="play-circle-outline" size={20} color={Colors.dark.background} />
+                      <Ionicons name="play" size={18} color={Colors.dark.background} />
                       <Text style={styles.watchButtonText}>უყურე და დაალაიქე</Text>
                     </TouchableOpacity>
-                  ) : null}
+                  ) : (
+                    <View style={styles.likedState}>
+                      <Ionicons name="heart" size={18} color={Colors.dark.tabIconDefault} />
+                      <Text style={styles.likedStateText}>დალაიქებულია</Text>
+                    </View>
+                  )}
                 </>
               ) : (
                 <Text style={styles.noVideo}>ვიდეო სინქრონიზირდება...</Text>
@@ -161,7 +172,7 @@ export const VideoLikesManager: React.FC<VideoLikesManagerProps> = ({ initialSta
 
         {/* Info Box */}
         <View style={styles.infoBox}>
-          <Ionicons name="information-circle-outline" size={24} color={Colors.dark.tint} />
+          <Ionicons name="information-circle" size={24} color={Colors.dark.tint} />
           <Text style={styles.infoText}>
             XP გემატება ავტომატურად, როდესაც დაალაიქებ ჩვენს ვიდეოს. დააჭირე გადამოწმების ღილაკს რომ ნახო ცვლილება.
           </Text>
@@ -247,29 +258,42 @@ const styles = StyleSheet.create({
   scrollArea: {
     flex: 1,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontFamily: 'HamakiENG',
-    color: Colors.dark.text,
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  sectionDescription: {
-    fontSize: 14,
+  sectionTitleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.dark.tint,
+    marginRight: 10,
+  },
+  sectionTitle: {
+    fontSize: 20,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
-    opacity: 0.7,
+    fontWeight: 'bold',
+  },
+  sectionDescription: {
+    fontSize: 13,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.text,
+    opacity: 0.6,
     marginBottom: 16,
+    lineHeight: 18,
   },
   videoList: {
-    gap: 16,
+    gap: 12,
     marginBottom: 24,
   },
   videoCard: {
-    backgroundColor: 'rgba(245, 245, 245, 0.05)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(196, 255, 0, 0.2)',
+    borderColor: 'rgba(196, 255, 0, 0.1)',
   },
   videoHeader: {
     flexDirection: 'row',
@@ -280,22 +304,33 @@ const styles = StyleSheet.create({
   channelInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    flex: 1,
+    gap: 10,
+  },
+  channelIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   channelName: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   xpBadge: {
     backgroundColor: Colors.dark.tint,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
   },
   xpBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'SpaceMono',
     color: Colors.dark.background,
     fontWeight: 'bold',
@@ -306,12 +341,16 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
     marginBottom: 12,
     lineHeight: 20,
+    opacity: 0.9,
   },
   videoActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
   likeStatus: {
     flexDirection: 'row',
@@ -319,92 +358,124 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   likeStatusText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'SpaceMono',
     color: Colors.dark.tabIconDefault,
   },
   likeStatusTextActive: {
-    color: Colors.dark.tint,
-    fontWeight: '600',
+    color: '#FF3B30',
+    fontWeight: 'bold',
   },
   xpAwarded: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.dark.tint,
   },
   xpAwardedText: {
-    fontSize: 14,
+    fontSize: 10,
     fontFamily: 'SpaceMono',
     color: Colors.dark.tint,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   xpPending: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    backgroundColor: 'rgba(255, 165, 0, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   xpPendingText: {
-    fontSize: 14,
+    fontSize: 10,
     fontFamily: 'SpaceMono',
     color: '#FFA500',
+    fontWeight: 'bold',
   },
   watchButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.dark.tint,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
     gap: 8,
   },
   watchButtonText: {
     fontSize: 14,
     fontFamily: 'SpaceMono',
     color: Colors.dark.background,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
-  likedButton: {
+  verifiedState: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    backgroundColor: 'rgba(196, 255, 0, 0.05)',
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 10,
     gap: 8,
     borderWidth: 1,
-    borderColor: 'rgba(196, 255, 0, 0.3)',
+    borderColor: 'rgba(196, 255, 0, 0.1)',
   },
-  likedButtonText: {
-    fontSize: 14,
+  verifiedText: {
+    fontSize: 13,
+    fontFamily: 'SpaceMono',
+    color: Colors.dark.tint,
+    fontWeight: 'bold',
+  },
+  likedState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 8,
+  },
+  likedStateText: {
+    fontSize: 13,
     fontFamily: 'SpaceMono',
     color: Colors.dark.tabIconDefault,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   noVideo: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
-    opacity: 0.5,
+    opacity: 0.4,
     fontStyle: 'italic',
+    textAlign: 'center',
+    marginVertical: 10,
   },
   infoBox: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(196, 255, 0, 0.1)',
+    backgroundColor: 'rgba(196, 255, 0, 0.05)',
     borderRadius: 12,
     padding: 16,
     gap: 12,
     borderWidth: 1,
-    borderColor: 'rgba(196, 255, 0, 0.3)',
-    marginBottom: 16,
+    borderColor: 'rgba(196, 255, 0, 0.1)',
+    marginBottom: 24,
   },
   infoText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: 'SpaceMono',
     color: Colors.dark.text,
-    lineHeight: 20,
+    lineHeight: 18,
+    opacity: 0.8,
   },
   verifySection: {
     padding: 16,

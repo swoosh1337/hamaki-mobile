@@ -1,25 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurMask, Canvas, Group, RoundedRect, SweepGradient, vec } from "@shopify/react-native-skia";
 import { BlurView } from 'expo-blur';
-import React, { useEffect, useState } from 'react';
-import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
+    Easing,
     useAnimatedStyle,
+    useDerivedValue,
     useSharedValue,
     withRepeat,
     withSequence,
-    withTiming
+    withTiming,
 } from 'react-native-reanimated';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 import { GamesIcon } from '@/components/GamesIcon';
 import { HammockJumpGame } from '@/components/games/HammockJumpGame';
 import { NoPogodGame } from '@/components/games/NoPogodGame';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { useGameCooldown } from '@/hooks/useGameCooldown';
+import { useGameCooldown, type UseGameCooldownReturn } from '@/hooks/useGameCooldown';
 import { trackGamePlay } from '@/utils/analytics';
 import { GAME_COOLDOWN_MS, getAllGameCooldowns } from '@/utils/gameCooldowns';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('GamesScreen');
 
 interface GameItem {
   id: string;
@@ -51,6 +55,203 @@ const GAMES: GameItem[] = [
     isAvailable: true,
   },
 ];
+
+const GlowingCardBorder = ({ width, height, color }: { width: number; height: number; color: string }) => {
+  const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    rotation.value = withRepeat(
+      withTiming(2 * Math.PI, { duration: 2500, easing: Easing.linear }),
+      -1,
+      false
+    );
+  }, []);
+
+  const center = useMemo(() => vec(width / 2, height / 2), [width, height]);
+
+  const transform = useDerivedValue(() => {
+    return [
+      { translateX: center.x },
+      { translateY: center.y },
+      { rotate: rotation.value },
+      { translateX: -center.x },
+      { translateY: -center.y },
+    ];
+  });
+
+  const PADDING = 20; // Extra space for the blur/bloom
+
+  return (
+    <View style={[styles.glowContainer, { width: width + PADDING * 2, height: height + PADDING * 2, left: -PADDING, top: -PADDING }]}>
+      <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Group transform={[{ translateX: PADDING }, { translateY: PADDING }]}>
+          {/* 1. Base Layer - Static Bloom */}
+          <RoundedRect
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            r={24}
+            style="stroke"
+            strokeWidth={4}
+            color={color + '44'}
+          >
+            <BlurMask blur={10} style="normal" />
+          </RoundedRect>
+
+          {/* 2. Moving Glow Layer (Bloom) */}
+          <RoundedRect
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            r={24}
+            style="stroke"
+            strokeWidth={14}
+            color="transparent"
+          >
+            <SweepGradient
+              c={center}
+              colors={[
+                'transparent',
+                color + '00', 
+                color, 
+                color + '00', 
+                'transparent',
+              ]}
+              positions={[0, 0.2, 0.5, 0.8, 1]}
+              transform={transform}
+            />
+            <BlurMask blur={15} style="normal" />
+          </RoundedRect>
+
+          {/* 3. Main High-Intensity Moving Glow */}
+          <RoundedRect
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            r={24}
+            style="stroke"
+            strokeWidth={6}
+            color="transparent"
+          >
+            <SweepGradient
+              c={center}
+              colors={[
+                'transparent',
+                color + '00', 
+                color, 
+                '#FFFFFF',    // White core for intensity
+                color, 
+                color + '00', 
+                'transparent',
+              ]}
+              positions={[0, 0.3, 0.45, 0.5, 0.55, 0.7, 1]}
+              transform={transform}
+            />
+            <BlurMask blur={5} style="normal" />
+          </RoundedRect>
+        </Group>
+      </Canvas>
+    </View>
+  );
+};
+
+const GameCard = ({
+  game,
+  cooldown,
+  onPress
+}: {
+  game: GameItem;
+  cooldown: UseGameCooldownReturn;
+  onPress: (id: string) => void;
+}) => {
+  const [layout, setLayout] = useState({ width: 0, height: 0 });
+  const isOnCooldown = cooldown.isOnCooldown;
+
+  // Pulse animation for lock icon
+  const pulse = useSharedValue(1);
+
+  useEffect(() => {
+    if (isOnCooldown) {
+      pulse.value = withRepeat(
+        withSequence(
+          withTiming(1.2, { duration: 1000 }),
+          withTiming(1, { duration: 1000 })
+        ),
+        -1,
+        true
+      );
+    } else {
+      pulse.value = 1;
+    }
+  }, [isOnCooldown]);
+
+  const animatedLockStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }],
+    opacity: pulse.value === 1 ? 1 : 0.8,
+  }));
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.gameCard,
+        { borderColor: game.color + '40' },
+        (!game.isAvailable || isOnCooldown) && styles.gameCardDisabled
+      ]}
+      onPress={() => onPress(game.id)}
+      disabled={!game.isAvailable || isOnCooldown}
+      onLayout={(e) => setLayout(e.nativeEvent.layout)}
+    >
+      {/* Glowing Border Effect - Only when available and not on cooldown */}
+      {game.isAvailable && !isOnCooldown && layout.width > 0 && (
+        <GlowingCardBorder width={layout.width} height={layout.height} color={game.color} />
+      )}
+
+      {/* Cooldown overlay with lock icon and countdown */}
+      {game.isAvailable && isOnCooldown && (
+        <BlurView intensity={80} tint="dark" style={styles.cooldownOverlay}>
+          <View style={styles.cooldownInner}>
+            <Animated.View style={[styles.lockIconContainer, animatedLockStyle]}>
+              <Ionicons name="lock-closed" size={20} color={Colors.dark.tint} />
+            </Animated.View>
+            <View style={styles.timerContainer}>
+              <Text style={styles.cooldownTimerText}>
+                {cooldown.remainingFormatted}
+              </Text>
+              <View style={styles.cooldownBadge}>
+                <Text style={styles.cooldownLabelText}>COOLDOWN</Text>
+              </View>
+            </View>
+          </View>
+        </BlurView>
+      )}
+      <View style={[styles.gameIconContainer, { backgroundColor: game.color + '20' }]}>
+        {game.id === 'no-pogodi' ? (
+          <Ionicons
+            name={game.icon}
+            size={32}
+            color={game.isAvailable && !isOnCooldown ? game.color : Colors.dark.tabIconDefault}
+          />
+        ) : (
+          <GamesIcon size={32} />
+        )}
+      </View>
+      <View style={styles.gameInfo}>
+        <Text style={[styles.gameTitle, { fontFamily: game.titleFont }, (!game.isAvailable || isOnCooldown) && styles.gameDisabledText]}>
+          {game.title}
+        </Text>
+        <Text style={[styles.gameDescription, (!game.isAvailable || isOnCooldown) && styles.gameDisabledText]}>
+          {game.description}
+        </Text>
+        {!game.isAvailable && (
+          <Text style={styles.comingSoonBadge}>Coming Soon</Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 export default function GamesScreen() {
   const { userProfile, isDemoMode } = useAuth();
@@ -94,7 +295,7 @@ export default function GamesScreen() {
 
         setServerCooldownsSynced(true);
       } catch (error) {
-        console.error('Failed to sync game cooldowns from server:', error);
+        log.error('Failed to sync game cooldowns from server', error);
       }
     };
 
@@ -103,7 +304,7 @@ export default function GamesScreen() {
 
   const handleGamePress = async (gameId: string) => {
     if (!userProfile?.id) {
-      Alert.alert('Error', 'Please sign in to play games');
+      Alert.alert('შეცდომა', 'გთხოვთ შეხვიდეთ თამაშისთვის');
       return;
     }
 
@@ -114,7 +315,7 @@ export default function GamesScreen() {
     if (cooldown.isOnCooldown) {
       Alert.alert(
         '⏰ Cooldown-ი',
-        `You can play again in ${cooldown.remainingFormatted}.\n\nYou'll get a notification when it's ready!`,
+        `თავიდან თამაში შეგიძლია ${cooldown.remainingFormatted}-ში.\n\nშეტყობინებას მიიღებ როცა მზად იქნება!`,
         [{ text: 'OK' }]
       );
       return;
@@ -128,9 +329,12 @@ export default function GamesScreen() {
     setSelectedGame(gameId);
   };
 
-  const closeGame = () => {
+  const closeGame = async () => {
     setSelectedGame(null);
-    // Cooldowns are automatically managed by hooks
+    // Refresh cooldown state from storage after game closes
+    // This ensures the game card shows updated cooldown status
+    await noPogodCooldown.refresh();
+    await hammockJumpCooldown.refresh();
   };
 
   const renderGameCard = (game: GameItem) => {
@@ -160,60 +364,15 @@ export default function GamesScreen() {
       opacity: pulse.value === 1 ? 1 : 0.8,
     }));
 
-    return (
-      <TouchableOpacity
-        key={game.id}
-        style={[
-          styles.gameCard,
-          { borderColor: game.color + '40' },
-          (!game.isAvailable || isOnCooldown) && styles.gameCardDisabled
-        ]}
-        onPress={() => handleGamePress(game.id)}
-        disabled={!game.isAvailable || isOnCooldown}
-      >
-        {/* Cooldown overlay with lock icon and countdown */}
-        {game.isAvailable && isOnCooldown && (
-          <BlurView intensity={80} tint="dark" style={styles.cooldownOverlay}>
-            <View style={styles.cooldownInner}>
-              <Animated.View style={[styles.lockIconContainer, animatedLockStyle]}>
-                <Ionicons name="lock-closed" size={20} color={Colors.dark.tint} />
-              </Animated.View>
-              <View style={styles.timerContainer}>
-                <Text style={styles.cooldownTimerText}>
-                  {cooldown.remainingFormatted}
-                </Text>
-                <View style={styles.cooldownBadge}>
-                  <Text style={styles.cooldownLabelText}>COOLDOWN</Text>
-                </View>
-              </View>
-            </View>
-          </BlurView>
-        )}
-        <View style={[styles.gameIconContainer, { backgroundColor: game.color + '20' }]}>
-          {game.id === 'no-pogodi' ? (
-            <Ionicons
-              name={game.icon}
-              size={32}
-              color={game.isAvailable && !isOnCooldown ? game.color : Colors.dark.tabIconDefault}
-            />
-          ) : (
-            <GamesIcon size={32} />
-          )}
-        </View>
-        <View style={styles.gameInfo}>
-          <Text style={[styles.gameTitle, { fontFamily: game.titleFont }, (!game.isAvailable || isOnCooldown) && styles.gameDisabledText]}>
-            {game.title}
-          </Text>
-          <Text style={[styles.gameDescription, (!game.isAvailable || isOnCooldown) && styles.gameDisabledText]}>
-            {game.description}
-          </Text>
-          {!game.isAvailable && (
-            <Text style={styles.comingSoonBadge}>Coming Soon</Text>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  return (
+    <GameCard
+      key={game.id}
+      game={game}
+      cooldown={cooldown}
+      onPress={handleGamePress}
+    />
+  );
+};
 
   return (
     <View style={styles.container}>
@@ -324,6 +483,10 @@ const styles = StyleSheet.create({
   },
   gameCardDisabled: {
     borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  glowContainer: {
+    position: 'absolute',
+    pointerEvents: 'none',
   },
   cooldownOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -12,8 +12,9 @@
  * All data comes through hooks which use services.
  */
 
+import { BlurView } from 'expo-blur';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, RefreshControl, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { NetworkError } from '@/components/ui/NetworkError';
 import { Colors } from '@/constants/Colors';
@@ -164,15 +165,23 @@ export default function LeaderboardScreen() {
                 key={`${item.user_id}-${item.rank}`}
                 style={[styles.leaderboardItem, isCurrentUser && styles.currentUserItem]}
             >
-                <Text style={[styles.rankText, isCurrentUser && styles.currentUserText]}>{item.rank}.</Text>
-                <Text style={[styles.nameText, isCurrentUser && styles.currentUserText]}>{item.name}</Text>
-                <Text style={[styles.pointsText, isCurrentUser && styles.currentUserText]}>{item.points}</Text>
+                <BlurView
+                    intensity={isCurrentUser ? 40 : 15}
+                    tint="dark"
+                    style={StyleSheet.absoluteFill}
+                />
+                <View style={styles.itemInner}>
+                    <Text style={[styles.rankText, isCurrentUser && styles.currentUserText]}>{item.rank}.</Text>
+                    <Text style={[styles.nameText, isCurrentUser && styles.currentUserText]}>{item.name}</Text>
+                    <Text style={[styles.pointsText, isCurrentUser && styles.currentUserText]}>{item.points}</Text>
+                </View>
             </View>
         );
     };
 
     const renderPrizeItem = (item: PrizeItem) => (
         <View key={item.id} style={styles.prizeCard}>
+            <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
             <TouchableOpacity
                 style={styles.prizeThumbnailContainer}
                 onPress={() => togglePrize(item.id)}
@@ -183,9 +192,9 @@ export default function LeaderboardScreen() {
                     style={styles.prizeThumbnail}
                     resizeMode="cover"
                 />
-                <View style={styles.sponsorLabel}>
+                <BlurView intensity={60} tint="dark" style={styles.sponsorLabel}>
                     <Text style={styles.sponsorLabelText}>{item.sponsor}</Text>
-                </View>
+                </BlurView>
                 <View style={styles.expandIconContainer}>
                     <Text style={styles.expandIcon}>{item.expanded ? '✓' : '+'}</Text>
                 </View>
@@ -206,6 +215,7 @@ export default function LeaderboardScreen() {
     if (loading && !error) {
         return (
             <View style={styles.container}>
+                <StatusBar barStyle="light-content" />
                 <Text style={styles.title}>LEADERBOARD</Text>
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={Colors.dark.tint} />
@@ -217,6 +227,7 @@ export default function LeaderboardScreen() {
     if (errorMessage) {
         return (
             <View style={styles.container}>
+                <StatusBar barStyle="light-content" />
                 <Text style={styles.title}>LEADERBOARD</Text>
                 <NetworkError
                     message={errorMessage}
@@ -229,78 +240,90 @@ export default function LeaderboardScreen() {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>LEADERBOARD</Text>
+            <StatusBar barStyle="light-content" />
+            
+            {/* Background Decor */}
+            <View style={styles.bgDecorCircle1} />
+            <View style={styles.bgDecorCircle2} />
 
-            <View style={styles.tabContainer}>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'weekly' && styles.activeTab]}
-                    onPress={() => setActiveTab('weekly')}
+            <SafeAreaView style={styles.safeArea}>
+                <Text style={styles.title}>LEADERBOARD</Text>
+
+                <View style={styles.tabContainer}>
+                    <TouchableOpacity
+                        style={[styles.tab, activeTab === 'weekly' && styles.activeTab]}
+                        onPress={() => setActiveTab('weekly')}
+                    >
+                        <BlurView intensity={activeTab === 'weekly' ? 0 : 20} tint="light" style={StyleSheet.absoluteFill} />
+                        <Text style={[styles.tabText, activeTab === 'weekly' && styles.activeTabText]}>
+                            კვირის
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.tab, activeTab === 'main' && styles.activeTab]}
+                        onPress={() => setActiveTab('main')}
+                    >
+                        <BlurView intensity={activeTab === 'main' ? 0 : 20} tint="light" style={StyleSheet.absoluteFill} />
+                        <Text style={[styles.tabText, activeTab === 'main' && styles.activeTabText]}>
+                            თვის
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.tab, activeTab === 'prizes' && styles.activeTab]}
+                        onPress={() => setActiveTab('prizes')}
+                    >
+                        <BlurView intensity={activeTab === 'prizes' ? 0 : 20} tint="light" style={StyleSheet.absoluteFill} />
+                        <Text style={[styles.tabText, activeTab === 'prizes' && styles.activeTabText]}>
+                            პრიზები
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                    style={styles.content}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.scrollContent}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={isRefreshing}
+                            onRefresh={handleRefresh}
+                            colors={[Colors.dark.tint]}
+                            tintColor={Colors.dark.tint}
+                            progressBackgroundColor={Colors.dark.background}
+                        />
+                    }
                 >
-                    <Text style={[styles.tabText, activeTab === 'weekly' && styles.activeTabText]}>
-                        კვირის
-                    </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'main' && styles.activeTab]}
-                    onPress={() => setActiveTab('main')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'main' && styles.activeTabText]}>
-                        თვის
-                    </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'prizes' && styles.activeTab]}
-                    onPress={() => setActiveTab('prizes')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'prizes' && styles.activeTabText]}>
-                        პრიზები
-                    </Text>
-                </TouchableOpacity>
-            </View>
+                    {activeTab === 'weekly' && (
+                        <View style={styles.leaderboardContainer}>
+                            {weeklyData.length > 0 ? (
+                                weeklyData.map(renderLeaderboardItem)
+                            ) : (
+                                <Text style={styles.emptyText}>No weekly data yet</Text>
+                            )}
+                        </View>
+                    )}
 
-            <ScrollView
-                style={styles.content}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={isRefreshing}
-                        onRefresh={handleRefresh}
-                        colors={[Colors.dark.tint]}
-                        tintColor={Colors.dark.tint}
-                        progressBackgroundColor={Colors.dark.background}
-                    />
-                }
-            >
-                {activeTab === 'weekly' && (
-                    <View style={styles.leaderboardContainer}>
-                        {weeklyData.length > 0 ? (
-                            weeklyData.map(renderLeaderboardItem)
-                        ) : (
-                            <Text style={styles.emptyText}>No weekly data yet</Text>
-                        )}
-                    </View>
-                )}
+                    {activeTab === 'main' && (
+                        <View style={styles.leaderboardContainer}>
+                            {mainData.length > 0 ? (
+                                mainData.map(renderLeaderboardItem)
+                            ) : (
+                                <Text style={styles.emptyText}>No leaderboard data yet</Text>
+                            )}
+                        </View>
+                    )}
 
-                {activeTab === 'main' && (
-                    <View style={styles.leaderboardContainer}>
-                        {mainData.length > 0 ? (
-                            mainData.map(renderLeaderboardItem)
-                        ) : (
-                            <Text style={styles.emptyText}>No leaderboard data yet</Text>
-                        )}
-                    </View>
-                )}
-
-                {activeTab === 'prizes' && (
-                    <View style={styles.prizesContainer}>
-                        {prizes.length > 0 ? (
-                            prizes.map(renderPrizeItem)
-                        ) : (
-                            <Text style={styles.emptyText}>No prizes available</Text>
-                        )}
-                    </View>
-                )}
-            </ScrollView>
+                    {activeTab === 'prizes' && (
+                        <View style={styles.prizesContainer}>
+                            {prizes.length > 0 ? (
+                                prizes.map(renderPrizeItem)
+                            ) : (
+                                <Text style={styles.emptyText}>No prizes available</Text>
+                            )}
+                        </View>
+                    )}
+                </ScrollView>
+            </SafeAreaView>
         </View>
     );
 }
@@ -309,14 +332,46 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: Colors.dark.background,
-        paddingTop: 60,
+    },
+    safeArea: {
+        flex: 1,
+    },
+    bgDecorCircle1: {
+        position: 'absolute',
+        top: -100,
+        right: -100,
+        width: 300,
+        height: 300,
+        borderRadius: 150,
+        backgroundColor: Colors.dark.tint + '05',
+    },
+    bgDecorCircle2: {
+        position: 'absolute',
+        bottom: 100,
+        left: -150,
+        width: 400,
+        height: 400,
+        borderRadius: 200,
+        backgroundColor: Colors.dark.tint + '03',
+    },
+    headerRow: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 10,
+        paddingBottom: 20,
+        zIndex: 10,
     },
     title: {
         fontSize: 32,
         fontFamily: 'HamakiGeo',
         color: Colors.dark.tint,
         textAlign: 'center',
+        marginTop: 20,
         marginBottom: 20,
+    },
+    logo: {
+        width: 280,
+        height: 120,
     },
     loadingContainer: {
         flex: 1,
@@ -326,24 +381,28 @@ const styles = StyleSheet.create({
     tabContainer: {
         flexDirection: 'row',
         paddingHorizontal: 20,
-        marginBottom: 15,
-        gap: 10,
+        marginBottom: 20,
+        gap: 8,
     },
     tab: {
         flex: 1,
         paddingVertical: 12,
-        paddingHorizontal: 16,
         borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
         alignItems: 'center',
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
     },
     activeTab: {
         backgroundColor: Colors.dark.tint,
+        borderColor: Colors.dark.tint,
     },
     tabText: {
         fontSize: 14,
         fontFamily: 'HamakiGeo',
         color: Colors.dark.text,
+        fontWeight: '600',
     },
     activeTabText: {
         color: Colors.dark.background,
@@ -351,47 +410,49 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
+    },
+    scrollContent: {
         paddingHorizontal: 20,
+        paddingBottom: 40,
     },
     leaderboardContainer: {
-        flex: 1,
-    },
-    currentUserItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 8,
-        paddingHorizontal: 15,
-        marginBottom: 10,
-        backgroundColor: 'rgba(196, 255, 0, 0.1)',
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: Colors.dark.tint,
-    },
-    currentUserText: {
-        color: Colors.dark.tint,
+        gap: 8,
     },
     leaderboardItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 8,
-        paddingHorizontal: 15,
-        marginBottom: 5,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 10,
+        borderRadius: 20,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: 'transparent',
+    },
+    itemInner: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+    },
+    currentUserItem: {
+        borderColor: Colors.dark.tint,
+        backgroundColor: 'transparent',
+    },
+    currentUserText: {
+        color: Colors.dark.tint,
+        fontWeight: 'bold',
     },
     rankText: {
         fontSize: 16,
         fontFamily: 'SpaceMono',
         color: Colors.dark.text,
         width: 40,
-        textAlign: 'left',
     },
     nameText: {
         fontSize: 16,
         fontFamily: 'SpaceMono',
         color: Colors.dark.text,
         flex: 1,
-        marginLeft: 10,
     },
     pointsText: {
         fontSize: 16,
@@ -408,65 +469,68 @@ const styles = StyleSheet.create({
         opacity: 0.5,
     },
     prizesContainer: {
-        flex: 1,
-        paddingBottom: 20,
+        gap: 16,
     },
     prizeCard: {
-        marginBottom: 15,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 12,
+        borderRadius: 24,
         overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: 'transparent',
     },
     prizeThumbnailContainer: {
         width: '100%',
-        height: 150,
+        height: 180,
         position: 'relative',
     },
     prizeThumbnail: {
         width: '100%',
         height: '100%',
-        backgroundColor: '#111318',
     },
     sponsorLabel: {
         position: 'absolute',
-        bottom: 10,
-        left: 10,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 8,
+        top: 16,
+        left: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 12,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     sponsorLabelText: {
         fontSize: 14,
         fontFamily: 'HamakiGeo',
         color: Colors.dark.text,
         fontWeight: 'bold',
+        textTransform: 'uppercase',
     },
     expandIconContainer: {
         position: 'absolute',
-        bottom: 10,
-        right: 10,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        bottom: 16,
+        right: 16,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.2)',
     },
     expandIcon: {
-        fontSize: 20,
-        fontFamily: 'HamakiGeo',
+        fontSize: 24,
         color: Colors.dark.tint,
         fontWeight: 'bold',
     },
     prizeDetails: {
         padding: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.03)',
     },
     prizeDetailText: {
-        fontSize: 16,
+        fontSize: 15,
         fontFamily: 'SpaceMono',
         color: Colors.dark.text,
-        marginBottom: 8,
+        marginBottom: 10,
+        lineHeight: 20,
     },
 });

@@ -10,12 +10,9 @@
 -- relational table that enforces uniqueness at the database level.
 -- ============================================================================
 
--- Step 1: Drop existing table if it has wrong constraints (idempotent migration)
-DROP TABLE IF EXISTS public.user_video_like_awards;
-
--- Step 2: Create the tracking table
+-- Step 1: Create the tracking table (idempotent)
 -- References public.users instead of auth.users to handle all existing users
-CREATE TABLE public.user_video_like_awards (
+CREATE TABLE IF NOT EXISTS public.user_video_like_awards (
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     video_id TEXT NOT NULL,
     channel_key TEXT NOT NULL,
@@ -25,6 +22,38 @@ CREATE TABLE public.user_video_like_awards (
     -- Composite primary key ensures one award per user per video
     PRIMARY KEY (user_id, video_id)
 );
+
+-- Step 2: Ensure columns and constraints exist without destructive changes
+ALTER TABLE public.user_video_like_awards
+    ADD COLUMN IF NOT EXISTS user_id UUID,
+    ADD COLUMN IF NOT EXISTS video_id TEXT,
+    ADD COLUMN IF NOT EXISTS channel_key TEXT,
+    ADD COLUMN IF NOT EXISTS xp_awarded INTEGER DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS awarded_at TIMESTAMPTZ DEFAULT NOW();
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'user_video_like_awards_pkey'
+          AND conrelid = 'public.user_video_like_awards'::regclass
+    ) THEN
+        ALTER TABLE public.user_video_like_awards
+            ADD CONSTRAINT user_video_like_awards_pkey PRIMARY KEY (user_id, video_id);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'user_video_like_awards_user_id_fkey'
+          AND conrelid = 'public.user_video_like_awards'::regclass
+    ) THEN
+        ALTER TABLE public.user_video_like_awards
+            ADD CONSTRAINT user_video_like_awards_user_id_fkey
+            FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+    END IF;
+END $$;
 
 -- Step 3: Add comments
 COMMENT ON TABLE public.user_video_like_awards IS 'Tracks video like XP awards. Primary key prevents double-awarding.';
@@ -56,9 +85,6 @@ GRANT SELECT ON public.user_video_like_awards TO authenticated;
 GRANT ALL ON public.user_video_like_awards TO service_role;
 
 -- Step 7: Create indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_video_like_awards_user_id
-    ON public.user_video_like_awards(user_id);
-
 CREATE INDEX IF NOT EXISTS idx_video_like_awards_awarded_at
     ON public.user_video_like_awards(awarded_at DESC);
 

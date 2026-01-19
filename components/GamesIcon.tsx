@@ -21,7 +21,7 @@ export const GamesIcon: React.FC<Props> = ({
 }) => {
   return (
     <Image
-      source={require('@/assets/images/mini_games.png')}
+      source={require('@/assets/images/mini_games.webp')}
       style={[{ width: size, height: size }, style]}
       resizeMode={resizeMode}
       accessibilityLabel={accessibilityLabel}

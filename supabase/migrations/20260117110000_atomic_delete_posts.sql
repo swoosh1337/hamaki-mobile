@@ -12,19 +12,24 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-    v_deleted_count INTEGER;
+    v_upvotes_deleted INTEGER;
+    v_posts_deleted INTEGER;
 BEGIN
     -- Delete upvotes first (child records)
     DELETE FROM post_upvotes
     WHERE post_id = ANY(p_post_ids);
 
+    GET DIAGNOSTICS v_upvotes_deleted = ROW_COUNT;
+
     -- Delete posts (parent records)
     DELETE FROM posts
     WHERE id = ANY(p_post_ids);
 
-    GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
+    GET DIAGNOSTICS v_posts_deleted = ROW_COUNT;
 
-    RETURN v_deleted_count;
+    -- Return posts deleted count (primary metric for callers)
+    -- Upvotes are automatically cleaned up as part of the transaction
+    RETURN v_posts_deleted;
 END;
 $$;
 
